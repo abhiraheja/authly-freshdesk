@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trackly — Embeddable Widget (floating button, bottom-right)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI', system-ui, sans-serif; color:#0F172A; background:#F1F5F9; padding:40px 16px 80px; }
+  .note { max-width:1000px; margin:0 auto 8px; text-align:center; color:#64748B; font-size:13.5px; background:#FEF9C3; border:1px solid #FDE047; border-radius:10px; padding:9px 16px; }
+  .step-label { max-width:1000px; margin:36px auto 12px; font-size:12.5px; font-weight:700; color:#94A3B8; letter-spacing:1px; text-transform:uppercase; }
+
+  /* fake browser frame */
+  .browser { max-width:1000px; margin:0 auto; border-radius:14px; border:1px solid #E2E8F0; overflow:hidden; box-shadow:0 14px 40px -12px rgba(15,23,42,.15); background:#fff; }
+  .b-bar { background:#F8FAFC; padding:10px 16px; display:flex; gap:10px; align-items:center; border-bottom:1px solid #E2E8F0; }
+  .b-dot { width:10px; height:10px; border-radius:50%; background:#E2E8F0; }
+  .b-url { flex:1; background:#fff; border:1px solid #E2E8F0; border-radius:8px; padding:6px 14px; font-size:12.5px; color:#64748B; max-width:340px; margin:0 auto; text-align:center; }
+
+  /* fake host site (Acme's own website) */
+  .site { position:relative; height:520px; background:#fff; overflow:hidden; }
+  .site-nav { display:flex; align-items:center; gap:26px; padding:18px 44px; border-bottom:1px solid #F1F5F9; }
+  .site-logo { display:flex; align-items:center; gap:9px; font-weight:800; font-size:17px; color:#1E1B2E; }
+  .site-mark { width:28px; height:28px; background:#7C3AED; color:#fff; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:14px; }
+  .site-nav a { color:#6B7280; font-size:14px; text-decoration:none; }
+  .site-body { padding:44px; }
+  .ph { background:#F3F0FA; border-radius:10px; }
+  .ph-title { width:40%; height:26px; margin-bottom:14px; }
+  .ph-line { width:70%; height:12px; margin-bottom:9px; }
+  .ph-line.short { width:52%; }
+  .ph-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; margin-top:28px; }
+  .ph-card { height:150px; }
+
+  /* collapsed launcher */
+  .launcher { position:absolute; bottom:24px; right:24px; display:flex; align-items:center; gap:10px; }
+  .launcher .hint { background:#1E1B2E; color:#fff; font-size:12.5px; padding:8px 14px; border-radius:9px; opacity:.9; }
+  .fab { width:58px; height:58px; border-radius:50%; background:#7C3AED; color:#fff; display:flex; align-items:center; justify-content:center; font-size:24px; box-shadow:0 10px 28px -6px rgba(124,58,237,.55); cursor:pointer; border:none; }
+  .fab-badge { position:absolute; top:-3px; right:-3px; width:16px; height:16px; background:#DC2626; border-radius:50%; color:#fff; font-size:10px; font-weight:700; display:flex; align-items:center; justify-content:center; border:2px solid #fff; }
+
+  /* open popup panel */
+  .popup { position:absolute; bottom:96px; right:24px; width:360px; background:#fff; border-radius:18px; box-shadow:0 24px 60px -12px rgba(30,27,46,.35); overflow:hidden; border:1px solid #E9E4F5; }
+  .p-head { background:#7C3AED; color:#fff; padding:18px 20px 16px; }
+  .p-head-top { display:flex; align-items:center; gap:10px; }
+  .p-logo { width:28px; height:28px; background:#fff; color:#7C3AED; border-radius:8px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:13px; }
+  .p-head b { font-size:15.5px; }
+  .p-close { margin-left:auto; opacity:.75; font-size:16px; cursor:pointer; }
+  .p-head .greet { font-size:12.5px; opacity:.85; margin-top:10px; line-height:1.5; }
+  .p-body { padding:18px 20px 16px; max-height:330px; overflow-y:auto; }
+  .p-body label { display:block; font-size:12.5px; font-weight:600; color:#374151; margin:11px 0 5px; }
+  .p-body label .req { color:#DC2626; }
+  .p-body input, .p-body select, .p-body textarea { width:100%; padding:9px 12px; border:1.5px solid #D8D2E8; border-radius:9px; font-size:13.5px; font-family:inherit; background:#fff; }
+  .p-body textarea { height:66px; resize:none; }
+  .prefilled { background:#FBFAFE !important; color:#6B7280; }
+  .prefill-note { font-size:11px; color:#9CA3AF; margin-top:3px; }
+  .p-attach { border:1.5px dashed #D8D2E8; border-radius:9px; padding:9px; text-align:center; color:#9CA3AF; font-size:12px; margin-top:11px; background:#FBFAFE; }
+  .p-submit { width:100%; padding:11px; background:#7C3AED; color:#fff; border:none; border-radius:10px; font-size:14px; font-weight:700; cursor:pointer; margin-top:14px; }
+  .p-foot { text-align:center; font-size:10.5px; color:#C4BFD4; padding:9px 0 12px; border-top:1px solid #F5F2FB; }
+
+  /* success state panel */
+  .p-success { padding:34px 24px; text-align:center; }
+  .p-ic { width:54px; height:54px; border-radius:50%; background:#F0FDF4; color:#16A34A; font-size:24px; display:flex; align-items:center; justify-content:center; margin:0 auto 14px; }
+  .p-success b { font-size:16px; }
+  .p-success p { font-size:12.5px; color:#6B7280; margin-top:8px; line-height:1.6; }
+  .p-ref { background:#FBFAFE; border:1.5px dashed #D8D2E8; border-radius:9px; padding:9px; font-size:13px; color:#374151; margin:14px 0 4px; }
+  .p-ref b { color:#7C3AED; }
+
+  /* embed snippet */
+  .snippet { max-width:1000px; margin:14px auto 0; background:#0F172A; border-radius:12px; padding:18px 22px; font-family:Consolas, monospace; font-size:12.5px; color:#E2E8F0; line-height:1.7; overflow-x:auto; }
+  .snippet .c { color:#64748B; }
+  .snippet .a { color:#7DD3FC; }
+  .snippet .v { color:#86EFAC; }
+</style>
+</head>
+<body>
+
+<div class="note">📋 Design review: the floating widget on a fake host page (Acme's own website). Three states shown — collapsed launcher, open form, and success. Branding comes from the workspace's config; the form fields respect the admin's show/hide/pre-fill settings.</div>
+
+<!-- STATE 1: COLLAPSED -->
+<div class="step-label">State 1 — collapsed launcher (bottom-right of any page on acme.com)</div>
+<div class="browser">
+  <div class="b-bar"><div class="b-dot"></div><div class="b-dot"></div><div class="b-dot"></div><div class="b-url">🔒 acme.com/checkout</div></div>
+  <div class="site" style="height:330px;">
+    <div class="site-nav">
+      <div class="site-logo"><div class="site-mark">A</div> Acme</div>
+      <a href="#">Products</a><a href="#">Pricing</a><a href="#">About</a>
+    </div>
+    <div class="site-body">
+      <div class="ph ph-title"></div>
+      <div class="ph ph-line"></div>
+      <div class="ph ph-line short"></div>
+      <div class="ph-grid"><div class="ph ph-card"></div><div class="ph ph-card"></div><div class="ph ph-card"></div></div>
+    </div>
+    <div class="launcher">
+      <div class="hint">Need help? 👋</div>
+      <button class="fab" style="position:relative;">💬<span class="fab-badge">1</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- STATE 2: OPEN FORM -->
+<div class="step-label">State 2 — open popup with the ticket form (signed-in user detected → name/email pre-filled)</div>
+<div class="browser">
+  <div class="b-bar"><div class="b-dot"></div><div class="b-dot"></div><div class="b-dot"></div><div class="b-url">🔒 acme.com/checkout</div></div>
+  <div class="site">
+    <div class="site-nav">
+      <div class="site-logo"><div class="site-mark">A</div> Acme</div>
+      <a href="#">Products</a><a href="#">Pricing</a><a href="#">About</a>
+    </div>
+    <div class="site-body">
+      <div class="ph ph-title"></div>
+      <div class="ph ph-line"></div>
+      <div class="ph ph-line short"></div>
+      <div class="ph-grid"><div class="ph ph-card"></div><div class="ph ph-card"></div><div class="ph ph-card"></div></div>
+    </div>
+
+    <div class="popup">
+      <div class="p-head">
+        <div class="p-head-top">
+          <div class="p-logo">A</div><b>Acme Support</b><span class="p-close">✕</span>
+        </div>
+        <div class="greet">Hi Alice 👋 Tell us what's wrong and we'll get back to you within a couple of hours.</div>
+      </div>
+      <div class="p-body">
+        <label>Name</label>
+        <input class="prefilled" value="Alice Smith" readonly>
+        <label>Email</label>
+        <input class="prefilled" value="alice@acme.com" readonly>
+        <div class="prefill-note">Pre-filled by acme.com — verified, no OTP needed</div>
+        <label>Category</label>
+        <select><option>Checkout problem</option><option>Billing</option><option>Other</option></select>
+        <label>Subject <span class="req">*</span></label>
+        <input placeholder="Brief summary">
+        <label>Message <span class="req">*</span></label>
+        <textarea placeholder="Describe the issue…"></textarea>
+        <div class="p-attach">📎 Attach a screenshot</div>
+        <button class="p-submit">Submit ticket</button>
+      </div>
+      <div class="p-foot">Powered by Trackly</div>
+    </div>
+    <div class="launcher"><button class="fab">✕</button></div>
+  </div>
+</div>
+
+<!-- STATE 3: SUCCESS -->
+<div class="step-label">State 3 — success (guest visitors see the OTP step first, then this)</div>
+<div class="browser">
+  <div class="b-bar"><div class="b-dot"></div><div class="b-dot"></div><div class="b-dot"></div><div class="b-url">🔒 acme.com/checkout</div></div>
+  <div class="site" style="height:420px;">
+    <div class="site-nav">
+      <div class="site-logo"><div class="site-mark">A</div> Acme</div>
+      <a href="#">Products</a><a href="#">Pricing</a><a href="#">About</a>
+    </div>
+    <div class="site-body">
+      <div class="ph ph-title"></div>
+      <div class="ph ph-line"></div>
+      <div class="ph ph-line short"></div>
+    </div>
+
+    <div class="popup" style="bottom:96px;">
+      <div class="p-head">
+        <div class="p-head-top">
+          <div class="p-logo">A</div><b>Acme Support</b><span class="p-close">✕</span>
+        </div>
+      </div>
+      <div class="p-success">
+        <div class="p-ic">✓</div>
+        <b>Ticket submitted!</b>
+        <p>We've emailed you a confirmation with a link to track progress. You can close this window.</p>
+        <div class="p-ref">Reference <b>#1149</b></div>
+      </div>
+      <div class="p-foot">Powered by Trackly</div>
+    </div>
+    <div class="launcher"><button class="fab">✕</button></div>
+  </div>
+</div>
+
+<!-- EMBED SNIPPET -->
+<div class="step-label">What the enterprise pastes into their site (generated in Admin → Widget)</div>
+<div class="snippet">
+<span class="c">&lt;!-- Trackly support widget — paste before &lt;/body&gt; --&gt;</span><br>
+&lt;script<br>
+&nbsp;&nbsp;<span class="a">src</span>=<span class="v">"https://trackly.com/widget.js"</span><br>
+&nbsp;&nbsp;<span class="a">data-workspace</span>=<span class="v">"acme"</span><br>
+&nbsp;&nbsp;<span class="a">data-position</span>=<span class="v">"bottom-right"</span><br>
+&nbsp;&nbsp;<span class="a">data-fields</span>=<span class="v">"name,email,category,subject,message,attachment"</span><br>
+&nbsp;&nbsp;<span class="a">data-user-name</span>=<span class="v">"Alice Smith"</span>&nbsp;&nbsp;<span class="c">&lt;!-- optional pre-fill --&gt;</span><br>
+&nbsp;&nbsp;<span class="a">data-user-email</span>=<span class="v">"alice@acme.com"</span><br>
+&nbsp;&nbsp;<span class="a">data-user-token</span>=<span class="v">"&lt;signed token → skips OTP&gt;"</span><br>
+&gt;&lt;/script&gt;
+</div>
+
+</body>
+</html>

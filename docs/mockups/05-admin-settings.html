@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trackly — Admin Settings (SSO + Branding + Users)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI', system-ui, sans-serif; color:#0F172A; background:#F1F5F9; }
+  .app { display:grid; grid-template-columns:64px 230px 1fr; min-height:100vh; }
+  .rail { background:#0F172A; display:flex; flex-direction:column; align-items:center; padding:14px 0; gap:6px; }
+  .rail .mark { width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg,#2563EB,#7C3AED); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; margin-bottom:14px; }
+  .rail a { width:42px; height:42px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#94A3B8; text-decoration:none; }
+  .rail a.active { background:#1E293B; color:#fff; }
+
+  .subnav { background:#fff; border-right:1px solid #E2E8F0; padding:22px 14px; }
+  .subnav h3 { font-size:12px; text-transform:uppercase; letter-spacing:1px; color:#94A3B8; padding:0 10px 10px; }
+  .subnav a { display:block; padding:9px 12px; border-radius:9px; color:#475569; font-size:14px; font-weight:500; text-decoration:none; margin-bottom:2px; }
+  .subnav a.active { background:#EFF6FF; color:#1D4ED8; font-weight:600; }
+
+  main { padding:30px 40px; max-width:920px; }
+  .note { margin-bottom:24px; color:#64748B; font-size:13.5px; background:#FEF9C3; border:1px solid #FDE047; border-radius:10px; padding:10px 16px; }
+  h1 { font-size:21px; margin-bottom:4px; }
+  .sub { color:#64748B; font-size:14px; margin-bottom:24px; }
+  .card { background:#fff; border:1px solid #E2E8F0; border-radius:14px; padding:26px; margin-bottom:28px; }
+  .card h2 { font-size:16.5px; margin-bottom:4px; }
+  .card .desc { color:#64748B; font-size:13.5px; margin-bottom:18px; }
+  label { display:block; font-size:13px; font-weight:600; color:#334155; margin:14px 0 6px; }
+  input, select { width:100%; padding:10px 13px; border:1.5px solid #CBD5E1; border-radius:9px; font-size:14px; font-family:inherit; background:#fff; }
+  .row { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+  .btn { padding:10px 20px; border-radius:9px; font-weight:600; font-size:14px; border:none; cursor:pointer; }
+  .btn-primary { background:#2563EB; color:#fff; }
+  .btn-outline { background:#fff; border:1.5px solid #CBD5E1; color:#334155; }
+  .actions { margin-top:20px; display:flex; gap:10px; }
+
+  .conn { display:flex; align-items:center; justify-content:space-between; border:1.5px solid #BBF7D0; background:#F0FDF4; border-radius:12px; padding:16px 18px; }
+  .conn .l { display:flex; gap:14px; align-items:center; }
+  .conn .ic { width:40px; height:40px; border-radius:10px; background:#007DC1; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:16px; }
+  .conn b { font-size:15px; }
+  .conn .m { font-size:12.5px; color:#64748B; margin-top:2px; }
+  .chip { display:inline-block; font-size:11.5px; font-weight:700; padding:3px 11px; border-radius:99px; }
+  .active-chip { background:#F0FDF4; color:#16A34A; border:1px solid #BBF7D0; }
+  .verified { background:#F0FDF4; color:#16A34A; }
+  .pending { background:#FFF7ED; color:#EA580C; }
+
+  .map-table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:6px; }
+  .map-table th { text-align:left; font-size:11.5px; text-transform:uppercase; letter-spacing:.7px; color:#94A3B8; padding:8px 10px; border-bottom:1px solid #F1F5F9; }
+  .map-table td { padding:10px; border-bottom:1px solid #F8FAFC; }
+  .map-table code { background:#F1F5F9; padding:3px 9px; border-radius:6px; font-size:12.5px; }
+  .arrow { color:#94A3B8; }
+  .role-chip { font-size:12px; font-weight:700; padding:3px 12px; border-radius:99px; }
+  .r-agent { background:#EFF6FF; color:#2563EB; }
+  .r-admin { background:#F5F3FF; color:#7C3AED; }
+  .r-cust { background:#F1F5F9; color:#64748B; }
+
+  .domain-row { display:flex; align-items:center; justify-content:space-between; padding:13px 4px; border-bottom:1px solid #F8FAFC; font-size:14px; }
+  .mono { font-family:Consolas, monospace; background:#F8FAFC; border:1px solid #E2E8F0; padding:10px 14px; border-radius:9px; font-size:12.5px; color:#475569; margin-top:8px; word-break:break-all; }
+
+  .swatches { display:flex; gap:10px; margin-top:4px; }
+  .sw { width:32px; height:32px; border-radius:8px; cursor:pointer; border:2px solid transparent; }
+  .sw.sel { border-color:#0F172A; }
+  .upload { border:2px dashed #CBD5E1; border-radius:11px; padding:14px; text-align:center; color:#64748B; font-size:13px; background:#F8FAFC; display:flex; align-items:center; justify-content:center; gap:12px; }
+  .logo-prev { width:38px; height:38px; background:#7C3AED; border-radius:9px; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; }
+  .toggle { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-top:1px solid #F1F5F9; font-size:14px; }
+  .toggle .d { color:#64748B; font-size:12.5px; margin-top:2px; }
+  .switch { width:42px; height:24px; background:#2563EB; border-radius:99px; position:relative; flex-shrink:0; }
+  .switch.off { background:#CBD5E1; }
+  .switch::after { content:''; position:absolute; width:18px; height:18px; background:#fff; border-radius:50%; top:3px; right:3px; }
+  .switch.off::after { right:auto; left:3px; }
+
+  .user-row { display:grid; grid-template-columns:2fr 1.5fr 1fr 1fr 40px; align-items:center; padding:12px 4px; border-bottom:1px solid #F8FAFC; font-size:13.5px; }
+  .u { display:flex; gap:10px; align-items:center; }
+  .av { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:11px; font-weight:700; }
+  .muted { color:#94A3B8; font-size:12.5px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="rail">
+    <div class="mark">◆</div>
+    <a href="04-agent-dashboard.html" title="Dashboard">🏠</a>
+    <a href="03-agent-workspace.html" title="Tickets">🎫</a>
+    <a href="#" title="Problems">🧩</a>
+    <a href="#" title="Customers">👥</a>
+    <a href="#" class="active" title="Settings">⚙️</a>
+  </div>
+
+  <div class="subnav">
+    <h3>Settings</h3>
+    <a href="#users" class="active">Users &amp; roles</a>
+    <a href="#sso">Single sign-on</a>
+    <a href="#domains">Domains</a>
+    <a href="#branding">Branding</a>
+    <a href="#">Email</a>
+    <a href="#">Notifications</a>
+    <a href="#">Widget</a>
+    <a href="#">Announcements</a>
+  </div>
+
+  <main>
+    <div class="note">📋 Design review: four settings pages shown stacked (Users, SSO, Domains, Branding). In the real app each is its own page.</div>
+
+    <!-- USERS -->
+    <h1 id="users">Users &amp; roles</h1>
+    <p class="sub">Roles live in Trackly — change them here any time, no IdP needed.</p>
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; margin-bottom:14px;">
+        <input style="max-width:280px" placeholder="🔍 Search members…">
+        <button class="btn btn-primary">+ Invite member</button>
+      </div>
+      <div class="user-row" style="font-size:11.5px; text-transform:uppercase; letter-spacing:.7px; color:#94A3B8; font-weight:700;">
+        <span>Member</span><span>Signed in via</span><span>Role</span><span>Last active</span><span></span>
+      </div>
+      <div class="user-row">
+        <div class="u"><div class="av" style="background:#7C3AED">VD</div><div>Viola D<br><span class="muted">viola@acme.com</span></div></div>
+        <span>Okta SSO</span>
+        <span><select style="width:110px; padding:6px 8px;"><option>Admin</option><option>Agent</option><option>Customer</option></select></span>
+        <span class="muted">2 min ago</span><span>⋯</span>
+      </div>
+      <div class="user-row">
+        <div class="u"><div class="av" style="background:#0EA5E9">MH</div><div>Monica H<br><span class="muted">monica@acme.com</span></div></div>
+        <span>Okta SSO</span>
+        <span><select style="width:110px; padding:6px 8px;"><option>Agent</option></select></span>
+        <span class="muted">1 h ago</span><span>⋯</span>
+      </div>
+      <div class="user-row">
+        <div class="u"><div class="av" style="background:#10B981">GB</div><div>Gavin B<br><span class="muted">gavin@acme.com</span></div></div>
+        <span>Okta SSO</span>
+        <span><select style="width:110px; padding:6px 8px;"><option>Agent</option></select></span>
+        <span class="muted">Today</span><span>⋯</span>
+      </div>
+      <div class="user-row">
+        <div class="u"><div class="av" style="background:#F59E0B">JO</div><div>Javier Ortiz<br><span class="muted">javiero219@hotmail.com</span></div></div>
+        <span>Okta SSO <span class="muted">· JIT provisioned</span></span>
+        <span><span class="role-chip r-cust">Customer</span></span>
+        <span class="muted">25 min ago</span><span>⋯</span>
+      </div>
+      <div class="user-row" style="background:#FFFBEB; border-radius:8px;">
+        <div class="u"><div class="av" style="background:#CBD5E1">?</div><div>taylor@acme.com<br><span class="muted">Invitation pending · expires in 6 days</span></div></div>
+        <span>—</span>
+        <span><span class="role-chip r-agent">Agent</span></span>
+        <span class="muted">Resend</span><span>⋯</span>
+      </div>
+    </div>
+
+    <!-- SSO -->
+    <h1 id="sso">Single sign-on</h1>
+    <p class="sub">One active connection per workspace. Email+password stays available unless disabled below.</p>
+    <div class="card">
+      <div class="conn">
+        <div class="l">
+          <div class="ic">O</div>
+          <div>
+            <b>Okta SAML</b> <span class="chip active-chip">● Active</span>
+            <div class="m">Last tested Jul 1, 2026 · 42 users signed in this week</div>
+          </div>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-outline">Test SSO</button>
+          <button class="btn btn-outline">Edit</button>
+        </div>
+      </div>
+
+      <label style="margin-top:22px;">Group → role mapping <span style="color:#94A3B8; font-weight:400;">(re-evaluated on every login)</span></label>
+      <table class="map-table">
+        <tr><th>IdP group</th><th></th><th>Trackly role</th><th></th></tr>
+        <tr><td><code>support-admins</code></td><td class="arrow">→</td><td><span class="role-chip r-admin">Admin</span></td><td style="color:#94A3B8">✕</td></tr>
+        <tr><td><code>support-agents</code></td><td class="arrow">→</td><td><span class="role-chip r-agent">Agent</span></td><td style="color:#94A3B8">✕</td></tr>
+        <tr><td><em style="color:#94A3B8">everyone else</em></td><td class="arrow">→</td><td><span class="role-chip r-cust">Customer</span></td><td></td></tr>
+      </table>
+      <div class="actions"><button class="btn btn-outline">+ Add mapping</button></div>
+
+      <div class="toggle" style="margin-top:18px;">
+        <div><b>Allow email magic-link login</b><div class="d">Passwordless sign-in via emailed link + code. If off, members can only sign in through Okta SAML.</div></div>
+        <div class="switch"></div>
+      </div>
+      <div class="toggle">
+        <div><b>Switch provider</b><div class="d">Users and tickets are preserved; identities re-link by email on first login.</div></div>
+        <button class="btn btn-outline">Change provider…</button>
+      </div>
+    </div>
+
+    <!-- DOMAINS -->
+    <h1 id="domains">Domains</h1>
+    <p class="sub">Verified domains route your users to SSO automatically from the login page.</p>
+    <div class="card">
+      <div class="domain-row">
+        <div><b>acme.com</b> <span class="chip verified">✓ Verified</span></div>
+        <div style="display:flex; gap:16px; align-items:center; font-size:13px; color:#475569;">Discoverable <div class="switch"></div></div>
+      </div>
+      <div class="domain-row">
+        <div><b>acme.co.uk</b> <span class="chip pending">⏳ Pending verification</span></div>
+        <button class="btn btn-outline">Check DNS</button>
+      </div>
+      <div class="mono">TXT record for acme.co.uk:&nbsp;&nbsp;trackly-verification=tk_9f3a1c77e2b64d0c</div>
+      <div class="actions"><button class="btn btn-primary">+ Add domain</button></div>
+    </div>
+
+    <!-- BRANDING -->
+    <h1 id="branding">Branding</h1>
+    <p class="sub">Applied to the customer form, portal, widget, and notification emails.</p>
+    <div class="card">
+      <div class="row">
+        <div>
+          <label>Logo</label>
+          <div class="upload"><div class="logo-prev">A</div> acme-logo.svg · <b style="color:#2563EB">Replace</b></div>
+          <label>Brand colour</label>
+          <div class="swatches">
+            <div class="sw" style="background:#2563EB"></div>
+            <div class="sw sel" style="background:#7C3AED"></div>
+            <div class="sw" style="background:#DC2626"></div>
+            <div class="sw" style="background:#16A34A"></div>
+            <div class="sw" style="background:#0F172A"></div>
+            <input style="width:110px; margin-left:6px;" value="#7C3AED">
+          </div>
+          <label>Portal title</label>
+          <input value="Acme Support">
+          <label>Welcome message</label>
+          <input value="How can we help you?">
+          <div class="toggle" style="margin-top:16px;">
+            <div><b>Hide "Powered by Trackly"</b><div class="d">Available on the Enterprise plan.</div></div>
+            <div class="switch off"></div>
+          </div>
+        </div>
+        <div>
+          <label>Live preview</label>
+          <div style="border:1px solid #E2E8F0; border-radius:12px; overflow:hidden;">
+            <div style="background:#7C3AED; color:#fff; padding:14px 18px; display:flex; gap:10px; align-items:center; font-weight:700;">
+              <div class="logo-prev" style="width:26px; height:26px; background:#fff; color:#7C3AED; font-size:13px;">A</div> Acme Support
+            </div>
+            <div style="padding:18px; background:#FAFAFA; font-size:13px; color:#475569;">
+              <b style="color:#0F172A; font-size:15px;">How can we help you?</b>
+              <div style="height:30px; background:#fff; border:1px solid #E2E8F0; border-radius:8px; margin-top:12px;"></div>
+              <div style="height:30px; background:#fff; border:1px solid #E2E8F0; border-radius:8px; margin-top:8px;"></div>
+              <div style="height:56px; background:#fff; border:1px solid #E2E8F0; border-radius:8px; margin-top:8px;"></div>
+              <div style="height:32px; width:130px; background:#7C3AED; border-radius:8px; margin-top:12px;"></div>
+              <div style="text-align:center; color:#CBD5E1; font-size:11px; margin-top:14px;">Powered by Trackly</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="actions"><button class="btn btn-primary">Save changes</button><button class="btn btn-outline">Discard</button></div>
+    </div>
+  </main>
+
+</div>
+</body>
+</html>

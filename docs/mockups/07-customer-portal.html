@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Acme Support — Customer Portal (branded)</title>
+<style>
+  /* Customer-facing: styled entirely with the workspace's brand colour (#7C3AED). */
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI', system-ui, sans-serif; color:#1E1B2E; background:#F6F4FA; padding-bottom:60px; }
+  .note { max-width:860px; margin:26px auto 8px; text-align:center; color:#64748B; font-size:13.5px; background:#FEF9C3; border:1px solid #FDE047; border-radius:10px; padding:9px 16px; }
+  .step-label { max-width:860px; margin:36px auto 12px; font-size:12.5px; font-weight:700; color:#94A3B8; letter-spacing:1px; text-transform:uppercase; }
+
+  header { background:#7C3AED; color:#fff; padding:16px 0; }
+  .head-inner { max-width:860px; margin:0 auto; display:flex; align-items:center; gap:12px; padding:0 16px; }
+  .brand-logo { width:32px; height:32px; background:#fff; color:#7C3AED; border-radius:9px; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:15px; }
+  .head-inner b { font-size:16.5px; }
+  .head-right { margin-left:auto; display:flex; gap:18px; align-items:center; font-size:13.5px; }
+  .avatar { width:30px; height:30px; border-radius:50%; background:rgba(255,255,255,.25); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; }
+
+  .wrap { max-width:860px; margin:26px auto 0; padding:0 16px; }
+  .toolbar { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+  .toolbar h1 { font-size:21px; }
+  .new-btn { background:#7C3AED; color:#fff; border:none; padding:11px 20px; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; }
+  .tabs { display:flex; gap:6px; margin-bottom:16px; }
+  .tab { padding:8px 16px; border-radius:9px; font-size:13.5px; font-weight:600; color:#6B7280; cursor:pointer; }
+  .tab.active { background:#EDE7FB; color:#6D28D9; }
+
+  .ticket { background:#fff; border:1px solid #E9E4F5; border-radius:14px; padding:18px 22px; margin-bottom:12px; display:flex; align-items:center; gap:18px; cursor:pointer; }
+  .ticket:hover { border-color:#C9B8F0; }
+  .t-main { flex:1; }
+  .t-sub { font-weight:600; font-size:15px; }
+  .t-meta { font-size:12.5px; color:#9CA3AF; margin-top:4px; }
+  .chip { font-size:11.5px; font-weight:700; padding:4px 12px; border-radius:99px; white-space:nowrap; }
+  .open { background:#F0FDF4; color:#16A34A; }
+  .pend { background:#FFF7ED; color:#EA580C; }
+  .resolved { background:#F1F5F9; color:#64748B; }
+  .reply-dot { width:9px; height:9px; background:#7C3AED; border-radius:50%; }
+
+  /* detail view */
+  .detail { background:#fff; border:1px solid #E9E4F5; border-radius:16px; overflow:hidden; }
+  .d-head { padding:20px 26px; border-bottom:1px solid #F1EDF9; display:flex; justify-content:space-between; align-items:center; }
+  .d-head h2 { font-size:17px; }
+  .d-head .m { font-size:12.5px; color:#9CA3AF; margin-top:3px; }
+  .thread { padding:24px 26px; display:flex; flex-direction:column; gap:14px; background:#FBFAFE; }
+  .msg { max-width:75%; }
+  .msg .who { font-size:12px; color:#9CA3AF; margin-bottom:4px; }
+  .bubble { padding:12px 15px; border-radius:13px; font-size:14px; line-height:1.55; }
+  .mine { align-self:flex-end; text-align:right; }
+  .mine .bubble { background:#EDE7FB; text-align:left; border-top-right-radius:4px; }
+  .theirs .bubble { background:#fff; border:1px solid #E9E4F5; border-top-left-radius:4px; }
+  .agent-badge { display:inline-block; background:#7C3AED; color:#fff; font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; margin-left:6px; vertical-align:1px; }
+  .composer { padding:16px 26px 20px; border-top:1px solid #F1EDF9; }
+  .composer textarea { width:100%; border:1.5px solid #D8D2E8; border-radius:11px; padding:12px 14px; font-size:14px; font-family:inherit; height:70px; resize:none; }
+  .c-foot { display:flex; justify-content:space-between; align-items:center; margin-top:10px; }
+  .c-foot .hint { font-size:12.5px; color:#9CA3AF; }
+  .send { background:#7C3AED; color:#fff; border:none; padding:10px 22px; border-radius:9px; font-weight:600; font-size:14px; cursor:pointer; }
+  .powered { text-align:center; color:#C4BFD4; font-size:12px; margin-top:24px; }
+</style>
+</head>
+<body>
+
+<div class="note">📋 Design review: customer portal list + ticket detail stacked. Signed-in customers see only their own tickets; private agent notes never appear here.</div>
+
+<div class="step-label">Customer portal — ticket list (signed in via workspace SSO)</div>
+<header>
+  <div class="head-inner">
+    <div class="brand-logo">A</div><b>Acme Support</b>
+    <div class="head-right"><span>Submit a ticket</span><div class="avatar">JO</div></div>
+  </div>
+</header>
+<div class="wrap">
+  <div class="toolbar">
+    <h1>My tickets</h1>
+    <button class="new-btn">+ New ticket</button>
+  </div>
+  <div class="tabs">
+    <div class="tab active">Open (2)</div>
+    <div class="tab">Resolved (3)</div>
+    <div class="tab">All (5)</div>
+  </div>
+
+  <div class="ticket">
+    <div class="reply-dot" title="New reply"></div>
+    <div class="t-main">
+      <div class="t-sub">#1126 · Cannot verify my code</div>
+      <div class="t-meta">Technical issue · Updated 2 min ago · Viola from Acme replied</div>
+    </div>
+    <span class="chip open">Open</span>
+  </div>
+  <div class="ticket">
+    <div style="width:9px;"></div>
+    <div class="t-main">
+      <div class="t-sub">#1098 · Invoice shows wrong billing address</div>
+      <div class="t-meta">Billing · Updated 2 days ago · Waiting on you</div>
+    </div>
+    <span class="chip pend">Pending</span>
+  </div>
+  <div class="ticket" style="opacity:.65">
+    <div style="width:9px;"></div>
+    <div class="t-main">
+      <div class="t-sub">#1042 · Can't pay — checkout failing</div>
+      <div class="t-meta">Billing · Resolved Jun 12 · linked to a known incident</div>
+    </div>
+    <span class="chip resolved">Resolved</span>
+  </div>
+</div>
+
+<div class="step-label" style="margin-top:44px;">Customer portal — ticket detail (what the customer sees; 🔒 internal notes are hidden)</div>
+<div class="wrap">
+  <div class="detail">
+    <div class="d-head">
+      <div>
+        <h2>#1126 · Cannot verify my code</h2>
+        <div class="m">Opened today 12:41 PM · Technical issue</div>
+      </div>
+      <span class="chip open">Open</span>
+    </div>
+    <div class="thread">
+      <div class="msg mine">
+        <div class="who">You · 12:41 PM</div>
+        <div class="bubble">Hi — I requested a verification code three times but the email that arrives has no code attached to it. Can you help? 📎 screen-recording.mp4</div>
+      </div>
+      <div class="msg theirs">
+        <div class="who">Viola D <span class="agent-badge">ACME TEAM</span> · 12:44 PM</div>
+        <div class="bubble">Thanks Javier — sorry about that. I'm looking into it now and will have our technical team check the delivery logs.</div>
+      </div>
+      <div class="msg theirs">
+        <div class="who">Viola D <span class="agent-badge">ACME TEAM</span> · 1:02 PM</div>
+        <div class="bubble">We found the issue and just fixed it. Could you request a new code and try once more?</div>
+      </div>
+    </div>
+    <div class="composer">
+      <textarea placeholder="Write a reply…"></textarea>
+      <div class="c-foot">
+        <span class="hint">📎 Attach files · You can also reply directly from your email inbox</span>
+        <button class="send">Send</button>
+      </div>
+    </div>
+  </div>
+  <div class="powered">Powered by Trackly</div>
+</div>
+
+</body>
+</html>

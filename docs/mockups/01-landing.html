@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trackly — Marketing Landing Page</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI', system-ui, -apple-system, sans-serif; color:#0F172A; background:#fff; }
+  a { text-decoration:none; color:inherit; }
+  .btn { display:inline-block; padding:12px 24px; border-radius:10px; font-weight:600; font-size:15px; cursor:pointer; border:none; }
+  .btn-primary { background:#2563EB; color:#fff; }
+  .btn-outline { background:#fff; color:#2563EB; border:1.5px solid #CBD5E1; }
+  .btn-ghost { background:transparent; color:#334155; padding:10px 16px; }
+
+  nav { display:flex; align-items:center; justify-content:space-between; padding:18px 64px; border-bottom:1px solid #F1F5F9; position:sticky; top:0; background:#fff; z-index:10; }
+  .logo { display:flex; align-items:center; gap:10px; font-size:20px; font-weight:800; }
+  .logo-mark { width:32px; height:32px; border-radius:9px; background:linear-gradient(135deg,#2563EB,#7C3AED); display:flex; align-items:center; justify-content:center; color:#fff; font-size:16px; }
+  .nav-links { display:flex; gap:8px; align-items:center; }
+  .nav-links a { padding:8px 14px; color:#475569; font-weight:500; font-size:15px; border-radius:8px; }
+  .nav-links a:hover { background:#F1F5F9; }
+
+  .hero { text-align:center; padding:88px 24px 56px; background:radial-gradient(ellipse at top, #EFF6FF 0%, #ffffff 65%); }
+  .hero .eyebrow { display:inline-block; background:#EFF6FF; color:#2563EB; font-size:13px; font-weight:700; padding:6px 14px; border-radius:99px; margin-bottom:20px; border:1px solid #DBEAFE; }
+  .hero h1 { font-size:52px; line-height:1.12; letter-spacing:-1.5px; max-width:820px; margin:0 auto 20px; }
+  .hero h1 span { color:#2563EB; }
+  .hero p { font-size:19px; color:#64748B; max-width:640px; margin:0 auto 32px; line-height:1.6; }
+  .hero-ctas { display:flex; gap:14px; justify-content:center; }
+  .hero-note { margin-top:16px; font-size:13px; color:#94A3B8; }
+
+  .screenshot { max-width:1020px; margin:48px auto 0; border-radius:16px; border:1px solid #E2E8F0; box-shadow:0 24px 60px -12px rgba(15,23,42,.18); overflow:hidden; }
+  .ss-bar { background:#F8FAFC; padding:10px 16px; display:flex; gap:6px; border-bottom:1px solid #E2E8F0; }
+  .ss-dot { width:10px; height:10px; border-radius:50%; background:#E2E8F0; }
+  .ss-body { display:grid; grid-template-columns:200px 1fr 220px; height:320px; font-size:11px; }
+  .ss-left { border-right:1px solid #F1F5F9; padding:12px; background:#FBFCFE; }
+  .ss-item { padding:8px; border-radius:8px; margin-bottom:4px; color:#475569; }
+  .ss-item.active { background:#EFF6FF; color:#1D4ED8; font-weight:600; }
+  .ss-mid { padding:14px; }
+  .ss-bubble { background:#F1F5F9; border-radius:10px; padding:8px 10px; margin-bottom:8px; max-width:75%; color:#334155; }
+  .ss-bubble.agent { background:#DBEAFE; margin-left:auto; }
+  .ss-bubble.internal { background:#FEF3C7; border:1px dashed #F59E0B; }
+  .ss-right { border-left:1px solid #F1F5F9; padding:12px; background:#FBFCFE; color:#64748B; }
+  .ss-right div { padding:5px 0; border-bottom:1px solid #F1F5F9; }
+  .ss-right b { color:#334155; }
+
+  .idps { text-align:center; padding:56px 24px; color:#94A3B8; }
+  .idps p { font-size:13px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; margin-bottom:24px; }
+  .idp-row { display:flex; gap:14px; justify-content:center; flex-wrap:wrap; }
+  .idp { padding:10px 22px; border:1px solid #E2E8F0; border-radius:10px; font-weight:600; color:#475569; font-size:15px; background:#fff; }
+
+  .features { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; max-width:1060px; margin:0 auto; padding:24px; }
+  .feature { border:1px solid #E2E8F0; border-radius:16px; padding:28px; }
+  .feature .ic { width:44px; height:44px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; margin-bottom:16px; }
+  .feature h3 { font-size:18px; margin-bottom:8px; }
+  .feature p { color:#64748B; font-size:14.5px; line-height:1.6; }
+
+  .section-title { text-align:center; padding:72px 24px 32px; }
+  .section-title h2 { font-size:34px; letter-spacing:-0.5px; margin-bottom:10px; }
+  .section-title p { color:#64748B; font-size:17px; }
+
+  .pricing { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; max-width:1060px; margin:0 auto; padding:16px 24px 80px; }
+  .plan { border:1px solid #E2E8F0; border-radius:16px; padding:32px 28px; position:relative; }
+  .plan.popular { border:2px solid #2563EB; box-shadow:0 12px 40px -8px rgba(37,99,235,.2); }
+  .plan .tag { position:absolute; top:-13px; left:50%; transform:translateX(-50%); background:#2563EB; color:#fff; font-size:12px; font-weight:700; padding:4px 14px; border-radius:99px; }
+  .plan h3 { font-size:17px; color:#475569; margin-bottom:8px; }
+  .plan .price { font-size:38px; font-weight:800; margin-bottom:4px; }
+  .plan .price small { font-size:15px; color:#94A3B8; font-weight:500; }
+  .plan ul { list-style:none; margin:22px 0; }
+  .plan li { padding:7px 0; color:#475569; font-size:14.5px; }
+  .plan li::before { content:'✓'; color:#16A34A; font-weight:700; margin-right:10px; }
+  .plan .btn { width:100%; text-align:center; }
+
+  footer { border-top:1px solid #F1F5F9; padding:40px 64px; display:flex; justify-content:space-between; color:#94A3B8; font-size:14px; }
+  footer .cols { display:flex; gap:40px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="logo"><div class="logo-mark">◆</div> Trackly</div>
+  <div class="nav-links">
+    <a href="#">Features</a><a href="#">Pricing</a><a href="#">Docs</a><a href="#">Security</a>
+  </div>
+  <div class="nav-links">
+    <a href="#" class="btn btn-ghost">Sign in</a>
+    <a href="02-onboarding.html" class="btn btn-primary">Start free trial →</a>
+  </div>
+</nav>
+
+<section class="hero">
+  <span class="eyebrow">🔐 Works with the identity provider you already have</span>
+  <h1>Customer support that works with <span>your identity</span></h1>
+  <p>Ticketing, two-way email threading, and a fully branded customer portal.
+     Bring your own SSO — Okta, Google, Microsoft Entra ID, Authly — or none at all.</p>
+  <div class="hero-ctas">
+    <a href="02-onboarding.html" class="btn btn-primary">Start free trial</a>
+    <a href="#" class="btn btn-outline">Book a demo</a>
+  </div>
+  <div class="hero-note">Free for up to 3 agents · No credit card required</div>
+
+  <div class="screenshot">
+    <div class="ss-bar"><div class="ss-dot"></div><div class="ss-dot"></div><div class="ss-dot"></div></div>
+    <div class="ss-body">
+      <div class="ss-left">
+        <div class="ss-item active">#1126 · Verifying code…</div>
+        <div class="ss-item">#1125 · Where is my order</div>
+        <div class="ss-item">#1124 · Overseas shipping</div>
+        <div class="ss-item">#1123 · Wholesale order</div>
+        <div class="ss-item">#1122 · Refund request</div>
+      </div>
+      <div class="ss-mid">
+        <div class="ss-bubble">Email came through but there is no code attached to it.</div>
+        <div class="ss-bubble agent">Thanks Javier — our technical team is looking into this now.</div>
+        <div class="ss-bubble internal">🔒 @Gavin can you check the OTP service logs?</div>
+        <div class="ss-bubble agent">We found the issue — could you try once more?</div>
+      </div>
+      <div class="ss-right">
+        <div><b>Assignee</b><br>Viola D</div>
+        <div><b>Watchers</b><br>Taylor B, Gavin B</div>
+        <div><b>Priority</b><br>High</div>
+        <div><b>Category</b><br>Technical</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="idps">
+  <p>Single sign-on with</p>
+  <div class="idp-row">
+    <span class="idp">Okta</span><span class="idp">Google Workspace</span><span class="idp">Microsoft Entra ID</span>
+    <span class="idp">Authly</span><span class="idp">Auth0</span><span class="idp">Custom SAML</span><span class="idp">Custom OIDC</span>
+  </div>
+</section>
+
+<div class="section-title">
+  <h2>Everything a support team needs</h2>
+  <p>From the first ticket to the root cause.</p>
+</div>
+<section class="features">
+  <div class="feature"><div class="ic" style="background:#EFF6FF">🎫</div><h3>Smart ticketing</h3><p>Round-robin auto-assignment, watchers, private internal notes, and problem grouping to track root causes across many tickets.</p></div>
+  <div class="feature"><div class="ic" style="background:#F0FDF4">✉️</div><h3>Two-way email threading</h3><p>Customers reply from their inbox and it lands in the ticket thread. Agents reply from Trackly. Fully configurable per workspace.</p></div>
+  <div class="feature"><div class="ic" style="background:#FDF4FF">🎨</div><h3>Your brand, not ours</h3><p>The customer-facing portal and forms carry your logo, colours, and domain. Trackly stays invisible to your customers.</p></div>
+  <div class="feature"><div class="ic" style="background:#FFF7ED">🔐</div><h3>Bring your own SSO</h3><p>Connect the IdP you already use in minutes with a guided wizard. Group-to-role mapping onboards your whole team automatically.</p></div>
+  <div class="feature"><div class="ic" style="background:#F0F9FF">🧩</div><h3>Embeddable widget</h3><p>Drop a script tag into any site or app and collect tickets right where your customers are — pre-filled and branded.</p></div>
+  <div class="feature"><div class="ic" style="background:#FEF2F2">📣</div><h3>Outage announcements</h3><p>Email every customer in one click during planned or unplanned outages, and link announcements to tracked problems.</p></div>
+</section>
+
+<div class="section-title">
+  <h2>Simple pricing</h2>
+  <p>Start free. Scale when your team does.</p>
+</div>
+<section class="pricing">
+  <div class="plan">
+    <h3>Free</h3>
+    <div class="price">$0 <small>/ month</small></div>
+    <ul><li>Up to 3 agents</li><li>Passwordless magic-link login</li><li>Ticketing & private notes</li><li>Email notifications</li></ul>
+    <a href="#" class="btn btn-outline">Get started</a>
+  </div>
+  <div class="plan popular">
+    <span class="tag">Most popular</span>
+    <h3>Team</h3>
+    <div class="price">$12 <small>/ agent / month</small></div>
+    <ul><li>Unlimited agents</li><li>Two-way email threading</li><li>Custom branding</li><li>Embeddable widget</li><li>Problems & announcements</li></ul>
+    <a href="#" class="btn btn-primary">Start free trial</a>
+  </div>
+  <div class="plan">
+    <h3>Enterprise</h3>
+    <div class="price">Custom</div>
+    <ul><li>SAML / OIDC SSO</li><li>Group → role mapping</li><li>Domain verification</li><li>Remove "Powered by Trackly"</li><li>SLA & priority support</li></ul>
+    <a href="#" class="btn btn-outline">Contact sales</a>
+  </div>
+</section>
+
+<footer>
+  <div class="logo" style="font-size:16px"><div class="logo-mark" style="width:26px;height:26px;font-size:13px">◆</div> Trackly</div>
+  <div class="cols"><a href="#">Docs</a><a href="#">Security</a><a href="#">Status</a><a href="#">Contact</a></div>
+</footer>
+
+</body>
+</html>

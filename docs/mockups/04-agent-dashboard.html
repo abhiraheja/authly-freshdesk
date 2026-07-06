@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trackly — Agent Dashboard</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI', system-ui, sans-serif; color:#0F172A; background:#F1F5F9; }
+  .app { display:grid; grid-template-columns:64px 1fr; min-height:100vh; }
+  .rail { background:#0F172A; display:flex; flex-direction:column; align-items:center; padding:14px 0; gap:6px; }
+  .rail .mark { width:36px; height:36px; border-radius:10px; background:linear-gradient(135deg,#2563EB,#7C3AED); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; margin-bottom:14px; }
+  .rail a { width:42px; height:42px; border-radius:11px; display:flex; align-items:center; justify-content:center; font-size:18px; color:#94A3B8; text-decoration:none; }
+  .rail a.active { background:#1E293B; color:#fff; }
+  .rail .spacer { flex:1; }
+  .rail .avatar { width:34px; height:34px; border-radius:50%; background:#7C3AED; color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:700; }
+
+  main { padding:28px 36px; max-width:1160px; }
+  .page-head { display:flex; justify-content:space-between; align-items:center; margin-bottom:24px; }
+  .page-head h1 { font-size:22px; letter-spacing:-0.3px; }
+  .page-head .sub { color:#64748B; font-size:14px; margin-top:3px; }
+  .range { background:#fff; border:1.5px solid #E2E8F0; padding:9px 16px; border-radius:10px; font-size:13.5px; color:#475569; font-weight:600; }
+
+  .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:18px; margin-bottom:28px; }
+  .stat { background:#fff; border:1px solid #E2E8F0; border-radius:14px; padding:20px; }
+  .stat .lbl { font-size:13px; color:#64748B; font-weight:600; margin-bottom:8px; }
+  .stat .val { font-size:32px; font-weight:800; letter-spacing:-1px; }
+  .stat .delta { font-size:12.5px; font-weight:700; margin-top:6px; display:inline-block; padding:2px 9px; border-radius:99px; }
+  .up { color:#16A34A; background:#F0FDF4; }
+  .down { color:#DC2626; background:#FEF2F2; }
+  .spark { height:34px; margin-top:10px; display:flex; align-items:flex-end; gap:3px; }
+  .spark i { flex:1; background:#DBEAFE; border-radius:3px 3px 0 0; }
+  .spark i.hi { background:#2563EB; }
+
+  .card { background:#fff; border:1px solid #E2E8F0; border-radius:14px; margin-bottom:24px; overflow:hidden; }
+  .card-head { padding:16px 22px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #F1F5F9; }
+  .card-head h2 { font-size:16px; }
+  .card-head .filters { display:flex; gap:8px; }
+  .pill-btn { border:1.5px solid #E2E8F0; background:#fff; padding:7px 14px; border-radius:9px; font-size:13px; color:#475569; font-weight:600; cursor:pointer; }
+  .pill-btn.active { background:#EFF6FF; border-color:#93C5FD; color:#1D4ED8; }
+
+  table { width:100%; border-collapse:collapse; font-size:13.5px; }
+  th { text-align:left; padding:11px 22px; font-size:11.5px; text-transform:uppercase; letter-spacing:.7px; color:#94A3B8; border-bottom:1px solid #F1F5F9; font-weight:700; }
+  td { padding:13px 22px; border-bottom:1px solid #F8FAFC; color:#334155; }
+  tr:hover td { background:#F8FAFF; cursor:pointer; }
+  .subject { font-weight:600; color:#0F172A; }
+  .chip { display:inline-block; font-size:11.5px; font-weight:700; padding:3px 11px; border-radius:99px; }
+  .new { background:#EFF6FF; color:#2563EB; }
+  .open { background:#F0FDF4; color:#16A34A; }
+  .pend { background:#FFF7ED; color:#EA580C; }
+  .high { background:#FEF2F2; color:#DC2626; }
+  .med { background:#FEFCE8; color:#A16207; }
+  .low { background:#F1F5F9; color:#64748B; }
+  .assignee { display:flex; align-items:center; gap:8px; }
+  .av { width:24px; height:24px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#fff; font-size:10px; font-weight:700; }
+  .unassigned { color:#94A3B8; font-style:italic; }
+  .see-more { text-align:center; padding:14px; color:#2563EB; font-weight:600; font-size:13.5px; cursor:pointer; }
+
+  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:24px; }
+  .problem-item { display:flex; justify-content:space-between; align-items:center; padding:14px 22px; border-bottom:1px solid #F8FAFC; }
+  .problem-item .t { font-weight:600; font-size:14px; }
+  .problem-item .m { font-size:12.5px; color:#94A3B8; margin-top:2px; }
+  .inv { background:#FFF7ED; color:#EA580C; }
+  .mon { background:#EFF6FF; color:#2563EB; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="rail">
+    <div class="mark">◆</div>
+    <a href="#" class="active" title="Dashboard">🏠</a>
+    <a href="03-agent-workspace.html" title="Tickets">🎫</a>
+    <a href="#" title="Problems">🧩</a>
+    <a href="#" title="Customers">👥</a>
+    <a href="05-admin-settings.html" title="Settings">⚙️</a>
+    <div class="spacer"></div>
+    <div class="avatar">VD</div>
+  </div>
+
+  <main>
+    <div class="page-head">
+      <div>
+        <h1>Good afternoon, Viola 👋</h1>
+        <div class="sub">Acme Corporation · acme.trackly.com</div>
+      </div>
+      <div class="range">📅 Jul 1 – Jul 7, 2026 ▾</div>
+    </div>
+
+    <div class="stats">
+      <div class="stat">
+        <div class="lbl">Open tickets</div>
+        <div class="val">29</div>
+        <span class="delta down">▲ 8% vs last week</span>
+        <div class="spark"><i style="height:40%"></i><i style="height:55%"></i><i style="height:45%"></i><i style="height:70%"></i><i style="height:60%"></i><i style="height:80%"></i><i class="hi" style="height:100%"></i></div>
+      </div>
+      <div class="stat">
+        <div class="lbl">Solved this week</div>
+        <div class="val">164</div>
+        <span class="delta up">▲ 15% vs last week</span>
+        <div class="spark"><i style="height:50%"></i><i style="height:60%"></i><i style="height:45%"></i><i style="height:75%"></i><i style="height:65%"></i><i style="height:85%"></i><i class="hi" style="height:100%"></i></div>
+      </div>
+      <div class="stat">
+        <div class="lbl">Avg. first response</div>
+        <div class="val">1m 32s</div>
+        <span class="delta up">▼ 12% faster</span>
+        <div class="spark"><i style="height:90%"></i><i style="height:75%"></i><i style="height:80%"></i><i style="height:60%"></i><i style="height:55%"></i><i style="height:45%"></i><i class="hi" style="height:35%"></i></div>
+      </div>
+      <div class="stat">
+        <div class="lbl">Unassigned</div>
+        <div class="val">3</div>
+        <span class="delta down">needs attention</span>
+        <div class="spark"><i style="height:20%"></i><i style="height:35%"></i><i style="height:20%"></i><i style="height:45%"></i><i style="height:30%"></i><i style="height:60%"></i><i class="hi" style="height:75%"></i></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>My tickets</h2>
+        <div class="filters">
+          <button class="pill-btn active">All (29)</button>
+          <button class="pill-btn">Unassigned (3)</button>
+          <button class="pill-btn">Assigned to me (9)</button>
+          <button class="pill-btn">Watching (4)</button>
+        </div>
+      </div>
+      <table>
+        <tr><th>ID</th><th>Subject</th><th>Requester</th><th>Channel</th><th>Status</th><th>Priority</th><th>Assignee</th><th>Updated</th></tr>
+        <tr>
+          <td>#1147</td><td class="subject">Replacement policy</td><td>Isabella W</td><td>Web form</td>
+          <td><span class="chip new">New</span></td><td><span class="chip med">Medium</span></td>
+          <td class="unassigned">Unassigned</td><td>2m</td>
+        </tr>
+        <tr>
+          <td>#1146</td><td class="subject">Help me set up a new account</td><td>Ryan Green</td><td>Widget</td>
+          <td><span class="chip new">New</span></td><td><span class="chip low">Low</span></td>
+          <td class="unassigned">Unassigned</td><td>9m</td>
+        </tr>
+        <tr>
+          <td>#1145</td><td class="subject">Order tracking</td><td>Marta Diaz</td><td>Email</td>
+          <td><span class="chip new">New</span></td><td><span class="chip med">Medium</span></td>
+          <td class="unassigned">Unassigned</td><td>14m</td>
+        </tr>
+        <tr>
+          <td>#1126</td><td class="subject">Cannot verify my code</td><td>Javier Ortiz</td><td>Web form</td>
+          <td><span class="chip open">Open</span></td><td><span class="chip high">High</span></td>
+          <td><div class="assignee"><div class="av" style="background:#7C3AED">VD</div> Viola D</div></td><td>45s</td>
+        </tr>
+        <tr>
+          <td>#1129</td><td class="subject">Return request</td><td>Matthew M</td><td>Web form</td>
+          <td><span class="chip open">Open</span></td><td><span class="chip med">Medium</span></td>
+          <td><div class="assignee"><div class="av" style="background:#0EA5E9">MH</div> Monica H</div></td><td>1h</td>
+        </tr>
+        <tr>
+          <td>#976</td><td class="subject">Refund</td><td>Brian Baker</td><td>Email</td>
+          <td><span class="chip pend">Pending</span></td><td><span class="chip med">Medium</span></td>
+          <td><div class="assignee"><div class="av" style="background:#0EA5E9">MH</div> Monica H</div></td><td>2d</td>
+        </tr>
+      </table>
+      <div class="see-more">See all tickets →</div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <div class="card-head"><h2>🧩 Active problems</h2><button class="pill-btn">+ New problem</button></div>
+        <div class="problem-item">
+          <div><div class="t">PG-14 · Email delivery delays</div><div class="m">3 linked tickets · Gavin B</div></div>
+          <span class="chip inv">Investigating</span>
+        </div>
+        <div class="problem-item">
+          <div><div class="t">PG-13 · Payment gateway timeout</div><div class="m">11 linked tickets · Viola D</div></div>
+          <span class="chip mon">Monitoring</span>
+        </div>
+        <div class="problem-item">
+          <div><div class="t">PG-12 · Mobile app crash on login</div><div class="m">6 linked tickets · Taylor B</div></div>
+          <span class="chip mon">Monitoring</span>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h2>📣 Recent announcements</h2><button class="pill-btn">+ New</button></div>
+        <div class="problem-item">
+          <div><div class="t">Planned maintenance — July 10</div><div class="m">Scheduled · sends to 1,240 customers</div></div>
+          <span class="chip new">Scheduled</span>
+        </div>
+        <div class="problem-item">
+          <div><div class="t">Payment issue resolved</div><div class="m">Sent Jul 1 · 1,180 delivered, 4 bounced</div></div>
+          <span class="chip open">Sent</span>
+        </div>
+      </div>
+    </div>
+  </main>
+
+</div>
+</body>
+</html>

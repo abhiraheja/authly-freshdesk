@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Trackly — Design Mockups (review gallery)</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI', system-ui, sans-serif; color:#0F172A; background:#F1F5F9; padding:48px 24px 80px; }
+  .wrap { max-width:900px; margin:0 auto; }
+  .logo { display:flex; align-items:center; gap:10px; font-size:22px; font-weight:800; margin-bottom:6px; }
+  .logo-mark { width:34px; height:34px; border-radius:9px; background:linear-gradient(135deg,#2563EB,#7C3AED); display:flex; align-items:center; justify-content:center; color:#fff; }
+  .sub { color:#64748B; font-size:15px; margin-bottom:36px; }
+  h2 { font-size:14px; text-transform:uppercase; letter-spacing:1.2px; color:#94A3B8; margin:34px 0 14px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  a.card { display:block; background:#fff; border:1px solid #E2E8F0; border-radius:14px; padding:22px 24px; text-decoration:none; color:inherit; transition:box-shadow .15s, border-color .15s; }
+  a.card:hover { border-color:#93C5FD; box-shadow:0 8px 24px -8px rgba(37,99,235,.18); }
+  .card .n { font-size:12px; font-weight:700; color:#2563EB; margin-bottom:6px; }
+  .card b { font-size:16.5px; }
+  .card p { color:#64748B; font-size:13.5px; margin-top:6px; line-height:1.55; }
+  .tag { display:inline-block; font-size:11px; font-weight:700; padding:3px 10px; border-radius:99px; margin-top:12px; margin-right:6px; }
+  .t-trackly { background:#EFF6FF; color:#2563EB; }
+  .t-acme { background:#F5F3FF; color:#7C3AED; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo"><div class="logo-mark">◆</div> Trackly — Design Mockups</div>
+  <p class="sub">Open each screen in your browser to review. Trackly-branded surfaces use blue; the customer-facing surfaces demo how an enterprise's own branding (purple “Acme”) takes over.</p>
+
+  <h2>1 · Public — how an enterprise finds &amp; joins Trackly</h2>
+  <div class="grid">
+    <a class="card" href="01-landing.html">
+      <div class="n">01</div><b>Marketing landing page</b>
+      <p>Hero, product screenshot, IdP logos, feature grid, and 3-tier pricing. The front door for enterprises evaluating Trackly.</p>
+      <span class="tag t-trackly">Trackly brand</span>
+    </a>
+    <a class="card" href="02-onboarding.html">
+      <div class="n">02</div><b>Signup &amp; onboarding wizard</b>
+      <p>All 5 steps: create account → workspace → branding (live preview) → invite team → optional SSO. Plus the getting-started checklist.</p>
+      <span class="tag t-trackly">Trackly brand</span>
+    </a>
+  </div>
+
+  <h2>2 · Internal portal — admins &amp; agents</h2>
+  <div class="grid">
+    <a class="card" href="03-agent-workspace.html">
+      <div class="n">03</div><b>Agent workspace (three-pane)</b>
+      <p>The layout you picked: open tickets left, conversation centre with public reply / 🔒 private note toggle, ticket details + watchers right.</p>
+      <span class="tag t-trackly">Trackly brand</span>
+    </a>
+    <a class="card" href="04-agent-dashboard.html">
+      <div class="n">04</div><b>Agent dashboard</b>
+      <p>Stat cards with sparklines, filterable “My tickets” table with unassigned queue, active problems, and recent announcements.</p>
+      <span class="tag t-trackly">Trackly brand</span>
+    </a>
+    <a class="card" href="05-admin-settings.html">
+      <div class="n">05</div><b>Admin settings</b>
+      <p>Users &amp; roles (incl. pending invites + JIT-provisioned users), SSO connection with group→role mapping, domain verification, branding editor.</p>
+      <span class="tag t-trackly">Trackly brand</span>
+    </a>
+  </div>
+
+  <h2>3 · Customer-facing — the enterprise's brand, not Trackly's</h2>
+  <div class="grid">
+    <a class="card" href="06-customer-form.html">
+      <div class="n">06</div><b>Branded submit form + guest OTP</b>
+      <p>Three stages: branded form with SSO-or-guest paths → 6-digit OTP verification → confirmation with reference number and magic link.</p>
+      <span class="tag t-acme">Acme brand (demo)</span>
+    </a>
+    <a class="card" href="07-customer-portal.html">
+      <div class="n">07</div><b>Customer portal</b>
+      <p>Signed-in customer's ticket list and conversation view — agent replies visible, internal notes hidden, reply-by-email hint.</p>
+      <span class="tag t-acme">Acme brand (demo)</span>
+    </a>
+    <a class="card" href="08-widget.html">
+      <div class="n">08</div><b>Embeddable widget (floating popup)</b>
+      <p>Bottom-right launcher on the enterprise's own site: collapsed button, open ticket form with pre-filled user info, and success state — plus the embed snippet.</p>
+      <span class="tag t-acme">Acme brand (demo)</span>
+    </a>
+  </div>
+</div>
+</body>
+</html>
