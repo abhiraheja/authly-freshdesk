@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Trackly.Api/Trackly.Api.csproj" />
+    <Project Path="src/Trackly.Core/Trackly.Core.csproj" />
+    <Project Path="src/Trackly.Infrastructure/Trackly.Infrastructure.csproj" />
+    <Project Path="src/Trackly.Modules/Trackly.Modules.csproj" />
+  </Folder>
+</Solution>

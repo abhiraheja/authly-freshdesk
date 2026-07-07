@@ -1,0 +1,203 @@
+import {
+  Alert,
+  Button,
+  Divider,
+  Link,
+  List,
+  ListItemButton,
+  ListItemText,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material'
+import { useMutation } from '@tanstack/react-query'
+import { useState } from 'react'
+import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import { sendMagicLink, verifyMagicLink, type VerifyResponse, type WorkspaceSummary } from '../api/auth'
+import { AuthCard } from '../components/AuthCard'
+import { CodeInput } from '../components/CodeInput'
+import { savePendingAuth } from '../lib/pendingAuth'
+import { useAuthCompletion } from './useAuthCompletion'
+
+interface EmailAuthPageProps {
+  mode: 'login' | 'signup'
+}
+
+// Login and onboarding step 1 share this screen: enter an email, then either
+// click the emailed link (handled by VerifyPage) or type the 6-digit code here.
+export function EmailAuthPage({ mode }: EmailAuthPageProps) {
+  const [phase, setPhase] = useState<'email' | 'code' | 'choose'>('email')
+  const [email, setEmail] = useState('')
+  const [code, setCode] = useState('')
+  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const navigate = useNavigate()
+  const completeAuth = useAuthCompletion()
+
+  const handleVerifyResponse = (res: VerifyResponse) => {
+    if (res.status === 'ok') {
+      completeAuth(res.user)
+    } else if (res.status === 'signup_required') {
+      savePendingAuth({ email: res.email, code })
+      navigate('/onboarding/workspace')
+    } else {
+      setWorkspaces(res.workspaces)
+      setPhase('choose')
+    }
+  }
+
+  const send = useMutation({
+    mutationFn: () => sendMagicLink(email),
+    onSuccess: () => {
+      setError(null)
+      setCode('')
+      setPhase('code')
+    },
+    onError: (e: Error) => setError(e.message),
+  })
+
+  const verify = useMutation({
+    mutationFn: (workspaceSlug?: string) => verifyMagicLink({ email, code, workspaceSlug }),
+    onSuccess: handleVerifyResponse,
+    onError: (e: Error) => setError(e.message),
+  })
+
+  const isSignup = mode === 'signup'
+
+  if (phase === 'choose') {
+    return (
+      <AuthCard title="Choose a workspace" subtitle={<>Your email belongs to more than one workspace.</>}>
+        <List>
+          {workspaces.map((w) => (
+            <ListItemButton
+              key={w.slug}
+              onClick={() => verify.mutate(w.slug)}
+              disabled={verify.isPending}
+              sx={{ border: '1.5px solid #E2E8F0', borderRadius: '12px', mb: 1 }}
+            >
+              <ListItemText primary={w.name} secondary={`${w.slug}.trackly.com`} />
+            </ListItemButton>
+          ))}
+        </List>
+        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+      </AuthCard>
+    )
+  }
+
+  if (phase === 'code') {
+    return (
+      <AuthCard
+        title="Check your email 📬"
+        subtitle={
+          <>
+            We sent a sign-in link and a 6-digit code to <b>{email}</b>.
+            <br />
+            The link expires in 10 minutes.
+          </>
+        }
+        stepsDone={isSignup ? 1 : undefined}
+      >
+        <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: '#334155', mb: 1 }}>
+          Or enter the code from the email
+        </Typography>
+        <CodeInput value={code} onChange={setCode} disabled={verify.isPending} />
+        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+        <Button
+          fullWidth
+          size="large"
+          variant="contained"
+          sx={{ mt: 3 }}
+          disabled={code.length !== 6 || verify.isPending}
+          onClick={() => verify.mutate(undefined)}
+        >
+          Verify →
+        </Button>
+        <Stack sx={{ alignItems: 'center', mt: 1.75 }}>
+          <Link
+            component="button"
+            type="button"
+            underline="hover"
+            color="text.secondary"
+            sx={{ fontSize: 14 }}
+            disabled={send.isPending}
+            onClick={() => send.mutate()}
+          >
+            Resend email
+          </Link>
+        </Stack>
+      </AuthCard>
+    )
+  }
+
+  return (
+    <AuthCard
+      title={isSignup ? 'Create your account' : 'Sign in to Trackly'}
+      subtitle={
+        isSignup ? (
+          <>
+            You'll be the administrator of your new workspace.
+            <br />
+            No password needed — ever.
+          </>
+        ) : (
+          <>Welcome back. No password needed — ever.</>
+        )
+      }
+      stepsDone={isSignup ? 1 : undefined}
+    >
+      <Button fullWidth size="large" variant="outlined" color="inherit" disabled sx={{ borderColor: '#CBD5E1', color: '#334155' }}>
+        Continue with Google (coming soon)
+      </Button>
+      <Divider sx={{ my: 2.75, fontSize: 13, color: 'text.secondary' }}>
+        {isSignup ? 'or sign up with email' : 'or sign in with email'}
+      </Divider>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (email.includes('@')) send.mutate()
+        }}
+      >
+        <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: '#334155', mb: 0.75 }}>Work email</Typography>
+        <TextField
+          fullWidth
+          type="email"
+          placeholder="you@company.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          autoFocus
+        />
+        {error && <Alert severity="error" sx={{ mt: 2 }}>{error}</Alert>}
+        <Button
+          fullWidth
+          size="large"
+          variant="contained"
+          type="submit"
+          sx={{ mt: 3 }}
+          disabled={!email.includes('@') || send.isPending}
+        >
+          ✉️ Email me a sign-in link →
+        </Button>
+      </form>
+      <Typography align="center" sx={{ fontSize: 13, color: '#94A3B8', mt: 1.5 }}>
+        We'll send a magic link + 6-digit code. Click the link or type the code — you're in.
+      </Typography>
+      <Typography align="center" sx={{ fontSize: 14, mt: 2.5 }}>
+        {isSignup ? (
+          <>
+            Already have a workspace?{' '}
+            <Link component={RouterLink} to="/login" underline="hover">
+              Sign in
+            </Link>
+          </>
+        ) : (
+          <>
+            New to Trackly?{' '}
+            <Link component={RouterLink} to="/signup" underline="hover">
+              Start free
+            </Link>
+          </>
+        )}
+      </Typography>
+    </AuthCard>
+  )
+}

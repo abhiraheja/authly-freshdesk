@@ -175,6 +175,18 @@ Design decisions:
   verification — no "account already exists" errors, no separate signup form.
 - **Rate limiting:** same as guest OTP — max 3 sends per email per 15 minutes,
   per-IP limits, 5 failed code attempts locks the token.
+- **Global vs workspace-scoped sends:** a send from a workspace context
+  (e.g. acme.trackly.com/login) stores `workspace_id` on the token; a send from
+  trackly.com stores NULL and the workspace is resolved at verify time from the
+  user's memberships. Verify then returns one of: `ok` (session issued),
+  `signup_required` (email verified but no account anywhere → onboarding step 2),
+  or `choose_workspace` (email belongs to several workspaces → client re-verifies
+  with a slug).
+- **Deferred consumption for multi-step outcomes:** `signup_required` and
+  `choose_workspace` responses do **not** consume the token — the follow-up
+  request (`POST /api/signup`, or re-verify with a workspace slug) validates it
+  again and consumes it there. Expiry and the failed-attempt lock still apply
+  throughout; a session is only ever issued from a request that consumes the token.
 
 ---
 
@@ -1121,7 +1133,10 @@ CREATE TABLE sessions (
 -- same attempt; either one consumes the row.
 CREATE TABLE email_tokens (
     id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    workspace_id    UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+                                            -- NULL for global sends from trackly.com
+                                            -- (login/signup before a workspace is known);
+                                            -- the workspace is resolved at verify time
     email           TEXT NOT NULL,
     purpose         TEXT NOT NULL,          -- 'guest_verify' | 'login'
     link_token_hash TEXT UNIQUE,            -- SHA-256 of the magic-link token (256-bit random)
