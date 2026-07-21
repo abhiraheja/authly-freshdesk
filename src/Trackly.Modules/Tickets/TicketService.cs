@@ -1,0 +1,328 @@
+using Microsoft.EntityFrameworkCore;
+using Trackly.Core.Entities;
+using Trackly.Infrastructure.Data;
+
+namespace Trackly.Modules.Tickets;
+
+public class TicketService(TracklyDbContext db)
+{
+    // ---- Queries ------------------------------------------------------------
+
+    // Workspace isolation + role scoping for every ticket read. Customers only
+    // ever see their own tickets; agents and admins see the whole workspace.
+    private IQueryable<Ticket> VisibleTickets(Actor actor)
+    {
+        var query = db.Tickets.Where(t => t.WorkspaceId == actor.WorkspaceId);
+        if (!actor.IsAgentOrAdmin)
+            query = query.Where(t => t.RequesterId == actor.UserId);
+        return query;
+    }
+
+    public async Task<(IReadOnlyList<TicketSummaryDto> Items, int Total)> ListAsync(
+        Actor actor, TicketListQuery query, CancellationToken ct)
+    {
+        var tickets = VisibleTickets(actor);
+
+        if (!string.IsNullOrWhiteSpace(query.Status))
+            tickets = tickets.Where(t => t.Status == query.Status);
+        if (!string.IsNullOrWhiteSpace(query.Priority))
+            tickets = tickets.Where(t => t.Priority == query.Priority);
+        if (query.AssigneeId is not null && actor.IsAgentOrAdmin)
+            tickets = tickets.Where(t => t.AssigneeId == query.AssigneeId);
+        if (!string.IsNullOrWhiteSpace(query.Search))
+            tickets = tickets.Where(t => EF.Functions.ILike(t.Subject, $"%{query.Search}%"));
+
+        var total = await tickets.CountAsync(ct);
+        var pageSize = Math.Clamp(query.PageSize, 1, 100);
+        var page = Math.Max(query.Page, 1);
+
+        var items = await tickets
+            .OrderByDescending(t => t.UpdatedAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(t => new TicketSummaryDto(
+                t.Id, t.Subject, t.Status, t.Priority, t.Channel,
+                CategoryDto.From(t.Category),
+                UserSummaryDto.From(t.Requester),
+                t.GuestName, t.GuestEmail,
+                UserSummaryDto.From(t.Assignee),
+                t.Comments.Count(c => !c.IsInternal || actor.IsAgentOrAdmin),
+                t.CreatedAt, t.UpdatedAt))
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
+    public async Task<TicketDetailDto?> GetAsync(Actor actor, Guid ticketId, CancellationToken ct)
+    {
+        var ticket = await VisibleTickets(actor)
+            .Include(t => t.Category)
+            .Include(t => t.Requester)
+            .Include(t => t.Assignee)
+            .Include(t => t.Watchers).ThenInclude(w => w.Agent)
+            .SingleOrDefaultAsync(t => t.Id == ticketId, ct);
+        return ticket is null ? null : ToDetail(ticket);
+    }
+
+    // ---- Create + round-robin assignment ------------------------------------
+
+    public async Task<TicketDetailDto> CreateAsync(
+        Actor actor, CreateTicketRequest request, CancellationToken ct)
+    {
+        var priority = request.Priority ?? TicketPriority.Medium;
+        if (!TicketPriority.All.Contains(priority))
+            throw new ArgumentException("Invalid priority.");
+
+        Guid? categoryId = null;
+        if (request.CategoryId is not null)
+        {
+            categoryId = await db.Categories
+                .Where(c => c.WorkspaceId == actor.WorkspaceId && c.Id == request.CategoryId)
+                .Select(c => (Guid?)c.Id)
+                .SingleOrDefaultAsync(ct);
+            if (categoryId is null)
+                throw new ArgumentException("Unknown category.");
+        }
+
+        var ticket = new Ticket
+        {
+            WorkspaceId = actor.WorkspaceId,
+            Subject = request.Subject.Trim(),
+            Description = request.Description.Trim(),
+            Priority = priority,
+            CategoryId = categoryId,
+            RequesterId = actor.UserId,
+        };
+        db.Tickets.Add(ticket);
+
+        var assigneeId = await PickRoundRobinAssigneeAsync(actor.WorkspaceId, ct);
+        if (assigneeId is not null)
+        {
+            ticket.AssigneeId = assigneeId;
+            db.TicketAssignments.Add(new TicketAssignment
+            {
+                Ticket = ticket,
+                AssignedTo = assigneeId.Value,
+                AssignedBy = null, // auto-assigned
+            });
+        }
+
+        await db.SaveChangesAsync(ct);
+        return (await GetAsync(actor, ticket.Id, ct))!;
+    }
+
+    // Active agent with the fewest open/pending tickets. Also used for guest tickets.
+    public async Task<Guid?> PickRoundRobinAssigneeAsync(Guid workspaceId, CancellationToken ct)
+    {
+        return await db.Users
+            .Where(u => u.WorkspaceId == workspaceId && u.IsActive && u.Role == TracklyRoles.Agent)
+            .Select(u => new
+            {
+                u.Id,
+                OpenCount = db.Tickets.Count(t =>
+                    t.AssigneeId == u.Id &&
+                    (t.Status == TicketStatus.Open || t.Status == TicketStatus.Pending)),
+            })
+            .OrderBy(x => x.OpenCount)
+            .ThenBy(x => x.Id)
+            .Select(x => (Guid?)x.Id)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    // ---- Update (agent/admin) ------------------------------------------------
+
+    public async Task<TicketDetailDto?> UpdateAsync(
+        Actor actor, Guid ticketId, UpdateTicketRequest request, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin)
+            throw new UnauthorizedAccessException();
+
+        var ticket = await db.Tickets
+            .SingleOrDefaultAsync(t => t.WorkspaceId == actor.WorkspaceId && t.Id == ticketId, ct);
+        if (ticket is null)
+            return null;
+
+        if (request.Subject is not null)
+        {
+            if (string.IsNullOrWhiteSpace(request.Subject))
+                throw new ArgumentException("Subject cannot be empty.");
+            ticket.Subject = request.Subject.Trim();
+        }
+
+        if (request.Status is not null)
+        {
+            if (!TicketStatus.All.Contains(request.Status))
+                throw new ArgumentException("Invalid status.");
+            ticket.Status = request.Status;
+        }
+
+        if (request.Priority is not null)
+        {
+            if (!TicketPriority.All.Contains(request.Priority))
+                throw new ArgumentException("Invalid priority.");
+            ticket.Priority = request.Priority;
+        }
+
+        if (request.ClearCategory)
+        {
+            ticket.CategoryId = null;
+        }
+        else if (request.CategoryId is not null)
+        {
+            var exists = await db.Categories.AnyAsync(
+                c => c.WorkspaceId == actor.WorkspaceId && c.Id == request.CategoryId, ct);
+            if (!exists)
+                throw new ArgumentException("Unknown category.");
+            ticket.CategoryId = request.CategoryId;
+        }
+
+        if (request.Unassign)
+        {
+            ticket.AssigneeId = null;
+        }
+        else if (request.AssigneeId is not null && request.AssigneeId != ticket.AssigneeId)
+        {
+            var isAssignable = await db.Users.AnyAsync(u =>
+                u.WorkspaceId == actor.WorkspaceId && u.Id == request.AssigneeId &&
+                u.IsActive && (u.Role == TracklyRoles.Agent || u.Role == TracklyRoles.Admin), ct);
+            if (!isAssignable)
+                throw new ArgumentException("Assignee must be an active agent or admin in this workspace.");
+            ticket.AssigneeId = request.AssigneeId;
+            db.TicketAssignments.Add(new TicketAssignment
+            {
+                TicketId = ticket.Id,
+                AssignedTo = request.AssigneeId.Value,
+                AssignedBy = actor.UserId,
+            });
+        }
+
+        ticket.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return await GetAsync(actor, ticketId, ct);
+    }
+
+    // ---- Watchers -------------------------------------------------------------
+
+    public async Task<bool> AddWatcherAsync(Actor actor, Guid ticketId, Guid agentId, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin)
+            throw new UnauthorizedAccessException();
+
+        var ticketExists = await db.Tickets.AnyAsync(
+            t => t.WorkspaceId == actor.WorkspaceId && t.Id == ticketId, ct);
+        if (!ticketExists)
+            return false;
+
+        var isWatchable = await db.Users.AnyAsync(u =>
+            u.WorkspaceId == actor.WorkspaceId && u.Id == agentId && u.IsActive &&
+            (u.Role == TracklyRoles.Agent || u.Role == TracklyRoles.Admin), ct);
+        if (!isWatchable)
+            throw new ArgumentException("Watcher must be an active agent or admin in this workspace.");
+
+        var already = await db.TicketWatchers.AnyAsync(
+            w => w.TicketId == ticketId && w.AgentId == agentId, ct);
+        if (!already)
+        {
+            db.TicketWatchers.Add(new TicketWatcher
+            {
+                TicketId = ticketId,
+                AgentId = agentId,
+                AddedBy = actor.UserId,
+            });
+            await db.SaveChangesAsync(ct);
+        }
+        return true;
+    }
+
+    public async Task<bool> RemoveWatcherAsync(Actor actor, Guid ticketId, Guid agentId, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin)
+            throw new UnauthorizedAccessException();
+
+        var ticketExists = await db.Tickets.AnyAsync(
+            t => t.WorkspaceId == actor.WorkspaceId && t.Id == ticketId, ct);
+        if (!ticketExists)
+            return false;
+
+        await db.TicketWatchers
+            .Where(w => w.TicketId == ticketId && w.AgentId == agentId)
+            .ExecuteDeleteAsync(ct);
+        return true;
+    }
+
+    // ---- Comments ---------------------------------------------------------------
+
+    public async Task<IReadOnlyList<CommentDto>?> ListCommentsAsync(
+        Actor actor, Guid ticketId, CancellationToken ct)
+    {
+        var ticketVisible = await VisibleTickets(actor).AnyAsync(t => t.Id == ticketId, ct);
+        if (!ticketVisible)
+            return null;
+
+        var comments = db.Comments.Where(c => c.TicketId == ticketId);
+        // Private notes never reach customers — enforced here, not in the UI.
+        if (!actor.IsAgentOrAdmin)
+            comments = comments.Where(c => !c.IsInternal);
+
+        var attachments = await db.Attachments
+            .Where(a => a.TicketId == ticketId && a.CommentId != null)
+            .ToListAsync(ct);
+
+        var list = await comments
+            .Include(c => c.Author)
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync(ct);
+
+        return list.Select(c => new CommentDto(
+            c.Id,
+            UserSummaryDto.From(c.Author),
+            c.GuestEmail,
+            c.Body,
+            c.IsInternal,
+            c.Source,
+            attachments
+                .Where(a => a.CommentId == c.Id)
+                .Select(a => new AttachmentDto(a.Id, a.CommentId, a.FileName, a.ContentType, a.SizeBytes, a.CreatedAt))
+                .ToList(),
+            c.CreatedAt)).ToList();
+    }
+
+    public async Task<CommentDto?> AddCommentAsync(
+        Actor actor, Guid ticketId, CreateCommentRequest request, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(request.Body))
+            throw new ArgumentException("Comment body is required.");
+
+        var ticket = await VisibleTickets(actor).SingleOrDefaultAsync(t => t.Id == ticketId, ct);
+        if (ticket is null)
+            return null;
+
+        var comment = new Comment
+        {
+            TicketId = ticket.Id,
+            AuthorId = actor.UserId,
+            Body = request.Body.Trim(),
+            // Customers can never create private notes — is_internal is forced off.
+            IsInternal = actor.IsAgentOrAdmin && request.IsInternal,
+        };
+        db.Comments.Add(comment);
+        ticket.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        var author = await db.Users.SingleAsync(u => u.Id == actor.UserId, ct);
+        return new CommentDto(
+            comment.Id, UserSummaryDto.From(author), null, comment.Body,
+            comment.IsInternal, comment.Source, [], comment.CreatedAt);
+    }
+
+    // ---- Mapping -----------------------------------------------------------------
+
+    private static TicketDetailDto ToDetail(Ticket t) => new(
+        t.Id, t.Subject, t.Description, t.Status, t.Priority, t.Channel,
+        CategoryDto.From(t.Category),
+        UserSummaryDto.From(t.Requester),
+        t.GuestName, t.GuestEmail,
+        UserSummaryDto.From(t.Assignee),
+        t.Watchers.Select(w => new WatcherDto(UserSummaryDto.From(w.Agent)!, w.AddedAt)).ToList(),
+        t.CreatedAt, t.UpdatedAt);
+}

@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
 using Trackly.Infrastructure.Email;
+using Trackly.Infrastructure.Storage;
 
 namespace Trackly.Infrastructure;
 
@@ -22,6 +23,8 @@ public static class DependencyInjection
             services.AddScoped<IEmailSender, SmtpEmailSender>();
         else
             services.AddScoped<IEmailSender, LoggingEmailSender>();
+
+        services.AddSingleton<IFileStorage, LocalFileStorage>();
 
         return services;
     }
