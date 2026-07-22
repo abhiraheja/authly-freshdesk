@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Trackly.Core.Interfaces;
@@ -15,7 +16,10 @@ public static class DependencyInjection
     {
         services.AddDbContext<TracklyDbContext>(options => options
             .UseNpgsql(configuration.GetConnectionString("Trackly"))
-            .UseSnakeCaseNamingConvention());
+            .UseSnakeCaseNamingConvention()
+            // EF 10 false positive: Database.Migrate() reports pending model
+            // changes even when `migrations add` produces an empty diff.
+            .ConfigureWarnings(w => w.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
         services.Configure<SmtpOptions>(configuration.GetSection(SmtpOptions.SectionName));
         var smtpConfigured = !string.IsNullOrEmpty(configuration[$"{SmtpOptions.SectionName}:Host"]);
