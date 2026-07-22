@@ -8,6 +8,8 @@ using Trackly.Core.Entities;
 using Trackly.Infrastructure;
 using Trackly.Infrastructure.Data;
 using Trackly.Modules.Auth;
+using Trackly.Modules.Guest;
+using Trackly.Modules.Invitations;
 using Trackly.Modules.Tickets;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +20,8 @@ builder.Services.AddTracklyInfrastructure(builder.Configuration);
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<AttachmentService>();
+builder.Services.AddScoped<GuestService>();
+builder.Services.AddScoped<InvitationService>();
 
 builder.Services.AddAuthentication(TracklySession.Scheme)
     .AddScheme<AuthenticationSchemeOptions, TracklySessionHandler>(TracklySession.Scheme, _ => { });

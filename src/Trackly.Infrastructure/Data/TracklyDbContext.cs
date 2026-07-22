@@ -15,6 +15,8 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<TicketAssignment> TicketAssignments => Set<TicketAssignment>();
     public DbSet<TicketWatcher> TicketWatchers => Set<TicketWatcher>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
+    public DbSet<WorkspaceBranding> WorkspaceBrandings => Set<WorkspaceBranding>();
+    public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -121,6 +123,27 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasOne(w => w.AddedByUser).WithMany().HasForeignKey(w => w.AddedBy)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<WorkspaceBranding>(e =>
+        {
+            e.ToTable("workspace_branding");
+            e.HasIndex(b => b.WorkspaceId).IsUnique();
+            e.Property(b => b.PrimaryColor).HasDefaultValue("#2563EB");
+            e.Property(b => b.HidePoweredBy).HasDefaultValue(false);
+            e.HasOne(b => b.Workspace).WithMany().HasForeignKey(b => b.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WorkspaceInvitation>(e =>
+        {
+            e.ToTable("workspace_invitations");
+            e.HasIndex(i => i.TokenHash).IsUnique();
+            e.HasIndex(i => new { i.WorkspaceId, i.Email });
+            e.HasOne(i => i.Workspace).WithMany().HasForeignKey(i => i.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(i => i.InvitedByUser).WithMany().HasForeignKey(i => i.InvitedBy)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Attachment>(e =>

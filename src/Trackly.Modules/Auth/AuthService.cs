@@ -149,9 +149,31 @@ public partial class AuthService(TracklyDbContext db, IEmailSender emailSender, 
         user.LastLoginAt = DateTime.UtcNow;
         var sessionToken = CreateSession(user, workspace.Id, ipAddress, userAgent);
         await db.SaveChangesAsync(ct);
+        await LinkGuestTicketsAsync(user, ct);
 
         user.Workspace = workspace;
         return new VerifyResult(VerifyStatus.Success, user, sessionToken);
+    }
+
+    // Issues a session for flows outside magic-link verify (e.g. invitation accept).
+    public async Task<string> IssueSessionAsync(User user, string? ipAddress, string? userAgent, CancellationToken ct)
+    {
+        var sessionToken = CreateSession(user, user.WorkspaceId, ipAddress, userAgent);
+        await db.SaveChangesAsync(ct);
+        return sessionToken;
+    }
+
+    // Anonymous guest tickets submitted with this email are linked to the account
+    // on every sign-in (guests may submit more tickets between logins).
+    public async Task LinkGuestTicketsAsync(User user, CancellationToken ct)
+    {
+        if (user.Email is null)
+            return;
+        await db.Tickets
+            .Where(t => t.WorkspaceId == user.WorkspaceId
+                        && t.RequesterId == null
+                        && t.GuestEmail == user.Email)
+            .ExecuteUpdateAsync(s => s.SetProperty(t => t.RequesterId, user.Id), ct);
     }
 
     // ---- Signup (onboarding steps 1–2) -------------------------------------
