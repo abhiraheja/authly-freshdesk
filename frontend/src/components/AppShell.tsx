@@ -1,14 +1,17 @@
 import { AppBar, Avatar, Box, Button, Stack, Toolbar, Typography, useColorScheme } from '@mui/material'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { logout } from '../api/auth'
+import { getPublicBranding } from '../api/guest'
 import { initials } from '../lib/format'
 import { useAuthStore } from '../store/auth'
 import { glass } from '../theme'
 import { ColorModeToggle } from './ColorModeToggle'
 
 // Trackly-owned chrome: glass app bar, role-aware nav, colour-mode toggle.
+// For CUSTOMERS the header switches to the workspace's branding instead —
+// invariant 6: customer-facing surfaces never show Trackly's brand.
 export function AppShell({ children }: { children: ReactNode }) {
   const user = useAuthStore((s) => s.user)
   const setUser = useAuthStore((s) => s.setUser)
@@ -19,6 +22,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const resolvedMode = mode === 'system' ? systemMode : mode
 
   const isAgent = user?.role === 'agent' || user?.role === 'admin'
+  const isCustomer = user?.role === 'customer'
+
+  const { data: branding } = useQuery({
+    queryKey: ['branding', user?.workspace.slug],
+    queryFn: () => getPublicBranding(user!.workspace.slug),
+    enabled: !!user && isCustomer,
+    staleTime: 60_000,
+  })
+  const brandColor = isCustomer ? branding?.primaryColor : undefined
 
   const signOut = useMutation({
     mutationFn: logout,
@@ -32,42 +44,68 @@ export function AppShell({ children }: { children: ReactNode }) {
   const links = [
     { label: 'Dashboard', path: '/dashboard' },
     { label: 'Tickets', path: '/dashboard/tickets' },
-  ]
+    { label: 'Team', path: '/admin/users', adminOnly: true },
+    { label: 'Branding', path: '/admin/settings/branding', adminOnly: true },
+  ].filter((l) => !l.adminOnly || user?.role === 'admin')
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: 'background.default' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: isCustomer ? '#F6F4FA' : 'background.default' }}>
       <AppBar
         position="sticky"
         elevation={0}
-        sx={{
-          ...(resolvedMode === 'dark' ? glass.dark : glass.light),
-          borderBottom: '1px solid',
-          borderColor: 'divider',
-          color: 'text.primary',
-        }}
+        sx={
+          brandColor
+            ? { bgcolor: brandColor }
+            : {
+                ...(resolvedMode === 'dark' ? glass.dark : glass.light),
+                borderBottom: '1px solid',
+                borderColor: 'divider',
+                color: 'text.primary',
+              }
+        }
       >
         <Toolbar>
           <Stack direction="row" spacing={1.1} sx={{ alignItems: 'center', flexGrow: 1, minWidth: 0 }}>
-            <Box
-              sx={{
-                width: 30,
-                height: 30,
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, #4F46E5, #A78BFA)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: '#fff',
-                fontSize: 14,
-              }}
-            >
-              ◆
-            </Box>
-            <Typography sx={{ fontSize: 17, fontWeight: 800, color: 'text.primary' }}>Trackly</Typography>
-            {user && (
-              <Typography sx={{ fontSize: 14, color: 'text.secondary', pl: 1 }} noWrap>
-                {user.workspace.name}
-              </Typography>
+            {isCustomer && branding ? (
+              <>
+                {branding.logoUrl ? (
+                  <Avatar src={branding.logoUrl} variant="rounded" sx={{ width: 30, height: 30, bgcolor: '#fff' }} />
+                ) : (
+                  <Avatar
+                    variant="rounded"
+                    sx={{ width: 30, height: 30, bgcolor: '#fff', color: brandColor, fontWeight: 800, fontSize: 14 }}
+                  >
+                    {branding.workspaceName.charAt(0).toUpperCase()}
+                  </Avatar>
+                )}
+                <Typography sx={{ fontSize: 16.5, fontWeight: 700, color: '#fff' }}>
+                  {branding.pageTitle}
+                </Typography>
+              </>
+            ) : (
+              <>
+                <Box
+                  sx={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: '10px',
+                    background: 'linear-gradient(135deg, #4F46E5, #A78BFA)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#fff',
+                    fontSize: 14,
+                  }}
+                >
+                  ◆
+                </Box>
+                <Typography sx={{ fontSize: 17, fontWeight: 800, color: 'text.primary' }}>Trackly</Typography>
+                {user && (
+                  <Typography sx={{ fontSize: 14, color: 'text.secondary', pl: 1 }} noWrap>
+                    {user.workspace.name}
+                  </Typography>
+                )}
+              </>
             )}
             {user && isAgent && (
               <Stack direction="row" spacing={0.5} sx={{ pl: 2 }}>
@@ -94,14 +132,29 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           {user && (
             <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center' }}>
-              <ColorModeToggle />
-              <Avatar sx={{ width: 30, height: 30, bgcolor: 'secondary.main', fontSize: 13, fontWeight: 700 }}>
+              {/* Dark mode is a Trackly-surface affordance only */}
+              {!isCustomer && <ColorModeToggle />}
+              <Avatar
+                sx={{
+                  width: 30,
+                  height: 30,
+                  bgcolor: brandColor ? 'rgba(255,255,255,.25)' : 'secondary.main',
+                  fontSize: 13,
+                  fontWeight: 700,
+                }}
+              >
                 {initials(user.name ?? user.email)}
               </Avatar>
-              <Typography sx={{ fontSize: 14, display: { xs: 'none', sm: 'block' } }}>
+              <Typography
+                sx={{ fontSize: 14, color: brandColor ? '#fff' : 'text.primary', display: { xs: 'none', sm: 'block' } }}
+              >
                 {user.name ?? user.email}
               </Typography>
-              <Button size="small" sx={{ color: 'text.secondary' }} onClick={() => signOut.mutate()}>
+              <Button
+                size="small"
+                sx={{ color: brandColor ? 'rgba(255,255,255,.85)' : 'text.secondary' }}
+                onClick={() => signOut.mutate()}
+              >
                 Sign out
               </Button>
             </Stack>

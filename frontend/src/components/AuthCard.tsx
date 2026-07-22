@@ -1,4 +1,4 @@
-import { Box, Paper, Stack, Typography } from '@mui/material'
+import { Avatar, Box, Paper, Stack, Typography } from '@mui/material'
 import type { ReactNode } from 'react'
 
 function LogoMark() {
@@ -8,7 +8,7 @@ function LogoMark() {
         width: 28,
         height: 28,
         borderRadius: '8px',
-        background: 'linear-gradient(135deg, #2563EB, #7C3AED)',
+        background: 'linear-gradient(135deg, #4F46E5, #A78BFA)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -19,6 +19,14 @@ function LogoMark() {
       ◆
     </Box>
   )
+}
+
+// Invariant 6: a workspace-scoped auth screen is customer-facing, so it wears
+// the workspace's brand, never Trackly's.
+export interface AuthCardBrand {
+  name: string
+  logoUrl: string | null
+  color: string
 }
 
 export function StepDots({ done, total = 5 }: { done: number; total?: number }) {
@@ -43,10 +51,11 @@ interface AuthCardProps {
   title: string
   subtitle?: ReactNode
   stepsDone?: number
+  brand?: AuthCardBrand | null
   children: ReactNode
 }
 
-export function AuthCard({ title, subtitle, stepsDone, children }: AuthCardProps) {
+export function AuthCard({ title, subtitle, stepsDone, brand, children }: AuthCardProps) {
   return (
     <Box
       sx={{
@@ -71,8 +80,26 @@ export function AuthCard({ title, subtitle, stepsDone, children }: AuthCardProps
         }}
       >
         <Stack direction="row" spacing={1.1} sx={{ alignItems: 'center', justifyContent: 'center', mb: 3 }}>
-          <LogoMark />
-          <Typography sx={{ fontSize: 18, fontWeight: 800 }}>Trackly</Typography>
+          {brand ? (
+            <>
+              {brand.logoUrl ? (
+                <Avatar src={brand.logoUrl} variant="rounded" sx={{ width: 28, height: 28 }} />
+              ) : (
+                <Avatar
+                  variant="rounded"
+                  sx={{ width: 28, height: 28, bgcolor: brand.color, fontSize: 14, fontWeight: 800 }}
+                >
+                  {brand.name.charAt(0).toUpperCase()}
+                </Avatar>
+              )}
+              <Typography sx={{ fontSize: 18, fontWeight: 800 }}>{brand.name}</Typography>
+            </>
+          ) : (
+            <>
+              <LogoMark />
+              <Typography sx={{ fontSize: 18, fontWeight: 800 }}>Trackly</Typography>
+            </>
+          )}
         </Stack>
         {stepsDone !== undefined && <StepDots done={stepsDone} />}
         <Typography variant="h5" align="center" sx={{ fontSize: 23, mb: 0.75 }}>

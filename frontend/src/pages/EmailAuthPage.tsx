@@ -10,10 +10,11 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link as RouterLink, useNavigate } from 'react-router-dom'
+import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom'
 import { sendMagicLink, verifyMagicLink, type VerifyResponse, type WorkspaceSummary } from '../api/auth'
+import { getPublicBranding } from '../api/guest'
 import { AuthCard } from '../components/AuthCard'
 import { CodeInput } from '../components/CodeInput'
 import { savePendingAuth } from '../lib/pendingAuth'
@@ -34,6 +35,19 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
   const navigate = useNavigate()
   const completeAuth = useAuthCompletion()
 
+  // A customer arriving from a workspace's branded submit form or portal link
+  // carries ?workspace=slug — that scopes the magic link to one workspace and
+  // skips the "choose a workspace" step entirely.
+  const [params] = useSearchParams()
+  const scopedSlug = params.get('workspace') ?? undefined
+  const { data: scopedWorkspace } = useQuery({
+    queryKey: ['branding', scopedSlug],
+    queryFn: () => getPublicBranding(scopedSlug!),
+    enabled: !!scopedSlug,
+    retry: false,
+    staleTime: 60_000,
+  })
+
   const handleVerifyResponse = (res: VerifyResponse) => {
     if (res.status === 'ok') {
       completeAuth(res.user)
@@ -47,7 +61,7 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
   }
 
   const send = useMutation({
-    mutationFn: () => sendMagicLink(email),
+    mutationFn: () => sendMagicLink(email, scopedSlug),
     onSuccess: () => {
       setError(null)
       setCode('')
@@ -57,12 +71,18 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
   })
 
   const verify = useMutation({
-    mutationFn: (workspaceSlug?: string) => verifyMagicLink({ email, code, workspaceSlug }),
+    mutationFn: (workspaceSlug?: string) => verifyMagicLink({ email, code, workspaceSlug: workspaceSlug ?? scopedSlug }),
     onSuccess: handleVerifyResponse,
     onError: (e: Error) => setError(e.message),
   })
 
   const isSignup = mode === 'signup'
+  const brand = scopedWorkspace
+    ? { name: scopedWorkspace.workspaceName, logoUrl: scopedWorkspace.logoUrl, color: scopedWorkspace.primaryColor }
+    : null
+  const brandBtn = brand
+    ? { bgcolor: brand.color, '&:hover': { bgcolor: brand.color, filter: 'brightness(0.92)' } }
+    : undefined
 
   if (phase === 'choose') {
     return (
@@ -88,6 +108,7 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
     return (
       <AuthCard
         title="Check your email 📬"
+        brand={brand}
         subtitle={
           <>
             We sent a sign-in link and a 6-digit code to <b>{email}</b>.
@@ -106,7 +127,7 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
           fullWidth
           size="large"
           variant="contained"
-          sx={{ mt: 3 }}
+          sx={{ mt: 3, ...brandBtn }}
           disabled={code.length !== 6 || verify.isPending}
           onClick={() => verify.mutate(undefined)}
         >
@@ -131,7 +152,8 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
 
   return (
     <AuthCard
-      title={isSignup ? 'Create your account' : 'Sign in to Trackly'}
+      title={isSignup ? 'Create your account' : brand ? `Sign in to ${brand.name}` : 'Sign in to Trackly'}
+      brand={brand}
       subtitle={
         isSignup ? (
           <>
@@ -139,6 +161,8 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
             <br />
             No password needed — ever.
           </>
+        ) : brand ? (
+          <>Track your support requests in one place. No password needed — ever.</>
         ) : (
           <>Welcome back. No password needed — ever.</>
         )
@@ -172,7 +196,7 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
           size="large"
           variant="contained"
           type="submit"
-          sx={{ mt: 3 }}
+          sx={{ mt: 3, ...brandBtn }}
           disabled={!email.includes('@') || send.isPending}
         >
           ✉️ Email me a sign-in link →
@@ -181,7 +205,8 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
       <Typography align="center" sx={{ fontSize: 13, color: '#94A3B8', mt: 1.5 }}>
         We'll send a magic link + 6-digit code. Click the link or type the code — you're in.
       </Typography>
-      <Typography align="center" sx={{ fontSize: 14, mt: 2.5 }}>
+      {/* Never advertise Trackly on a workspace-branded surface */}
+      <Typography align="center" sx={{ fontSize: 14, mt: 2.5, display: brand ? 'none' : 'block' }}>
         {isSignup ? (
           <>
             Already have a workspace?{' '}
