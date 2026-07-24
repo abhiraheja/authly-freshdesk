@@ -1392,10 +1392,10 @@ Build in this order — each phase is independently shippable and testable:
   announcements (typed outage emails, schedule + per-recipient delivery tracking),
   embeddable widget (`/widget.js` floating/inline/link over the branded submit
   form), agent dashboard stats endpoint (mockup 04).
-- **Known gap carried over from Phase 4:** the admin **email settings UI** was
-  never built (the backend API and `verify-phase4.ps1` exist; there is no
-  `/admin/settings/email` page, nav link, or `api/email.ts`). Build it before
-  calling email "shippable" from the UI.
+- The admin **email settings UI** (`/admin/settings/email`) — SMTP, interaction
+  mode, inbound connector (parse webhook / IMAP), and notification toggles — was
+  the one place the product wasn't UI-configurable after Phase 4; it was built as
+  a follow-up (the backend API had shipped in Phase 4).
 
 **Phase 7 — Service desk intelligence**
 

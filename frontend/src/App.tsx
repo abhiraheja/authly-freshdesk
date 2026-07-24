@@ -10,6 +10,7 @@ import { ProblemsPage } from './pages/agent/ProblemsPage'
 import { AnnouncementsPage } from './pages/admin/AnnouncementsPage'
 import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
 import { DomainsPage } from './pages/admin/DomainsPage'
+import { EmailSettingsPage } from './pages/admin/EmailSettingsPage'
 import { SsoSettingsPage } from './pages/admin/SsoSettingsPage'
 import { UsersPage } from './pages/admin/UsersPage'
 import { WidgetPage } from './pages/admin/WidgetPage'
@@ -48,6 +49,7 @@ function App() {
           <Route path="/admin/users" element={<UsersPage />} />
           <Route path="/admin/announcements" element={<AnnouncementsPage />} />
           <Route path="/admin/settings/branding" element={<BrandingSettingsPage />} />
+          <Route path="/admin/settings/email" element={<EmailSettingsPage />} />
           <Route path="/admin/settings/sso" element={<SsoSettingsPage />} />
           <Route path="/admin/settings/domains" element={<DomainsPage />} />
           <Route path="/admin/widget" element={<WidgetPage />} />

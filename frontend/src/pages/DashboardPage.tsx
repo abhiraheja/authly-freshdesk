@@ -11,6 +11,7 @@ const checklist = [
   { label: 'Create your workspace', done: true },
   { label: 'Add your branding', done: false, to: '/admin/settings/branding' },
   { label: 'Invite agents', done: false, to: '/admin/users' },
+  { label: 'Connect email', done: false, to: '/admin/settings/email' },
   { label: 'Configure SSO', done: false, to: '/admin/settings/sso' },
   { label: 'Embed the widget', done: false, to: '/admin/widget' },
 ] as { label: string; done: boolean; to?: string }[]
