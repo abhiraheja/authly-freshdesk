@@ -7,6 +7,7 @@ import { OnboardingWorkspacePage } from './pages/OnboardingWorkspacePage'
 import { VerifyPage } from './pages/VerifyPage'
 import { AgentWorkspacePage } from './pages/agent/AgentWorkspacePage'
 import { ProblemsPage } from './pages/agent/ProblemsPage'
+import { AnnouncementsPage } from './pages/admin/AnnouncementsPage'
 import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
 import { DomainsPage } from './pages/admin/DomainsPage'
 import { SsoSettingsPage } from './pages/admin/SsoSettingsPage'
@@ -44,6 +45,7 @@ function App() {
         </Route>
         <Route element={<RequireRole roles={['admin']} />}>
           <Route path="/admin/users" element={<UsersPage />} />
+          <Route path="/admin/announcements" element={<AnnouncementsPage />} />
           <Route path="/admin/settings/branding" element={<BrandingSettingsPage />} />
           <Route path="/admin/settings/sso" element={<SsoSettingsPage />} />
           <Route path="/admin/settings/domains" element={<DomainsPage />} />

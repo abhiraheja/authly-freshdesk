@@ -7,6 +7,7 @@ using Trackly.Api.Auth;
 using Trackly.Core.Entities;
 using Trackly.Infrastructure;
 using Trackly.Infrastructure.Data;
+using Trackly.Modules.Announcements;
 using Trackly.Modules.Auth;
 using Trackly.Modules.Email;
 using Trackly.Modules.Guest;
@@ -30,6 +31,8 @@ builder.Services.AddScoped<GuestService>();
 builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<SsoLoginService>();
 builder.Services.AddScoped<ProblemService>();
+builder.Services.AddScoped<AnnouncementService>();
+builder.Services.AddHostedService<AnnouncementWorker>();
 builder.Services.AddHostedService<EmailPollingWorker>();
 
 builder.Services.AddAuthentication(TracklySession.Scheme)

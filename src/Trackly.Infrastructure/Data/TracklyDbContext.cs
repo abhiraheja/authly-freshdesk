@@ -26,6 +26,8 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<WorkspaceDomain> WorkspaceDomains => Set<WorkspaceDomain>();
     public DbSet<SsoLoginState> SsoLoginStates => Set<SsoLoginState>();
     public DbSet<Problem> Problems => Set<Problem>();
+    public DbSet<Announcement> Announcements => Set<Announcement>();
+    public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -237,6 +239,31 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.ToTable("sso_login_states");
             e.HasIndex(s => s.State).IsUnique();
             e.HasIndex(s => s.ExpiresAt); // cleanup sweeps
+        });
+
+        modelBuilder.Entity<Announcement>(e =>
+        {
+            e.ToTable("announcements");
+            e.HasIndex(a => new { a.WorkspaceId, a.CreatedAt });
+            e.HasIndex(a => a.ScheduledAt); // scheduled-send sweeps
+            e.Property(a => a.Type).HasDefaultValue(AnnouncementType.General);
+            e.HasOne(a => a.Workspace).WithMany().HasForeignKey(a => a.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(a => a.Problem).WithMany().HasForeignKey(a => a.ProblemId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(a => a.CreatedByUser).WithMany().HasForeignKey(a => a.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<AnnouncementDelivery>(e =>
+        {
+            e.ToTable("announcement_deliveries");
+            e.HasIndex(d => d.AnnouncementId);
+            e.Property(d => d.Status).HasDefaultValue(DeliveryStatus.Pending);
+            e.HasOne(d => d.Announcement).WithMany(a => a.Deliveries).HasForeignKey(d => d.AnnouncementId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(d => d.User).WithMany().HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Problem>(e =>
