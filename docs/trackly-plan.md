@@ -620,7 +620,8 @@ CREATE TABLE email_configs (
     smtp_host              TEXT,
     smtp_port              INT,
     smtp_user              TEXT,
-    smtp_pass              TEXT,                 -- AES-256-GCM encrypted
+    smtp_password_encrypted TEXT,                -- AES-256-GCM (ISecretProtector)
+    smtp_use_start_tls     BOOLEAN DEFAULT true,
     from_name              TEXT,
     from_email             TEXT,
     -- Interaction mode
@@ -632,19 +633,44 @@ CREATE TABLE email_configs (
     -- Option A: parse webhook
     inbound_provider       TEXT,                 -- sendgrid | mailgun | postmark | ses
     inbound_reply_domain   TEXT,                 -- e.g. tickets.acme.com
-    inbound_webhook_secret TEXT,                 -- AES-256-GCM encrypted; verifies HMAC
+    inbound_webhook_secret_encrypted TEXT,       -- AES-256-GCM; verifies the HMAC
     -- Option B: mailbox polling
     mailbox_protocol       TEXT,                 -- imap | ms_graph | gmail_api
     mailbox_address        TEXT,                 -- e.g. support@acme.com
     mailbox_host           TEXT,                 -- IMAP host (imap only)
+    mailbox_port           INT,                  -- IMAP port (default 993)
     mailbox_username       TEXT,
-    mailbox_password       TEXT,                 -- AES-256-GCM encrypted (imap app password)
-    mailbox_oauth_tokens   TEXT,                 -- AES-256-GCM encrypted JSON (graph/gmail refresh token)
+    mailbox_password_encrypted TEXT,             -- AES-256-GCM (imap app password)
+    mailbox_oauth_tokens_encrypted TEXT,         -- AES-256-GCM JSON (graph/gmail refresh token)
     poll_interval_seconds  INT DEFAULT 60,
     last_polled_at         TIMESTAMPTZ,
     updated_at             TIMESTAMPTZ DEFAULT now()
 );
+
+-- Exactly-once inbound ingestion. A duplicate provider Message-ID collides on
+-- the unique index and rolls back the comment/ticket insert in the same
+-- transaction, so a webhook retry or polling-worker restart never doubles up.
+CREATE TABLE inbound_email_events (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id),
+    message_id   TEXT NOT NULL,
+    ticket_id    UUID,
+    comment_id   UUID,
+    outcome      TEXT NOT NULL,      -- comment | new_ticket | rejected | ignored
+    processed_at TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (workspace_id, message_id)
+);
 ```
+
+> **Implementation notes (Phase 4):** encrypted columns are suffixed `*_encrypted`
+> and are never returned by the admin API — `GET /api/admin/settings/email`
+> exposes `hasSmtpPassword` / `hasInboundWebhookSecret` / `hasMailboxPassword`
+> booleans instead. The parse-webhook endpoint is `POST /api/email/inbound/{slug}`;
+> the caller signs the **raw request body** with the workspace's webhook secret and
+> sends it as `X-Trackly-Signature: <hex HMAC-SHA256>` (constant-time compared).
+> A provider-specific adapter (SendGrid multipart, Mailgun signature) can normalise
+> onto this JSON contract later. Notification Message-IDs are stored canonical
+> (bracket-free `<tid>.<cid>@trackly`) so IMAP and webhook references match.
 
 ### Notification Settings (per workspace)
 
