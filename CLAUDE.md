@@ -27,4 +27,8 @@ Trackly is a standalone, multi-tenant ticket management SaaS (FreshDesk/Zendesk-
 
 ## Build order
 
-Follow the **Implementation Phases** section at the end of `docs/trackly-plan.md` (Phase 1: scaffold + magic-link auth → Phase 2: core ticketing → Phase 3: guest flow + branding → Phase 4: email → Phase 5: SSO → Phase 6: problems/announcements/widget). Each phase is independently shippable; use the Verification Checklist as acceptance criteria.
+Follow the **Implementation Phases** section at the end of `docs/trackly-plan.md` (Phase 1: scaffold + magic-link auth → Phase 2: core ticketing → Phase 3: guest flow + branding → Phase 4: email → Phase 5: SSO → Phase 6: problems/announcements/widget → Phase 7: SLA/KB/automation, AI copilot, omnichannel). Each phase is independently shippable; use the Verification Checklist as acceptance criteria.
+
+## UI work
+
+Read the **Design Direction (decided)** section of the plan before touching the frontend, and use the `trackly-ui` skill for component patterns. Two rules matter most: Material UI stays (the refreshed design was adopted, the framework was not), and Trackly surfaces get the Trackly palette plus dark mode while customer-facing surfaces get the workspace's brand and are always light.

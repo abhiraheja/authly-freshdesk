@@ -914,6 +914,51 @@ Served to the public form/widget via an unauthenticated, cacheable endpoint:
 
 ---
 
+## Design Direction (decided)
+
+The visual language was refreshed after reviewing an alternative service-desk UI.
+**Material UI stays** — the design was adopted, the framework was not. No Tailwind,
+no shadcn, no component-library migration. Everything below is expressed as MUI
+theme tokens in `frontend/src/theme.ts` and reused via `sx`.
+
+**Design tokens**
+
+| Token | Value | Used for |
+|---|---|---|
+| `primary.main` | `#4F46E5` (indigo) | Trackly actions, active nav, focus rings |
+| `secondary.main` | `#A78BFA` (violet) | avatars, gradient partner to primary |
+| `success.main` | `#10B981` | resolved/closed states |
+| `warning.main` | `#F59E0B` | pending, SLA at risk |
+| `error.main` | `#EF4444` | urgent priority, destructive actions |
+| `info.main` | `#3B82F6` | informational chips and banners |
+| Font | Inter (system fallback stack) | everything |
+| Radii | 14px cards, 18px hero panels, 12px buttons, 99px chips | — |
+| `shadows.soft` | resting card elevation | cards, panels |
+| `shadows.lift` | hover/primary-button elevation | contained buttons, hover |
+| `glass.light` / `glass.dark` | `blur(16px) saturate(160%)` | sticky app bar |
+
+**The two-palette rule (follows from invariant 6)**
+
+1. **Trackly surfaces** — agent workspace, admin pages, dashboards, Trackly's own
+   marketing and auth screens. These wear the Trackly palette and support **dark
+   mode** (MUI `colorSchemes` + `cssVariables.colorSchemeSelector: 'class'`).
+2. **Customer-facing surfaces** — submit form, guest ticket view, customer portal,
+   workspace-scoped login (`/login?workspace=slug`), notification emails, widget.
+   These wear the **workspace's** `primary_color` and logo, are **always light**
+   (a customer never toggles the tenant's brand into dark mode), and never
+   advertise Trackly beyond the optional "Powered by" line.
+
+`BrandedFrame` implements rule 2; `AppShell` switches between the two based on
+`user.role === 'customer'`.
+
+**Notes for implementers** are kept in the `trackly-ui` skill
+(`.claude/skills/trackly-ui/SKILL.md`) — including MUI v9 gotchas: system props
+were removed from `Stack`/`Box` (use `sx`), the `containedPrimary` style-override
+key was removed (use the `variants` array), and `border: '1px solid'` must always
+be paired with `borderColor: 'divider'` or it falls back to `currentColor`.
+
+---
+
 ## Components to Build
 
 ### 1. React Frontend (Vite + TypeScript)
@@ -1302,6 +1347,46 @@ Build in this order — each phase is independently shippable and testable:
 **Phase 6 — Remaining features**
 - Problems, announcements, embeddable widget (mockup 08), agent dashboard stats (mockup 04)
 
+**Phase 7 — Service desk intelligence**
+
+Everything in Phases 1–6 brings Trackly to parity with a basic help desk. Phase 7
+is what makes it competitive; it splits into three independently shippable slices.
+
+*7A — Service desk fundamentals*
+- **SLA policies** — per workspace, per priority: first-response and resolution
+  targets, business-hours calendars, pause-while-pending. Tickets carry
+  `first_response_due_at` / `resolve_due_at`; a background worker flags breaches
+  and the agent list shows a countdown chip (green → amber → red).
+- **Tags** — free-form `tags` + `ticket_tags`, type-ahead entry, filterable in the
+  agent workspace and reportable.
+- **Teams / groups** — `teams`, `team_members`; tickets route to a team, then
+  round-robin within it. Replaces the workspace-wide round robin from Phase 2.
+- **Knowledge base** — `kb_articles` (draft/published, per-category), a public
+  branded `/kb` reachable from the submit form, and article suggestions shown
+  while a customer types a subject (deflection).
+- **Automation rules** — `automation_rules` as trigger + conditions + actions
+  (on create / on update / time-based): auto-assign, auto-tag, set priority,
+  send a canned reply, escalate on SLA breach.
+- **Canned responses** — per workspace, insertable into the agent reply box.
+
+*7B — AI copilot (Claude API)*
+- Reply drafting from the thread plus the workspace's KB, agent edits before send
+- Thread summarisation for handoffs and long escalations
+- Auto-categorisation, priority and tag suggestions at intake
+- Sentiment / frustration flag surfaced on the ticket list
+- Draft a KB article from a resolved ticket, queued for agent approval
+- Guardrails: never auto-send without an agent action; a workspace toggle to
+  disable AI entirely; **private notes and other workspaces' data are never sent**
+
+*7C — Omnichannel & insight*
+- Live-chat upgrade of the Phase 6 widget (agent presence, typing, transcript
+  becomes a ticket)
+- Connectors: WhatsApp, Slack, Microsoft Teams — all feeding the shared inbound
+  pipeline built in Phase 4
+- CSAT survey on resolution, score stored per ticket and per agent
+- Analytics: volume, first-response and resolution times, SLA attainment,
+  deflection rate, agent leaderboards
+
 ---
 
 ## Verification Checklist
@@ -1328,3 +1413,9 @@ Build in this order — each phase is independently shippable and testable:
 - [ ] From-address spoofing: email from a non-participant address is rejected, no comment created
 - [ ] Suspend user in Trackly → session invalidated, access denied immediately
 - [ ] Workspace B cannot see Workspace A's tickets (workspace isolation)
+- [ ] Phase 7A: SLA breach on a paused (pending) ticket does not tick while pending
+- [ ] Phase 7A: automation rule fires exactly once per matching transition, never loops
+- [ ] Phase 7A: KB article suggestions on the submit form leak nothing beyond published articles of that workspace
+- [ ] Phase 7B: AI copilot prompt contains no private notes and no other workspace's data
+- [ ] Phase 7B: AI never sends a reply without an explicit agent action; workspace AI toggle off disables all calls
+- [ ] Phase 7C: chat transcript becomes a ticket in the right workspace; CSAT score cannot be submitted twice

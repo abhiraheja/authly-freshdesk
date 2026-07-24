@@ -1,0 +1,32 @@
+# Files Claude Code should not scan, index, or read directly.
+# These are generated or vendored — excluding them cuts the file-watching load
+# (mitigates the BSODs) and speeds up search. Shell commands (git, dotnet,
+# npm, docker) are unaffected and can still use these paths.
+
+# --- .NET build output ---
+bin/
+obj/
+.vs/
+artifacts/
+TestResults/
+*.binlog
+
+# --- Node / frontend ---
+node_modules/
+dist/
+dist-ssr/
+build/
+.vite/
+coverage/
+
+# --- Version control internals (use git commands, never read directly) ---
+.git/
+
+# --- IDE / OS cruft ---
+.idea/
+.DS_Store
+Thumbs.db
+
+# --- Logs ---
+logs/
+*.log
