@@ -174,11 +174,17 @@ Append here as phases land, so nothing is missed later.
 - **Phase 4 (email):** `Security:MasterKey` (secrets at rest), shared SMTP relay,
   the inbound webhook endpoint reachability, the IMAP-worker single-instance
   constraint. Per-workspace email config is data, not env.
-- **Phase 5 (SSO):** `App:ApiBaseUrl` (drives the OIDC/SAML callback URI). Each
-  workspace's IdP must whitelist the redirect URI `{ApiBaseUrl}/api/auth/sso/callback`.
-  The callback endpoint must be publicly reachable over HTTPS. Per-workspace OIDC
-  config (discovery URL, client id, encrypted client secret) and group→role
-  mappings are data, not env. OIDC to a non-loopback IdP requires HTTPS on the
-  discovery URL. _SAML SP metadata / signing cert — added with the SAML slice._
+- **Phase 5 (SSO):** `App:ApiBaseUrl` drives the OIDC/SAML callback URIs, which
+  must be publicly reachable over HTTPS and whitelisted at each IdP:
+  - OIDC redirect URI: `{ApiBaseUrl}/api/auth/sso/callback`
+  - SAML ACS (POST): `{ApiBaseUrl}/api/auth/saml/acs`; SP metadata for the IdP:
+    `{ApiBaseUrl}/api/auth/saml/metadata?workspace=<slug>`
+  Per-workspace OIDC config (discovery URL, client id, encrypted client secret),
+  SAML IdP metadata, and group→role mappings are data, not env. OIDC to a
+  non-loopback IdP requires HTTPS on the discovery URL. SAML AuthnRequests are
+  unsigned (no SP signing cert needed); the IdP **response** signature is
+  validated against the IdP metadata cert. Domain routing needs outbound DNS
+  (TXT lookups) from the API host. **Both OIDC and SAML must be verified against a
+  real IdP** — there is no automated substitute for a live identity provider.
 - **Phase 6+ / Phase 7:** _TBD — widget embed origin/CORS, AI copilot API key
   (`Anthropic`/Claude) as a deployment secret, omnichannel connector credentials._

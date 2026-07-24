@@ -1054,7 +1054,24 @@ services.AddOpenIdConnect("WorkspaceOidc", options => {
 });
 ```
 
-**SAML handling:** `ITfoxtec.Identity.Saml2` or `Sustainsys.Saml2` NuGet package.
+> **Implementation note (Phase 5):** rather than register `AddOpenIdConnect` and
+> fight the static-scheme model, Trackly implements the OIDC **authorization-code +
+> PKCE flow manually** (`IOidcClient` / `OidcClient`): one generic client, the
+> workspace's config passed per call. Discovery + JWKS are cached per issuer; the
+> id_token is validated for issuer, audience=client_id, signature, lifetime, and
+> nonce. State/nonce/PKCE verifier are correlated **server-side** in
+> `sso_login_states` (single-use, 10-min TTL) instead of a cross-site cookie — a
+> `SameSite=Strict` cookie would not survive the IdP round-trip. Endpoints:
+> `GET /api/auth/sso?workspace=slug` → IdP; `GET /api/auth/sso/callback` → session.
+> Login-page routing: `GET /api/public/sso/discover?email=` returns the workspace's
+> SSO start URL when the email domain is a verified, discoverable claim.
+
+**SAML handling:** `ITfoxtec.Identity.Saml2` (`.MvcCore`), handled in the API layer
+(`SamlController`): `GET /api/auth/saml?workspace=slug`, `POST /api/auth/saml/acs`,
+`GET /api/auth/saml/metadata?workspace=slug`. AuthnRequests are unsigned; the IdP
+**response signature is validated** against the cert in the IdP metadata before any
+claim is trusted. JIT/session/role-mapping is shared with OIDC via
+`SsoLoginService.FinishLoginAsync`.
 
 **Key API endpoints:**
 
