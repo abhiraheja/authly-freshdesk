@@ -17,6 +17,9 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<WorkspaceBranding> WorkspaceBrandings => Set<WorkspaceBranding>();
     public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
+    public DbSet<EmailConfig> EmailConfigs => Set<EmailConfig>();
+    public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
+    public DbSet<InboundEmailEvent> InboundEmailEvents => Set<InboundEmailEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -143,6 +146,42 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.HasOne(i => i.Workspace).WithMany().HasForeignKey(i => i.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasOne(i => i.InvitedByUser).WithMany().HasForeignKey(i => i.InvitedBy)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EmailConfig>(e =>
+        {
+            e.ToTable("email_configs");
+            e.HasIndex(c => c.WorkspaceId).IsUnique();
+            e.Property(c => c.UseSharedSmtp).HasDefaultValue(true);
+            e.Property(c => c.SmtpUseStartTls).HasDefaultValue(true);
+            e.Property(c => c.EmailMode).HasDefaultValue(EmailMode.NotificationsOnly);
+            e.Property(c => c.NewTicketViaEmail).HasDefaultValue(false);
+            e.Property(c => c.PollIntervalSeconds).HasDefaultValue(60);
+            e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<NotificationSettings>(e =>
+        {
+            e.ToTable("notification_settings");
+            e.HasIndex(s => s.WorkspaceId).IsUnique();
+            e.Property(s => s.NotifyCustomerOnCreate).HasDefaultValue(true);
+            e.Property(s => s.NotifyCustomerOnReply).HasDefaultValue(true);
+            e.Property(s => s.NotifyCustomerOnStatus).HasDefaultValue(true);
+            e.Property(s => s.NotifyAgentOnAssign).HasDefaultValue(true);
+            e.Property(s => s.NotifyAgentOnReply).HasDefaultValue(true);
+            e.Property(s => s.NotifyAgentOnReassign).HasDefaultValue(true);
+            e.HasOne(s => s.Workspace).WithMany().HasForeignKey(s => s.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<InboundEmailEvent>(e =>
+        {
+            e.ToTable("inbound_email_events");
+            // Exactly-once ingestion: a duplicate provider Message-ID collides here.
+            e.HasIndex(x => new { x.WorkspaceId, x.MessageId }).IsUnique();
+            e.HasOne(x => x.Workspace).WithMany().HasForeignKey(x => x.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
