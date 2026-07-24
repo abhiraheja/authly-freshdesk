@@ -28,6 +28,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<Problem> Problems => Set<Problem>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
+    public DbSet<WidgetConfig> WidgetConfigs => Set<WidgetConfig>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -263,6 +264,16 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.HasOne(d => d.Announcement).WithMany(a => a.Deliveries).HasForeignKey(d => d.AnnouncementId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasOne(d => d.User).WithMany().HasForeignKey(d => d.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WidgetConfig>(e =>
+        {
+            e.ToTable("widget_configs");
+            e.HasIndex(w => w.WorkspaceId).IsUnique();
+            e.Property(w => w.EmbedType).HasDefaultValue(WidgetEmbedType.Floating);
+            e.Property(w => w.Theme).HasDefaultValue("light");
+            e.HasOne(w => w.Workspace).WithMany().HasForeignKey(w => w.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

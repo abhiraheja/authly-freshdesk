@@ -12,6 +12,7 @@ import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
 import { DomainsPage } from './pages/admin/DomainsPage'
 import { SsoSettingsPage } from './pages/admin/SsoSettingsPage'
 import { UsersPage } from './pages/admin/UsersPage'
+import { WidgetPage } from './pages/admin/WidgetPage'
 import { SsoCompletePage } from './pages/auth/SsoCompletePage'
 import { NewTicketPage } from './pages/portal/NewTicketPage'
 import { PortalTicketDetailPage } from './pages/portal/PortalTicketDetailPage'
@@ -49,6 +50,7 @@ function App() {
           <Route path="/admin/settings/branding" element={<BrandingSettingsPage />} />
           <Route path="/admin/settings/sso" element={<SsoSettingsPage />} />
           <Route path="/admin/settings/domains" element={<DomainsPage />} />
+          <Route path="/admin/widget" element={<WidgetPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
