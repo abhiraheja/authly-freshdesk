@@ -57,8 +57,15 @@ public class InboundEmailService(
 
     // ---- Shared pipeline -----------------------------------------------------
 
-    public async Task<InboundResult> ProcessAsync(Guid workspaceId, InboundMessage msg, CancellationToken ct)
+    public async Task<InboundResult> ProcessAsync(Guid workspaceId, InboundMessage rawMsg, CancellationToken ct)
     {
+        // Canonicalise every Message-ID (strip angle brackets) so ids from any
+        // transport match the bracket-free form outbound stores on comments.
+        var msg = rawMsg with
+        {
+            MessageId = NormalizeId(rawMsg.MessageId),
+            ReferenceIds = rawMsg.ReferenceIds.Select(NormalizeId).Where(s => s.Length > 0).ToList(),
+        };
         var from = msg.FromEmail.Trim().ToLowerInvariant();
 
         // (a) Fast idempotency check — a definitive duplicate skips all work.
@@ -132,7 +139,7 @@ public class InboundEmailService(
             if (byAddr is not null) return byAddr;
         }
 
-        var refs = msg.ReferenceIds.ToList();
+        var refs = msg.ReferenceIds.ToList(); // already normalised in ProcessAsync
         if (refs.Count == 0) return null;
 
         // 2nd: In-Reply-To / References matched against a stored comment id.
@@ -171,10 +178,13 @@ public class InboundEmailService(
         return Guid.TryParseExact(local[(plus + 1)..], "N", out var g) ? g : null;
     }
 
+    internal static string NormalizeId(string id) =>
+        id.Trim().TrimStart('<').TrimEnd('>').Trim();
+
     internal static Guid? TicketIdFromTrackedMessageId(string messageId)
     {
-        // <{tid:N}.{cid:N}@trackly>
-        var s = messageId.Trim().TrimStart('<').TrimEnd('>');
+        // {tid:N}.{cid:N}@trackly
+        var s = NormalizeId(messageId);
         if (!s.EndsWith("@trackly", StringComparison.OrdinalIgnoreCase)) return null;
         var dot = s.IndexOf('.');
         var head = dot > 0 ? s[..dot] : s.Split('@')[0];

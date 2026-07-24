@@ -31,6 +31,8 @@ public static class DependencyInjection
 
         // Ticket notifications: per-workspace SMTP with a shared/dev fallback.
         services.AddScoped<IWorkspaceEmailSender, WorkspaceEmailSender>();
+        // Option B inbound transport (stateless).
+        services.AddSingleton<IMailboxReader, ImapMailboxReader>();
 
         services.AddSingleton<IFileStorage, LocalFileStorage>();
         services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();

@@ -226,11 +226,13 @@ public class NotificationService(
         : "Use the private tracking link from your original confirmation email to view this ticket.";
 
     // <ticket-uuid>.<comment-uuid>@trackly — carried on the comment for threading.
+    // Stored canonical (no angle brackets); MimeKit adds the brackets in the header
+    // and strips them again on the way back in, so inbound refs match this form.
     private static string CommentMessageId(Guid ticketId, Guid commentId)
-        => $"<{ticketId:N}.{commentId:N}@trackly>";
+        => $"{ticketId:N}.{commentId:N}@trackly";
 
     private static string NewMessageId(Guid ticketId)
-        => $"<{ticketId:N}.{Guid.NewGuid():N}@trackly>";
+        => $"{ticketId:N}.{Guid.NewGuid():N}@trackly";
 
     private async Task<Ticket?> LoadAsync(Guid ticketId, CancellationToken ct) =>
         await db.Tickets

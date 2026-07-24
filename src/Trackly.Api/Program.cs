@@ -12,6 +12,7 @@ using Trackly.Modules.Email;
 using Trackly.Modules.Guest;
 using Trackly.Modules.Invitations;
 using Trackly.Modules.Tickets;
+using Trackly.Api.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -25,6 +26,7 @@ builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<AttachmentService>();
 builder.Services.AddScoped<GuestService>();
 builder.Services.AddScoped<InvitationService>();
+builder.Services.AddHostedService<EmailPollingWorker>();
 
 builder.Services.AddAuthentication(TracklySession.Scheme)
     .AddScheme<AuthenticationSchemeOptions, TracklySessionHandler>(TracklySession.Scheme, _ => { });
