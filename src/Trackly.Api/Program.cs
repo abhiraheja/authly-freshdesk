@@ -9,6 +9,7 @@ using Trackly.Infrastructure;
 using Trackly.Infrastructure.Data;
 using Trackly.Modules.Announcements;
 using Trackly.Modules.Auth;
+using Trackly.Modules.Dashboard;
 using Trackly.Modules.Email;
 using Trackly.Modules.Guest;
 using Trackly.Modules.Invitations;
@@ -32,6 +33,7 @@ builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<SsoLoginService>();
 builder.Services.AddScoped<ProblemService>();
 builder.Services.AddScoped<AnnouncementService>();
+builder.Services.AddScoped<DashboardService>();
 builder.Services.AddHostedService<AnnouncementWorker>();
 builder.Services.AddHostedService<EmailPollingWorker>();
 

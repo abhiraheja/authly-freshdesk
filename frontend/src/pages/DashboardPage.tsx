@@ -1,7 +1,7 @@
 import { Box, Button, List, ListItem, Paper, Stack, Typography } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { listTickets } from '../api/tickets'
+import { getDashboardStats } from '../api/tickets'
 import { AppShell } from '../components/AppShell'
 import { StatCard } from '../components/StatCard'
 import { useAuthStore } from '../store/auth'
@@ -9,24 +9,22 @@ import { shadows } from '../theme'
 
 const checklist = [
   { label: 'Create your workspace', done: true },
-  { label: 'Add your branding', done: false, phase: 'Phase 3' },
-  { label: 'Invite agents', done: false, phase: 'Phase 3' },
-  { label: 'Connect email', done: false, phase: 'Phase 4' },
-  { label: 'Configure SSO', done: false, phase: 'Phase 5' },
-] as { label: string; done: boolean; phase?: string }[]
+  { label: 'Add your branding', done: false, to: '/admin/settings/branding' },
+  { label: 'Invite agents', done: false, to: '/admin/users' },
+  { label: 'Configure SSO', done: false, to: '/admin/settings/sso' },
+  { label: 'Embed the widget', done: false, to: '/admin/widget' },
+] as { label: string; done: boolean; to?: string }[]
 
 export function DashboardPage() {
   const user = useAuthStore((s) => s.user)
   const navigate = useNavigate()
 
-  // One list call; counts are derived client-side. Replace with a dedicated
-  // stats endpoint when ticket volume outgrows a single page.
-  const { data } = useQuery({ queryKey: ['dashboard-tickets'], queryFn: () => listTickets({ pageSize: 100 }) })
+  // Counts are computed server-side by the dashboard stats endpoint.
+  const { data: stats } = useQuery({ queryKey: ['dashboard-stats'], queryFn: getDashboardStats })
 
-  const tickets = data?.items ?? []
-  const count = (status: string) => tickets.filter((t) => t.status === status).length
-  const unassigned = tickets.filter((t) => !t.assignee).length
-  const mine = tickets.filter((t) => t.assignee?.id === user?.id).length
+  const count = (key: 'open' | 'pending' | 'resolved') => stats?.[key] ?? 0
+  const unassigned = stats?.unassigned ?? 0
+  const mine = stats?.assignedToMe ?? 0
 
   return (
     <AppShell>
@@ -56,13 +54,14 @@ export function DashboardPage() {
           mb: 4,
         }}
       >
-        <StatCard label="Total tickets" value={data?.total ?? '—'} icon="🎫" tone="primary"
+        <StatCard label="Total tickets" value={stats?.total ?? '—'} icon="🎫" tone="primary"
           onClick={() => navigate('/dashboard/tickets')} />
         <StatCard label="Open" value={count('open')} icon="📂" tone="info"
           onClick={() => navigate('/dashboard/tickets')} />
         <StatCard label="Pending" value={count('pending')} icon="⏱" tone="warning" />
-        <StatCard label="Resolved" value={count('resolved')} icon="✅" tone="success" />
         <StatCard label="Unassigned" value={unassigned} icon="🙋" tone={unassigned > 0 ? 'error' : 'success'} />
+        <StatCard label="Open problems" value={stats?.openProblems ?? 0} icon="🧩"
+          tone={(stats?.openProblems ?? 0) > 0 ? 'warning' : 'success'} onClick={() => navigate('/dashboard/problems')} />
       </Box>
 
       <Stack direction={{ xs: 'column', md: 'row' }} spacing={3} sx={{ alignItems: 'flex-start' }}>
@@ -75,25 +74,26 @@ export function DashboardPage() {
             {checklist.map((item) => (
               <ListItem
                 key={item.label}
+                onClick={() => item.to && navigate(item.to)}
                 sx={{
                   border: '1px solid',
                   borderColor: 'divider',
                   borderRadius: '10px',
                   mb: 1,
                   fontSize: 14.5,
-                  color: item.done ? 'text.secondary' : 'text.primary',
-                  textDecoration: item.done ? 'line-through' : 'none',
-                  bgcolor: item.done ? 'surfaceMuted' : 'background.paper',
+                  color: 'text.primary',
+                  bgcolor: 'background.paper',
                   display: 'flex',
                   justifyContent: 'space-between',
+                  cursor: item.to ? 'pointer' : 'default',
                 }}
               >
                 <span>
                   {item.done ? '✅' : '⬜'}&nbsp;&nbsp;{item.label}
                 </span>
-                {!item.done && item.phase && (
-                  <Box component="span" sx={{ fontSize: 12, color: 'text.secondary' }}>
-                    {item.phase}
+                {item.to && (
+                  <Box component="span" sx={{ fontSize: 12, color: 'primary.main' }}>
+                    Manage →
                   </Box>
                 )}
               </ListItem>

@@ -60,6 +60,21 @@ export interface Comment {
   createdAt: string
 }
 
+export interface DashboardStats {
+  total: number
+  open: number
+  pending: number
+  resolved: number
+  closed: number
+  unassigned: number
+  assignedToMe: number
+  openProblems: number
+}
+
+export function getDashboardStats() {
+  return api<DashboardStats>('/api/dashboard/stats')
+}
+
 export interface TicketListParams {
   status?: string
   priority?: string
