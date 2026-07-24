@@ -1388,7 +1388,14 @@ Build in this order — each phase is independently shippable and testable:
 - SAML via ITfoxtec (after OIDC works)
 
 **Phase 6 — Remaining features**
-- Problems, announcements, embeddable widget (mockup 08), agent dashboard stats (mockup 04)
+- Problems (group tickets under a root cause, bulk-resolve), broadcast
+  announcements (typed outage emails, schedule + per-recipient delivery tracking),
+  embeddable widget (`/widget.js` floating/inline/link over the branded submit
+  form), agent dashboard stats endpoint (mockup 04).
+- **Known gap carried over from Phase 4:** the admin **email settings UI** was
+  never built (the backend API and `verify-phase4.ps1` exist; there is no
+  `/admin/settings/email` page, nav link, or `api/email.ts`). Build it before
+  calling email "shippable" from the UI.
 
 **Phase 7 — Service desk intelligence**
 

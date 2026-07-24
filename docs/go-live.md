@@ -186,5 +186,16 @@ Append here as phases land, so nothing is missed later.
   validated against the IdP metadata cert. Domain routing needs outbound DNS
   (TXT lookups) from the API host. **Both OIDC and SAML must be verified against a
   real IdP** — there is no automated substitute for a live identity provider.
-- **Phase 6+ / Phase 7:** _TBD — widget embed origin/CORS, AI copilot API key
-  (`Anthropic`/Claude) as a deployment secret, omnichannel connector credentials._
+- **Phase 6 (problems / announcements / widget / dashboard):**
+  - `GET /widget.js` and `GET /api/public/workspaces/{slug}/widget` are public and
+    must be reachable over HTTPS from wherever customers embed the widget. The
+    loader embeds the branded submit form same-origin (`{ApiBaseUrl}/submit?...`),
+    so keep the SPA and API same-origin (§5).
+  - **`AnnouncementWorker` is a second in-process background service** (alongside
+    the IMAP poller). It claims each scheduled announcement by stamping `sent_at`
+    before sending, but running multiple API instances would still risk double
+    sends — reinforces the **single-instance** guidance until leader election
+    exists (§4).
+  - No new config keys or secrets.
+- **Phase 7:** _TBD — AI copilot API key (`Anthropic`/Claude) as a deployment
+  secret, omnichannel connector credentials._
