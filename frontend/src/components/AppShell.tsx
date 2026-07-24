@@ -46,6 +46,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     { label: 'Tickets', path: '/dashboard/tickets' },
     { label: 'Team', path: '/admin/users', adminOnly: true },
     { label: 'Branding', path: '/admin/settings/branding', adminOnly: true },
+    { label: 'SSO', path: '/admin/settings/sso', adminOnly: true },
+    { label: 'Domains', path: '/admin/settings/domains', adminOnly: true },
   ].filter((l) => !l.adminOnly || user?.role === 'admin')
 
   return (

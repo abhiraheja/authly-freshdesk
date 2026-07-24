@@ -15,6 +15,7 @@ import { useState } from 'react'
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router-dom'
 import { sendMagicLink, verifyMagicLink, type VerifyResponse, type WorkspaceSummary } from '../api/auth'
 import { getPublicBranding } from '../api/guest'
+import { discoverSso } from '../api/sso'
 import { AuthCard } from '../components/AuthCard'
 import { CodeInput } from '../components/CodeInput'
 import { savePendingAuth } from '../lib/pendingAuth'
@@ -31,7 +32,9 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
   const [email, setEmail] = useState('')
   const [code, setCode] = useState('')
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([])
-  const [error, setError] = useState<string | null>(null)
+  const [params0] = useSearchParams()
+  const [error, setError] = useState<string | null>(params0.get('sso_error'))
+  const [checkingSso, setCheckingSso] = useState(false)
   const navigate = useNavigate()
   const completeAuth = useAuthCompletion()
 
@@ -47,6 +50,29 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
     retry: false,
     staleTime: 60_000,
   })
+
+  // Login flow: for the Trackly-wide login, first check whether the email's
+  // domain routes to a workspace's SSO. If so, hand off to the IdP; otherwise
+  // fall back to the magic link. (Branded per-workspace logins skip discovery.)
+  const beginLogin = async () => {
+    if (!email.includes('@')) return
+    setError(null)
+    if (!scopedSlug) {
+      setCheckingSso(true)
+      try {
+        const discovery = await discoverSso(email)
+        if (discovery?.startUrl) {
+          window.location.href = discovery.startUrl
+          return
+        }
+      } catch {
+        // discovery failure is non-fatal — fall back to magic link
+      } finally {
+        setCheckingSso(false)
+      }
+    }
+    send.mutate()
+  }
 
   const handleVerifyResponse = (res: VerifyResponse) => {
     if (res.status === 'ok') {
@@ -178,7 +204,7 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
       <form
         onSubmit={(e) => {
           e.preventDefault()
-          if (email.includes('@')) send.mutate()
+          beginLogin()
         }}
       >
         <Typography sx={{ fontSize: 13.5, fontWeight: 600, color: '#334155', mb: 0.75 }}>Work email</Typography>
@@ -197,9 +223,9 @@ export function EmailAuthPage({ mode }: EmailAuthPageProps) {
           variant="contained"
           type="submit"
           sx={{ mt: 3, ...brandBtn }}
-          disabled={!email.includes('@') || send.isPending}
+          disabled={!email.includes('@') || send.isPending || checkingSso}
         >
-          ✉️ Email me a sign-in link →
+          {checkingSso ? 'Checking…' : '✉️ Continue →'}
         </Button>
       </form>
       <Typography align="center" sx={{ fontSize: 13, color: '#94A3B8', mt: 1.5 }}>

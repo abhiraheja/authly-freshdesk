@@ -7,7 +7,10 @@ import { OnboardingWorkspacePage } from './pages/OnboardingWorkspacePage'
 import { VerifyPage } from './pages/VerifyPage'
 import { AgentWorkspacePage } from './pages/agent/AgentWorkspacePage'
 import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
+import { DomainsPage } from './pages/admin/DomainsPage'
+import { SsoSettingsPage } from './pages/admin/SsoSettingsPage'
 import { UsersPage } from './pages/admin/UsersPage'
+import { SsoCompletePage } from './pages/auth/SsoCompletePage'
 import { NewTicketPage } from './pages/portal/NewTicketPage'
 import { PortalTicketDetailPage } from './pages/portal/PortalTicketDetailPage'
 import { PortalTicketsPage } from './pages/portal/PortalTicketsPage'
@@ -21,6 +24,7 @@ function App() {
       <Route path="/login" element={<EmailAuthPage mode="login" />} />
       <Route path="/signup" element={<EmailAuthPage mode="signup" />} />
       <Route path="/auth/verify" element={<VerifyPage />} />
+      <Route path="/auth/sso/complete" element={<SsoCompletePage />} />
       <Route path="/onboarding/workspace" element={<OnboardingWorkspacePage />} />
       {/* Public, workspace-branded surfaces */}
       <Route path="/submit" element={<SubmitPage />} />
@@ -39,6 +43,8 @@ function App() {
         <Route element={<RequireRole roles={['admin']} />}>
           <Route path="/admin/users" element={<UsersPage />} />
           <Route path="/admin/settings/branding" element={<BrandingSettingsPage />} />
+          <Route path="/admin/settings/sso" element={<SsoSettingsPage />} />
+          <Route path="/admin/settings/domains" element={<DomainsPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
