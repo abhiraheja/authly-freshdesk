@@ -41,6 +41,7 @@ public static class DependencyInjection
         // OIDC (discovery/JWKS caching lives inside the singleton client).
         services.AddHttpClient("oidc");
         services.AddSingleton<IOidcClient, OidcClient>();
+        services.AddSingleton<IDnsTxtLookup, DnsClientTxtLookup>();
 
         return services;
     }
