@@ -20,6 +20,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddTracklyInfrastructure(builder.Configuration);
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<InboundEmailService>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<AttachmentService>();
 builder.Services.AddScoped<GuestService>();
