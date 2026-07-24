@@ -6,6 +6,7 @@ using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
 using Trackly.Infrastructure.Email;
 using Trackly.Infrastructure.Security;
+using Trackly.Infrastructure.Sso;
 using Trackly.Infrastructure.Storage;
 
 namespace Trackly.Infrastructure;
@@ -36,6 +37,10 @@ public static class DependencyInjection
 
         services.AddSingleton<IFileStorage, LocalFileStorage>();
         services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();
+
+        // OIDC (discovery/JWKS caching lives inside the singleton client).
+        services.AddHttpClient("oidc");
+        services.AddSingleton<IOidcClient, OidcClient>();
 
         return services;
     }

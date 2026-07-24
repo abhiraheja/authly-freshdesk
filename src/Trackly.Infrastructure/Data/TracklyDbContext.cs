@@ -24,6 +24,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<SsoGroupRoleMapping> SsoGroupRoleMappings => Set<SsoGroupRoleMapping>();
     public DbSet<UserIdentity> UserIdentities => Set<UserIdentity>();
     public DbSet<WorkspaceDomain> WorkspaceDomains => Set<WorkspaceDomain>();
+    public DbSet<SsoLoginState> SsoLoginStates => Set<SsoLoginState>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -226,6 +227,13 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.Property(d => d.Verified).HasDefaultValue(false);
             e.HasOne(d => d.Workspace).WithMany().HasForeignKey(d => d.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SsoLoginState>(e =>
+        {
+            e.ToTable("sso_login_states");
+            e.HasIndex(s => s.State).IsUnique();
+            e.HasIndex(s => s.ExpiresAt); // cleanup sweeps
         });
 
         modelBuilder.Entity<Attachment>(e =>

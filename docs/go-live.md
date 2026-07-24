@@ -41,7 +41,8 @@ store. Empty strings in the committed `appsettings.json` are placeholders.
 |-----|---------|------------------|--------|
 | `ConnectionStrings:Trackly` | PostgreSQL connection string | per-env | secret |
 | `Security:MasterKey` | base64 **32-byte** AES-256-GCM key for secrets at rest | per-env, generate once, back up | secret |
-| `App:FrontendBaseUrl` | Absolute base URL of the SPA; used to build links in **emails** (magic links, invites, guest tracking, notifications) | per-env (e.g. `https://app.trackly.com`) | no |
+| `App:FrontendBaseUrl` | Absolute base URL of the SPA; used to build links in **emails** (magic links, invites, guest tracking, notifications) and SSO redirects | per-env (e.g. `https://app.trackly.com`) | no |
+| `App:ApiBaseUrl` | Public base URL of the API; used to build the **OIDC/SAML redirect (callback) URI**. Falls back to the request scheme+host if unset — set it explicitly behind a proxy | per-env (e.g. `https://app.trackly.com`) | no |
 | `Storage:LocalPath` | Directory for uploaded attachments + logos | per-env (see §3) | no |
 | `Email:Smtp:Host` | Shared/deployment-level SMTP relay host. Empty ⇒ emails are logged, not sent | per-env | no |
 | `Email:Smtp:Port` | SMTP port | default 587 | no |
@@ -173,8 +174,11 @@ Append here as phases land, so nothing is missed later.
 - **Phase 4 (email):** `Security:MasterKey` (secrets at rest), shared SMTP relay,
   the inbound webhook endpoint reachability, the IMAP-worker single-instance
   constraint. Per-workspace email config is data, not env.
-- **Phase 5 (SSO):** _TBD — will add per-workspace OIDC/SAML config (encrypted
-  client secrets, redirect URIs that must be whitelisted at each IdP), and the
-  public callback URL(s) that must be reachable._
+- **Phase 5 (SSO):** `App:ApiBaseUrl` (drives the OIDC/SAML callback URI). Each
+  workspace's IdP must whitelist the redirect URI `{ApiBaseUrl}/api/auth/sso/callback`.
+  The callback endpoint must be publicly reachable over HTTPS. Per-workspace OIDC
+  config (discovery URL, client id, encrypted client secret) and group→role
+  mappings are data, not env. OIDC to a non-loopback IdP requires HTTPS on the
+  discovery URL. _SAML SP metadata / signing cert — added with the SAML slice._
 - **Phase 6+ / Phase 7:** _TBD — widget embed origin/CORS, AI copilot API key
   (`Anthropic`/Claude) as a deployment secret, omnichannel connector credentials._
