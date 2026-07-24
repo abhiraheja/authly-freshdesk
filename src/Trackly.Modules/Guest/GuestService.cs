@@ -4,6 +4,7 @@ using Trackly.Core.Entities;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
 using Trackly.Modules.Auth;
+using Trackly.Modules.Email;
 using Trackly.Modules.Tickets;
 
 namespace Trackly.Modules.Guest;
@@ -13,7 +14,8 @@ public class GuestService(
     IEmailSender emailSender,
     IFileStorage storage,
     IConfiguration configuration,
-    TicketService ticketService)
+    TicketService ticketService,
+    NotificationService notifications)
 {
     private const int MaxSendsPer15Minutes = 3;
     private const int MaxCodeAttempts = 5;
@@ -247,6 +249,10 @@ public class GuestService(
         db.Comments.Add(comment);
         ticket.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        // A guest reply is a customer-side reply → notify the assignee + watchers.
+        await notifications.OnReplyAsync(ticket.Id, comment.Id, authoredByAgent: false, ct);
+
         return new CommentDto(comment.Id, null, comment.GuestEmail, comment.Body, false, comment.Source, [], comment.CreatedAt);
     }
 

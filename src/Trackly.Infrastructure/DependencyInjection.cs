@@ -29,6 +29,9 @@ public static class DependencyInjection
         else
             services.AddScoped<IEmailSender, LoggingEmailSender>();
 
+        // Ticket notifications: per-workspace SMTP with a shared/dev fallback.
+        services.AddScoped<IWorkspaceEmailSender, WorkspaceEmailSender>();
+
         services.AddSingleton<IFileStorage, LocalFileStorage>();
         services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();
 

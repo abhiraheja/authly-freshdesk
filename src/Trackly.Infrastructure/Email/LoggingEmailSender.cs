@@ -10,8 +10,8 @@ public class LoggingEmailSender(ILogger<LoggingEmailSender> logger) : IEmailSend
     public Task SendAsync(EmailMessage message, CancellationToken cancellationToken = default)
     {
         logger.LogInformation(
-            "DEV EMAIL (no SMTP configured)\nTo: {To}\nSubject: {Subject}\n{Body}",
-            message.ToEmail, message.Subject, message.TextBody);
+            "DEV EMAIL (no SMTP configured)\nTo: {To}\nFrom: {From}\nReply-To: {ReplyTo}\nMessage-ID: {MessageId}\nSubject: {Subject}\n{Body}",
+            message.ToEmail, message.FromEmail, message.ReplyTo, message.MessageId, message.Subject, message.TextBody);
         return Task.CompletedTask;
     }
 }

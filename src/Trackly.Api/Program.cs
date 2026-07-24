@@ -8,6 +8,7 @@ using Trackly.Core.Entities;
 using Trackly.Infrastructure;
 using Trackly.Infrastructure.Data;
 using Trackly.Modules.Auth;
+using Trackly.Modules.Email;
 using Trackly.Modules.Guest;
 using Trackly.Modules.Invitations;
 using Trackly.Modules.Tickets;
@@ -18,6 +19,7 @@ builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilte
 builder.Services.AddOpenApi();
 builder.Services.AddTracklyInfrastructure(builder.Configuration);
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<AttachmentService>();
 builder.Services.AddScoped<GuestService>();

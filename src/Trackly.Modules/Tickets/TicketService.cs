@@ -1,10 +1,11 @@
 using Microsoft.EntityFrameworkCore;
 using Trackly.Core.Entities;
 using Trackly.Infrastructure.Data;
+using Trackly.Modules.Email;
 
 namespace Trackly.Modules.Tickets;
 
-public class TicketService(TracklyDbContext db)
+public class TicketService(TracklyDbContext db, NotificationService notifications)
 {
     // ---- Queries ------------------------------------------------------------
 
@@ -108,6 +109,7 @@ public class TicketService(TracklyDbContext db)
         }
 
         await db.SaveChangesAsync(ct);
+        await notifications.OnTicketCreatedAsync(ticket.Id, ct);
         return (await GetAsync(actor, ticket.Id, ct))!;
     }
 
@@ -141,6 +143,9 @@ public class TicketService(TracklyDbContext db)
             .SingleOrDefaultAsync(t => t.WorkspaceId == actor.WorkspaceId && t.Id == ticketId, ct);
         if (ticket is null)
             return null;
+
+        var previousStatus = ticket.Status;
+        var previousAssignee = ticket.AssigneeId;
 
         if (request.Subject is not null)
         {
@@ -198,6 +203,12 @@ public class TicketService(TracklyDbContext db)
 
         ticket.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        if (ticket.Status != previousStatus)
+            await notifications.OnStatusChangedAsync(ticket.Id, ticket.Status, ct);
+        if (ticket.AssigneeId is { } newAssignee && newAssignee != previousAssignee)
+            await notifications.OnAssignmentAsync(ticket.Id, newAssignee, reassigned: previousAssignee is not null, ct);
+
         return await GetAsync(actor, ticketId, ct);
     }
 
@@ -308,6 +319,11 @@ public class TicketService(TracklyDbContext db)
         db.Comments.Add(comment);
         ticket.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
+
+        // Internal notes stay internal — no external notification. External
+        // replies notify the other party (agent → customer, customer → agents).
+        if (!comment.IsInternal)
+            await notifications.OnReplyAsync(ticket.Id, comment.Id, authoredByAgent: actor.IsAgentOrAdmin, ct);
 
         var author = await db.Users.SingleAsync(u => u.Id == actor.UserId, ct);
         return new CommentDto(
