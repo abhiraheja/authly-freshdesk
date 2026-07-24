@@ -44,10 +44,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const links = [
     { label: 'Dashboard', path: '/dashboard' },
     { label: 'Tickets', path: '/dashboard/tickets' },
+    { label: 'Problems', path: '/dashboard/problems' },
+    { label: 'Announcements', path: '/admin/announcements', adminOnly: true },
     { label: 'Team', path: '/admin/users', adminOnly: true },
     { label: 'Branding', path: '/admin/settings/branding', adminOnly: true },
     { label: 'SSO', path: '/admin/settings/sso', adminOnly: true },
     { label: 'Domains', path: '/admin/settings/domains', adminOnly: true },
+    { label: 'Widget', path: '/admin/widget', adminOnly: true },
   ].filter((l) => !l.adminOnly || user?.role === 'admin')
 
   return (

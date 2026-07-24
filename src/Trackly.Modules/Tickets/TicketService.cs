@@ -62,7 +62,8 @@ public class TicketService(TracklyDbContext db, NotificationService notification
             .Include(t => t.Assignee)
             .Include(t => t.Watchers).ThenInclude(w => w.Agent)
             .SingleOrDefaultAsync(t => t.Id == ticketId, ct);
-        return ticket is null ? null : ToDetail(ticket);
+        // Problem grouping is internal — never expose it to a customer.
+        return ticket is null ? null : ToDetail(ticket, actor.IsAgentOrAdmin);
     }
 
     // ---- Create + round-robin assignment ------------------------------------
@@ -333,12 +334,13 @@ public class TicketService(TracklyDbContext db, NotificationService notification
 
     // ---- Mapping -----------------------------------------------------------------
 
-    private static TicketDetailDto ToDetail(Ticket t) => new(
+    private static TicketDetailDto ToDetail(Ticket t, bool isAgentOrAdmin) => new(
         t.Id, t.Subject, t.Description, t.Status, t.Priority, t.Channel,
         CategoryDto.From(t.Category),
         UserSummaryDto.From(t.Requester),
         t.GuestName, t.GuestEmail,
         UserSummaryDto.From(t.Assignee),
         t.Watchers.Select(w => new WatcherDto(UserSummaryDto.From(w.Agent)!, w.AddedAt)).ToList(),
+        isAgentOrAdmin ? t.ProblemId : null,
         t.CreatedAt, t.UpdatedAt);
 }

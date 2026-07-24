@@ -37,6 +37,7 @@ export interface Watcher {
 export interface TicketDetail extends Omit<TicketSummary, 'commentCount'> {
   description: string
   watchers: Watcher[]
+  problemId: string | null
 }
 
 export interface Attachment {

@@ -44,6 +44,7 @@ public record TicketDetailDto(
     string? GuestEmail,
     UserSummaryDto? Assignee,
     IReadOnlyList<WatcherDto> Watchers,
+    Guid? ProblemId,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 

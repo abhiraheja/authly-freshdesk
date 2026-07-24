@@ -25,6 +25,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<UserIdentity> UserIdentities => Set<UserIdentity>();
     public DbSet<WorkspaceDomain> WorkspaceDomains => Set<WorkspaceDomain>();
     public DbSet<SsoLoginState> SsoLoginStates => Set<SsoLoginState>();
+    public DbSet<Problem> Problems => Set<Problem>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -94,6 +95,8 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.HasOne(t => t.Requester).WithMany().HasForeignKey(t => t.RequesterId)
                 .OnDelete(DeleteBehavior.SetNull);
             e.HasOne(t => t.Assignee).WithMany().HasForeignKey(t => t.AssigneeId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.Problem).WithMany().HasForeignKey(t => t.ProblemId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -234,6 +237,19 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.ToTable("sso_login_states");
             e.HasIndex(s => s.State).IsUnique();
             e.HasIndex(s => s.ExpiresAt); // cleanup sweeps
+        });
+
+        modelBuilder.Entity<Problem>(e =>
+        {
+            e.ToTable("problems");
+            e.HasIndex(p => new { p.WorkspaceId, p.Status });
+            e.Property(p => p.Status).HasDefaultValue(ProblemStatus.Investigating);
+            e.HasOne(p => p.Workspace).WithMany().HasForeignKey(p => p.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(p => p.Assignee).WithMany().HasForeignKey(p => p.AssigneeId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(p => p.CreatedByUser).WithMany().HasForeignKey(p => p.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Attachment>(e =>

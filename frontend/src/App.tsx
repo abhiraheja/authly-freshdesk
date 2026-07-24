@@ -6,6 +6,7 @@ import { EmailAuthPage } from './pages/EmailAuthPage'
 import { OnboardingWorkspacePage } from './pages/OnboardingWorkspacePage'
 import { VerifyPage } from './pages/VerifyPage'
 import { AgentWorkspacePage } from './pages/agent/AgentWorkspacePage'
+import { ProblemsPage } from './pages/agent/ProblemsPage'
 import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
 import { DomainsPage } from './pages/admin/DomainsPage'
 import { SsoSettingsPage } from './pages/admin/SsoSettingsPage'
@@ -39,6 +40,7 @@ function App() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/dashboard/tickets" element={<AgentWorkspacePage />} />
           <Route path="/dashboard/tickets/:id" element={<AgentWorkspacePage />} />
+          <Route path="/dashboard/problems" element={<ProblemsPage />} />
         </Route>
         <Route element={<RequireRole roles={['admin']} />}>
           <Route path="/admin/users" element={<UsersPage />} />

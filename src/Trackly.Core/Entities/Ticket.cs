@@ -18,6 +18,8 @@ public class Ticket
     public string? GuestTokenHash { get; set; }     // SHA-256 of guest magic-link token
     public Guid? AssigneeId { get; set; }
     public User? Assignee { get; set; }
+    public Guid? ProblemId { get; set; }            // groups related tickets (agent-only)
+    public Problem? Problem { get; set; }
     public string Channel { get; set; } = TicketChannel.Web;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
