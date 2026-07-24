@@ -21,4 +21,5 @@ public static class TracklyRoles
     public const string Customer = "customer";
     public const string Agent = "agent";
     public const string Admin = "admin";
+    public static readonly string[] All = [Customer, Agent, Admin];
 }

@@ -20,6 +20,10 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<EmailConfig> EmailConfigs => Set<EmailConfig>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<InboundEmailEvent> InboundEmailEvents => Set<InboundEmailEvent>();
+    public DbSet<SsoConnection> SsoConnections => Set<SsoConnection>();
+    public DbSet<SsoGroupRoleMapping> SsoGroupRoleMappings => Set<SsoGroupRoleMapping>();
+    public DbSet<UserIdentity> UserIdentities => Set<UserIdentity>();
+    public DbSet<WorkspaceDomain> WorkspaceDomains => Set<WorkspaceDomain>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -182,6 +186,45 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             // Exactly-once ingestion: a duplicate provider Message-ID collides here.
             e.HasIndex(x => new { x.WorkspaceId, x.MessageId }).IsUnique();
             e.HasOne(x => x.Workspace).WithMany().HasForeignKey(x => x.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SsoConnection>(e =>
+        {
+            e.ToTable("sso_connections");
+            // One active SSO connection per workspace (switchable).
+            e.HasIndex(c => c.WorkspaceId).IsUnique();
+            e.Property(c => c.Status).HasDefaultValue(SsoStatus.Pending);
+            e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SsoGroupRoleMapping>(e =>
+        {
+            e.ToTable("sso_group_role_mappings");
+            e.HasIndex(m => m.ConnectionId);
+            e.HasOne(m => m.Connection).WithMany(c => c.GroupMappings).HasForeignKey(m => m.ConnectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<UserIdentity>(e =>
+        {
+            e.ToTable("user_identities");
+            e.HasIndex(i => new { i.ConnectionId, i.ProviderSub }).IsUnique();
+            e.Property(i => i.IsActive).HasDefaultValue(true);
+            e.HasOne(i => i.User).WithMany().HasForeignKey(i => i.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(i => i.Connection).WithMany().HasForeignKey(i => i.ConnectionId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<WorkspaceDomain>(e =>
+        {
+            e.ToTable("workspace_domains");
+            e.HasIndex(d => d.Domain).IsUnique();  // globally unique
+            e.Property(d => d.Discoverable).HasDefaultValue(true);
+            e.Property(d => d.Verified).HasDefaultValue(false);
+            e.HasOne(d => d.Workspace).WithMany().HasForeignKey(d => d.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
