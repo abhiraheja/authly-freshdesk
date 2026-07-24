@@ -93,13 +93,43 @@ public class SsoLoginService(
             return SsoCallbackResult.Fail("Sign-in failed. Please try again or contact your administrator.");
         }
 
+        return await FinishLoginAsync(conn, info, ipAddress, userAgent, ct);
+    }
+
+    // ---- SAML entry (protocol handled in the API layer; claims land here) ----
+
+    public Task<SsoConnection?> GetConnectionAsync(string slug, string protocol, CancellationToken ct)
+        => db.SsoConnections
+            .Include(c => c.GroupMappings)
+            .SingleOrDefaultAsync(c => c.Workspace!.Slug == slug && c.Protocol == protocol, ct);
+
+    public Task<SsoConnection?> GetConnectionByIdAsync(Guid connectionId, CancellationToken ct)
+        => db.SsoConnections
+            .Include(c => c.GroupMappings)
+            .SingleOrDefaultAsync(c => c.Id == connectionId, ct);
+
+    // Shared by OIDC callback and SAML ACS: the IdP has authenticated the user and
+    // handed us verified claims; provision, map role, issue the Trackly session.
+    public async Task<SsoCallbackResult> FinishLoginAsync(
+        SsoConnection conn, OidcUserInfo info, string? ipAddress, string? userAgent, CancellationToken ct)
+    {
         if (string.IsNullOrWhiteSpace(info.Email))
         {
             await db.SaveChangesAsync(ct);
             return SsoCallbackResult.Fail("Your identity provider did not return an email address.");
         }
 
-        var user = await ProvisionAsync(conn, info, ct);
+        User user;
+        try
+        {
+            user = await ProvisionAsync(conn, info, ct);
+        }
+        catch (InvalidOperationException)
+        {
+            await db.SaveChangesAsync(ct);
+            return SsoCallbackResult.Fail("This account has been deactivated in Trackly.");
+        }
+
         conn.Status = SsoStatus.Active;
         conn.TestedAt = DateTime.UtcNow;
 
