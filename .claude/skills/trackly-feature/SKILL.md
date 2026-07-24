@@ -153,3 +153,7 @@ is the source of truth.
 - Comment the *why*, not the *what* — especially around a security decision.
 - **Commit and push after every phase.** Don't let multiple phases accumulate
   unpushed; this project has already lost work that way.
+- **New config key or secret? Update `docs/go-live.md` in the same change.** Any
+  new `IConfiguration` read, connection string, encrypted setting, external
+  dependency, or prod-only concern goes in that deployment checklist immediately —
+  it's how we avoid missing settings when deploying to a new environment.

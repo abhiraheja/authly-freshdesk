@@ -6,6 +6,7 @@ Trackly is a standalone, multi-tenant ticket management SaaS (FreshDesk/Zendesk-
 
 - **`docs/trackly-plan.md`** — the complete, reviewed design document: architecture, auth flows, full PostgreSQL schema, API endpoint list, email architecture (two inbound connector options), wireframes, implementation phases, and verification checklist. **Read it before designing or building anything.** If implementation needs to deviate from the plan, update the plan in the same change.
 - **`docs/mockups/`** — 9 self-contained HTML mockups (open in a browser). These are the approved visual design. `index.html` is the gallery. Match their layout; styling is Material UI with the design tokens they demonstrate.
+- **`docs/go-live.md`** — living deployment checklist. Whenever a change adds a config key, secret, external dependency, or a prod-only concern, record it there in the same change so nothing is missed when deploying to a new environment.
 
 ## Tech stack (decided — do not re-litigate)
 
