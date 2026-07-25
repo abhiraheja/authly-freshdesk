@@ -15,8 +15,8 @@ namespace Trackly.Api.Controllers;
 [ApiController]
 public class WidgetController(TracklyDbContext db, IConfiguration configuration) : ControllerBase
 {
-    private string ApiOrigin => (configuration["App:ApiBaseUrl"] ?? $"{Request.Scheme}://{Request.Host}").TrimEnd('/');
-    private string FrontendOrigin => (configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173").TrimEnd('/');
+    private string ApiOrigin => (configuration.GetNonEmpty("App:ApiBaseUrl") ?? $"{Request.Scheme}://{Request.Host}").TrimEnd('/');
+    private string FrontendOrigin => (configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173").TrimEnd('/');
 
     public record SaveWidgetRequest(string EmbedType, JsonElement Fields, string Theme);
 

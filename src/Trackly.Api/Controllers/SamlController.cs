@@ -21,8 +21,8 @@ namespace Trackly.Api.Controllers;
 public class SamlController(
     SsoLoginService sso, IConfiguration configuration, IHttpClientFactory httpClientFactory) : ControllerBase
 {
-    private string FrontendBaseUrl => configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173";
-    private string ApiBaseUrl => (configuration["App:ApiBaseUrl"] ?? $"{Request.Scheme}://{Request.Host}").TrimEnd('/');
+    private string FrontendBaseUrl => configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173";
+    private string ApiBaseUrl => (configuration.GetNonEmpty("App:ApiBaseUrl") ?? $"{Request.Scheme}://{Request.Host}").TrimEnd('/');
     private string AcsUrl => $"{ApiBaseUrl}/api/auth/saml/acs";
     private string SpEntityId(SsoConnection conn, string slug) =>
         conn.SpEntityId is { Length: > 0 } id ? id : $"{ApiBaseUrl}/saml/{slug}";

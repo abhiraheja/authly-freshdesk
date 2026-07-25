@@ -47,7 +47,7 @@ public class InvitationService(
         db.WorkspaceInvitations.Add(invitation);
         await db.SaveChangesAsync(ct);
 
-        var frontendBaseUrl = configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173";
+        var frontendBaseUrl = configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173";
         await emailSender.SendAsync(new EmailMessage(
             email,
             $"You're invited to join {workspace.Name} on Trackly",

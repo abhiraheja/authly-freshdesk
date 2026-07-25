@@ -8,8 +8,12 @@ namespace Trackly.Infrastructure.Storage;
 // never taken from user input.
 public class LocalFileStorage(IConfiguration configuration) : IFileStorage
 {
+    // Treat an empty/whitespace config value the same as absent — the
+    // appsettings.json placeholder is "" and must not defeat the default.
     private readonly string _root = Path.GetFullPath(
-        configuration["Storage:LocalPath"] ?? Path.Combine(AppContext.BaseDirectory, "storage"));
+        configuration["Storage:LocalPath"] is { Length: > 0 } p && !string.IsNullOrWhiteSpace(p)
+            ? p
+            : Path.Combine(AppContext.BaseDirectory, "storage"));
 
     public async Task<string> SaveAsync(string keyPrefix, string fileName, Stream content, CancellationToken ct = default)
     {

@@ -157,7 +157,7 @@ public class GuestService(
         await db.SaveChangesAsync(ct);
 
         var reference = Reference(ticket.Id);
-        var frontendBaseUrl = configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173";
+        var frontendBaseUrl = configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173";
         var trackUrl = $"{frontendBaseUrl}/tickets/{ticket.Id}?token={guestToken}&workspace={workspaceSlug}";
         var branding = await db.WorkspaceBrandings.SingleOrDefaultAsync(b => b.WorkspaceId == ticket.WorkspaceId, ct);
         var productName = branding?.PageTitle ?? token.Workspace!.Name;

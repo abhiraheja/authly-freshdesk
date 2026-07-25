@@ -20,7 +20,7 @@ public class NotificationService(
     IConfiguration configuration,
     ILogger<NotificationService> logger)
 {
-    private string FrontendBaseUrl => configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173";
+    private string FrontendBaseUrl => configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173";
 
     // ---- Public events -------------------------------------------------------
 

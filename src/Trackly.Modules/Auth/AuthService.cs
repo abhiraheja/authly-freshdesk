@@ -56,7 +56,7 @@ public partial class AuthService(TracklyDbContext db, IEmailSender emailSender, 
         });
         await db.SaveChangesAsync(ct);
 
-        var frontendBaseUrl = configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173";
+        var frontendBaseUrl = configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173";
         var verifyUrl = $"{frontendBaseUrl}/auth/verify?token={linkToken}";
         if (workspace is not null)
             verifyUrl += $"&workspace={workspace.Slug}";

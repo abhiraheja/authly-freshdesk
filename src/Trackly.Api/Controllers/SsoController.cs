@@ -12,12 +12,12 @@ namespace Trackly.Api.Controllers;
 [ApiController]
 public class SsoController(SsoLoginService sso, IConfiguration configuration) : ControllerBase
 {
-    private string FrontendBaseUrl => configuration["App:FrontendBaseUrl"] ?? "http://localhost:5173";
+    private string FrontendBaseUrl => configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173";
 
     // The IdP-registered redirect URI must be byte-identical on start and callback.
     private string CallbackUri()
     {
-        var apiBase = configuration["App:ApiBaseUrl"] ?? $"{Request.Scheme}://{Request.Host}";
+        var apiBase = configuration.GetNonEmpty("App:ApiBaseUrl") ?? $"{Request.Scheme}://{Request.Host}";
         return $"{apiBase.TrimEnd('/')}/api/auth/sso/callback";
     }
 
