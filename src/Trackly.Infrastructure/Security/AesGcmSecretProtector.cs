@@ -7,24 +7,31 @@ namespace Trackly.Infrastructure.Security;
 
 // AES-256-GCM. The wire format is base64( nonce(12) || tag(16) || ciphertext ),
 // so a single string round-trips through a text column. The 256-bit master key
-// comes from configuration Security:MasterKey (base64). In Development a fixed
-// fallback key keeps local runs working; production MUST set a real key or
-// previously-encrypted secrets become unreadable.
+// comes from configuration Security:MasterKey (base64, exactly 32 bytes). When
+// unset, Development derives a stable 32-byte key from a constant passphrase so
+// local runs work; production MUST set a real key or previously-encrypted
+// secrets become unreadable.
 public class AesGcmSecretProtector : ISecretProtector
 {
     private const int NonceSize = 12; // AES-GCM standard nonce
     private const int TagSize = 16;   // 128-bit auth tag
     private readonly byte[] _key;
 
-    // A clearly-marked, non-secret development key. Only used when no master key
-    // is configured — never rely on this in production.
-    private const string DevFallbackKeyBase64 = "ZGV2LW9ubHktdHJhY2tseS1tYXN0ZXIta2V5LTMyIQ==";
+    // Constant passphrase for the Development fallback key. Never used in
+    // production (a real Security:MasterKey must be configured there).
+    private const string DevFallbackPassphrase = "trackly-dev-master-key-do-not-use-in-prod";
 
     public AesGcmSecretProtector(IConfiguration configuration)
     {
         var configured = configuration["Security:MasterKey"];
-        var raw = string.IsNullOrWhiteSpace(configured) ? DevFallbackKeyBase64 : configured;
-        _key = Convert.FromBase64String(raw);
+        if (string.IsNullOrWhiteSpace(configured))
+        {
+            // Derive a stable 32-byte dev key so local runs work without config.
+            _key = SHA256.HashData(Encoding.UTF8.GetBytes(DevFallbackPassphrase));
+            return;
+        }
+
+        _key = Convert.FromBase64String(configured);
         if (_key.Length != 32)
             throw new InvalidOperationException(
                 "Security:MasterKey must be a base64-encoded 32-byte (256-bit) key.");
