@@ -24,6 +24,7 @@ public class InboundEmailService(
     NotificationService notifications,
     TicketService ticketService,
     SlaService sla,
+    AutomationService automation,
     ILogger<InboundEmailService> logger)
 {
     // ---- Option A webhook entry ---------------------------------------------
@@ -227,6 +228,7 @@ public class InboundEmailService(
             ticket.AssigneeId = assigneeId;
             db.TicketAssignments.Add(new TicketAssignment { Ticket = ticket, AssignedTo = assigneeId.Value });
         }
+        await automation.RunOnCreateAsync(ticket, ct);
         await sla.ApplyOnCreateAsync(ticket, ct);
         db.InboundEmailEvents.Add(NewEvent(workspaceId, msg.MessageId, InboundOutcome.NewTicket, ticket.Id, null));
 

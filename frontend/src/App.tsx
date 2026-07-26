@@ -9,6 +9,7 @@ import { AgentWorkspacePage } from './pages/agent/AgentWorkspacePage'
 import { CannedResponsesPage } from './pages/agent/CannedResponsesPage'
 import { ProblemsPage } from './pages/agent/ProblemsPage'
 import { AnnouncementsPage } from './pages/admin/AnnouncementsPage'
+import { AutomationPage } from './pages/admin/AutomationPage'
 import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
 import { DomainsPage } from './pages/admin/DomainsPage'
 import { EmailSettingsPage } from './pages/admin/EmailSettingsPage'
@@ -56,6 +57,7 @@ function App() {
         <Route element={<RequireRole roles={['admin']} />}>
           <Route path="/admin/users" element={<UsersPage />} />
           <Route path="/admin/teams" element={<TeamsPage />} />
+          <Route path="/admin/automation" element={<AutomationPage />} />
           <Route path="/admin/announcements" element={<AnnouncementsPage />} />
           <Route path="/admin/settings/branding" element={<BrandingSettingsPage />} />
           <Route path="/admin/settings/email" element={<EmailSettingsPage />} />

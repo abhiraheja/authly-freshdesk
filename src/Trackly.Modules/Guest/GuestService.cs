@@ -16,7 +16,8 @@ public class GuestService(
     IConfiguration configuration,
     TicketService ticketService,
     NotificationService notifications,
-    SlaService sla)
+    SlaService sla,
+    AutomationService automation)
 {
     private const int MaxSendsPer15Minutes = 3;
     private const int MaxCodeAttempts = 5;
@@ -155,6 +156,7 @@ public class GuestService(
             ticket.AssigneeId = assigneeId;
             db.TicketAssignments.Add(new TicketAssignment { Ticket = ticket, AssignedTo = assigneeId.Value });
         }
+        await automation.RunOnCreateAsync(ticket, ct);
         await sla.ApplyOnCreateAsync(ticket, ct);
         await db.SaveChangesAsync(ct);
 

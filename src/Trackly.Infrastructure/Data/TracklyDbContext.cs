@@ -33,6 +33,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<SlaPolicy> SlaPolicies => Set<SlaPolicy>();
     public DbSet<KbArticle> KbArticles => Set<KbArticle>();
     public DbSet<CannedResponse> CannedResponses => Set<CannedResponse>();
+    public DbSet<AutomationRule> AutomationRules => Set<AutomationRule>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
     public DbSet<WidgetConfig> WidgetConfigs => Set<WidgetConfig>();
@@ -283,6 +284,16 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.Property(w => w.EmbedType).HasDefaultValue(WidgetEmbedType.Floating);
             e.Property(w => w.Theme).HasDefaultValue("light");
             e.HasOne(w => w.Workspace).WithMany().HasForeignKey(w => w.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AutomationRule>(e =>
+        {
+            e.ToTable("automation_rules");
+            e.HasIndex(r => new { r.WorkspaceId, r.Trigger, r.SortOrder });
+            e.Property(r => r.Trigger).HasDefaultValue(AutomationTrigger.OnCreate);
+            e.Property(r => r.Enabled).HasDefaultValue(true);
+            e.HasOne(r => r.Workspace).WithMany().HasForeignKey(r => r.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

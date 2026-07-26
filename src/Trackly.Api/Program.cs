@@ -34,6 +34,7 @@ builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<SlaService>();
 builder.Services.AddScoped<KbService>();
 builder.Services.AddScoped<CannedResponseService>();
+builder.Services.AddScoped<AutomationService>();
 builder.Services.AddScoped<GuestService>();
 builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<SsoLoginService>();

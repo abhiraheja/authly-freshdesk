@@ -5,7 +5,8 @@ using Trackly.Modules.Email;
 
 namespace Trackly.Modules.Tickets;
 
-public class TicketService(TracklyDbContext db, NotificationService notifications, SlaService sla)
+public class TicketService(
+    TracklyDbContext db, NotificationService notifications, SlaService sla, AutomationService automation)
 {
     // ---- Queries ------------------------------------------------------------
 
@@ -122,6 +123,8 @@ public class TicketService(TracklyDbContext db, NotificationService notification
             });
         }
 
+        // Automation may change priority/team/tags before SLA is computed.
+        await automation.RunOnCreateAsync(ticket, ct);
         await sla.ApplyOnCreateAsync(ticket, ct);
         await db.SaveChangesAsync(ct);
         await notifications.OnTicketCreatedAsync(ticket.Id, ct);
@@ -254,6 +257,10 @@ public class TicketService(TracklyDbContext db, NotificationService notification
             await sla.OnPriorityChangedAsync(ticket, ct);
         if (ticket.Status != previousStatus)
             sla.OnStatusChanged(ticket, previousStatus, ticket.Status);
+
+        // Automation on update runs after the agent's change (its own mutations
+        // are not re-evaluated, so rules can't loop).
+        await automation.RunOnUpdateAsync(ticket, ct);
 
         ticket.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
