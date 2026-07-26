@@ -4,6 +4,7 @@ import {
   Button,
   CircularProgress,
   Link,
+  Menu,
   MenuItem,
   Stack,
   TextField,
@@ -11,6 +12,7 @@ import {
 } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
+import { listCannedResponses } from '../../api/canned'
 import {
   addComment,
   attachmentUrl,
@@ -57,7 +59,10 @@ export function ConversationPane({ ticketId }: { ticketId: string }) {
   const [body, setBody] = useState('')
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [cannedAnchor, setCannedAnchor] = useState<null | HTMLElement>(null)
   const fileInput = useRef<HTMLInputElement>(null)
+
+  const cannedQuery = useQuery({ queryKey: ['canned'], queryFn: listCannedResponses })
 
   const ticketQuery = useQuery({ queryKey: ['ticket', ticketId], queryFn: () => getTicket(ticketId) })
   const commentsQuery = useQuery({ queryKey: ['comments', ticketId], queryFn: () => listComments(ticketId) })
@@ -282,9 +287,30 @@ export function ConversationPane({ ticketId }: { ticketId: string }) {
         <input ref={fileInput} type="file" hidden onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
         {error && <Alert severity="error" sx={{ mt: 1.5 }}>{error}</Alert>}
         <Stack direction="row" sx={{ justifyContent: 'space-between', alignItems: 'center', mt: 1.25 }}>
-          <Button size="small" sx={{ color: 'text.secondary' }} onClick={() => fileInput.current?.click()}>
-            📎 {file ? `${file.name} (${formatBytes(file.size)})` : 'Attach'}
-          </Button>
+          <Stack direction="row" spacing={0.5}>
+            <Button size="small" sx={{ color: 'text.secondary' }} onClick={() => fileInput.current?.click()}>
+              📎 {file ? `${file.name} (${formatBytes(file.size)})` : 'Attach'}
+            </Button>
+            {(cannedQuery.data?.length ?? 0) > 0 && (
+              <Button size="small" sx={{ color: 'text.secondary' }} onClick={(e) => setCannedAnchor(e.currentTarget)}>
+                ⚡ Canned
+              </Button>
+            )}
+            <Menu anchorEl={cannedAnchor} open={!!cannedAnchor} onClose={() => setCannedAnchor(null)}>
+              {(cannedQuery.data ?? []).map((c) => (
+                <MenuItem
+                  key={c.id}
+                  onClick={() => {
+                    setBody((prev) => (prev.trim() ? `${prev}\n\n${c.body}` : c.body))
+                    setCannedAnchor(null)
+                  }}
+                  sx={{ fontSize: 13.5 }}
+                >
+                  {c.title}
+                </MenuItem>
+              ))}
+            </Menu>
+          </Stack>
           <Button variant="contained" disabled={!body.trim() || send.isPending} onClick={() => send.mutate()}>
             {mode === 'reply' ? 'Send reply' : 'Add note'}
           </Button>

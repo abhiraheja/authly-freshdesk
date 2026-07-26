@@ -46,6 +46,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { label: 'Tickets', path: '/dashboard/tickets' },
     { label: 'Problems', path: '/dashboard/problems' },
     { label: 'Knowledge', path: '/dashboard/kb' },
+    { label: 'Canned', path: '/dashboard/canned' },
     { label: 'Announcements', path: '/admin/announcements', adminOnly: true },
     { label: 'Members', path: '/admin/users', adminOnly: true },
     { label: 'Teams', path: '/admin/teams', adminOnly: true },

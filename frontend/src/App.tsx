@@ -6,6 +6,7 @@ import { EmailAuthPage } from './pages/EmailAuthPage'
 import { OnboardingWorkspacePage } from './pages/OnboardingWorkspacePage'
 import { VerifyPage } from './pages/VerifyPage'
 import { AgentWorkspacePage } from './pages/agent/AgentWorkspacePage'
+import { CannedResponsesPage } from './pages/agent/CannedResponsesPage'
 import { ProblemsPage } from './pages/agent/ProblemsPage'
 import { AnnouncementsPage } from './pages/admin/AnnouncementsPage'
 import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
@@ -50,6 +51,7 @@ function App() {
           <Route path="/dashboard/tickets/:id" element={<AgentWorkspacePage />} />
           <Route path="/dashboard/problems" element={<ProblemsPage />} />
           <Route path="/dashboard/kb" element={<KbPage />} />
+          <Route path="/dashboard/canned" element={<CannedResponsesPage />} />
         </Route>
         <Route element={<RequireRole roles={['admin']} />}>
           <Route path="/admin/users" element={<UsersPage />} />

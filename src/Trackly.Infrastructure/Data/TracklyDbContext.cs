@@ -32,6 +32,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<SlaPolicy> SlaPolicies => Set<SlaPolicy>();
     public DbSet<KbArticle> KbArticles => Set<KbArticle>();
+    public DbSet<CannedResponse> CannedResponses => Set<CannedResponse>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
     public DbSet<WidgetConfig> WidgetConfigs => Set<WidgetConfig>();
@@ -282,6 +283,14 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.Property(w => w.EmbedType).HasDefaultValue(WidgetEmbedType.Floating);
             e.Property(w => w.Theme).HasDefaultValue("light");
             e.HasOne(w => w.Workspace).WithMany().HasForeignKey(w => w.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CannedResponse>(e =>
+        {
+            e.ToTable("canned_responses");
+            e.HasIndex(c => c.WorkspaceId);
+            e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
