@@ -44,6 +44,7 @@ public class ProblemService(TracklyDbContext db, NotificationService notificatio
                 UserSummaryDto.From(t.Assignee),
                 t.Comments.Count(),
                 t.TicketTags.Select(tt => new TagDto(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList(),
+                t.FirstResponseDueAt, t.ResolveDueAt, t.FirstResponseAt,
                 t.CreatedAt, t.UpdatedAt))
             .ToListAsync(ct);
 

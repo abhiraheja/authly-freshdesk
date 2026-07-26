@@ -29,6 +29,9 @@ public record TicketSummaryDto(
     UserSummaryDto? Assignee,
     int CommentCount,
     IReadOnlyList<TagDto> Tags,
+    DateTime? FirstResponseDueAt,
+    DateTime? ResolveDueAt,
+    DateTime? FirstResponseAt,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
@@ -51,6 +54,9 @@ public record TicketDetailDto(
     Guid? ProblemId,
     Guid? TeamId,
     string? TeamName,
+    DateTime? FirstResponseDueAt,
+    DateTime? ResolveDueAt,
+    DateTime? FirstResponseAt,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 

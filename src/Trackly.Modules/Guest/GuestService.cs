@@ -15,7 +15,8 @@ public class GuestService(
     IFileStorage storage,
     IConfiguration configuration,
     TicketService ticketService,
-    NotificationService notifications)
+    NotificationService notifications,
+    SlaService sla)
 {
     private const int MaxSendsPer15Minutes = 3;
     private const int MaxCodeAttempts = 5;
@@ -154,6 +155,7 @@ public class GuestService(
             ticket.AssigneeId = assigneeId;
             db.TicketAssignments.Add(new TicketAssignment { Ticket = ticket, AssignedTo = assigneeId.Value });
         }
+        await sla.ApplyOnCreateAsync(ticket, ct);
         await db.SaveChangesAsync(ct);
 
         var reference = Reference(ticket.Id);

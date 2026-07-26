@@ -30,6 +30,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<TicketTag> TicketTags => Set<TicketTag>();
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
+    public DbSet<SlaPolicy> SlaPolicies => Set<SlaPolicy>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
     public DbSet<WidgetConfig> WidgetConfigs => Set<WidgetConfig>();
@@ -280,6 +281,14 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.Property(w => w.EmbedType).HasDefaultValue(WidgetEmbedType.Floating);
             e.Property(w => w.Theme).HasDefaultValue("light");
             e.HasOne(w => w.Workspace).WithMany().HasForeignKey(w => w.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SlaPolicy>(e =>
+        {
+            e.ToTable("sla_policies");
+            e.HasIndex(p => new { p.WorkspaceId, p.Priority }).IsUnique();
+            e.HasOne(p => p.Workspace).WithMany().HasForeignKey(p => p.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

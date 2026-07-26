@@ -23,6 +23,14 @@ public class Ticket
     public Guid? TeamId { get; set; }               // routed team (round-robin within)
     public Team? Team { get; set; }
     public string Channel { get; set; } = TicketChannel.Web;
+
+    // SLA (nullable = no policy applies). first_response_at stops the response
+    // clock; sla_paused_at holds the moment the resolve clock paused (pending).
+    public DateTime? FirstResponseDueAt { get; set; }
+    public DateTime? ResolveDueAt { get; set; }
+    public DateTime? FirstResponseAt { get; set; }
+    public DateTime? SlaPausedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

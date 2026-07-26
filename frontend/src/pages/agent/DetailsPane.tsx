@@ -13,6 +13,7 @@ import {
   updateTicket,
   type UpdateTicketBody,
 } from '../../api/tickets'
+import { SlaBadge } from '../../components/SlaBadge'
 import { PRIORITY_CHIP, STATUS_CHIP, avatarColor, formatDateTime, initials } from '../../lib/format'
 import { useAuthStore } from '../../store/auth'
 
@@ -291,6 +292,11 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
             ))}
           </TextField>
         </Row>
+        {(ticket.firstResponseDueAt || ticket.resolveDueAt) && (
+          <Row k="SLA">
+            <SlaBadge ticket={ticket} showPrefix />
+          </Row>
+        )}
         <Row k="Channel">{ticket.channel}</Row>
         <Row k="Created">{formatDateTime(ticket.createdAt)}</Row>
         <Box sx={{ mt: 0.5, textAlign: 'right' }}>

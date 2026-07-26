@@ -23,6 +23,7 @@ public class InboundEmailService(
     ISecretProtector secrets,
     NotificationService notifications,
     TicketService ticketService,
+    SlaService sla,
     ILogger<InboundEmailService> logger)
 {
     // ---- Option A webhook entry ---------------------------------------------
@@ -118,6 +119,8 @@ public class InboundEmailService(
         };
         db.Comments.Add(comment);                     // comment.Id assigned client-side here
         ticket.UpdatedAt = DateTime.UtcNow;
+        if (authoredByAgent)
+            sla.OnAgentReply(ticket);                 // an agent replying by email is a first response too
         db.InboundEmailEvents.Add(NewEvent(workspaceId, msg.MessageId, InboundOutcome.Comment, ticket.Id, comment.Id));
 
         if (!await TrySaveAsync(ct))
@@ -224,6 +227,7 @@ public class InboundEmailService(
             ticket.AssigneeId = assigneeId;
             db.TicketAssignments.Add(new TicketAssignment { Ticket = ticket, AssignedTo = assigneeId.Value });
         }
+        await sla.ApplyOnCreateAsync(ticket, ct);
         db.InboundEmailEvents.Add(NewEvent(workspaceId, msg.MessageId, InboundOutcome.NewTicket, ticket.Id, null));
 
         if (!await TrySaveAsync(ct))

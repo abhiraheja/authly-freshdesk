@@ -48,6 +48,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     { label: 'Announcements', path: '/admin/announcements', adminOnly: true },
     { label: 'Members', path: '/admin/users', adminOnly: true },
     { label: 'Teams', path: '/admin/teams', adminOnly: true },
+    { label: 'SLA', path: '/admin/settings/sla', adminOnly: true },
     { label: 'Branding', path: '/admin/settings/branding', adminOnly: true },
     { label: 'Email', path: '/admin/settings/email', adminOnly: true },
     { label: 'SSO', path: '/admin/settings/sso', adminOnly: true },

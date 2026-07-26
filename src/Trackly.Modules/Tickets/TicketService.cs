@@ -5,7 +5,7 @@ using Trackly.Modules.Email;
 
 namespace Trackly.Modules.Tickets;
 
-public class TicketService(TracklyDbContext db, NotificationService notifications)
+public class TicketService(TracklyDbContext db, NotificationService notifications, SlaService sla)
 {
     // ---- Queries ------------------------------------------------------------
 
@@ -56,6 +56,9 @@ public class TicketService(TracklyDbContext db, NotificationService notification
                 actor.IsAgentOrAdmin
                     ? t.TicketTags.Select(tt => new TagDto(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList()
                     : new List<TagDto>(),
+                actor.IsAgentOrAdmin ? t.FirstResponseDueAt : null,
+                actor.IsAgentOrAdmin ? t.ResolveDueAt : null,
+                actor.IsAgentOrAdmin ? t.FirstResponseAt : null,
                 t.CreatedAt, t.UpdatedAt))
             .ToListAsync(ct);
 
@@ -119,6 +122,7 @@ public class TicketService(TracklyDbContext db, NotificationService notification
             });
         }
 
+        await sla.ApplyOnCreateAsync(ticket, ct);
         await db.SaveChangesAsync(ct);
         await notifications.OnTicketCreatedAsync(ticket.Id, ct);
         return (await GetAsync(actor, ticket.Id, ct))!;
@@ -163,6 +167,7 @@ public class TicketService(TracklyDbContext db, NotificationService notification
 
         var previousStatus = ticket.Status;
         var previousAssignee = ticket.AssigneeId;
+        var previousPriority = ticket.Priority;
 
         if (request.Subject is not null)
         {
@@ -243,6 +248,12 @@ public class TicketService(TracklyDbContext db, NotificationService notification
                 AssignedBy = actor.UserId,
             });
         }
+
+        // SLA: recompute on priority change, pause/resume on status change.
+        if (ticket.Priority != previousPriority)
+            await sla.OnPriorityChangedAsync(ticket, ct);
+        if (ticket.Status != previousStatus)
+            sla.OnStatusChanged(ticket, previousStatus, ticket.Status);
 
         ticket.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
@@ -361,6 +372,9 @@ public class TicketService(TracklyDbContext db, NotificationService notification
         };
         db.Comments.Add(comment);
         ticket.UpdatedAt = DateTime.UtcNow;
+        // First public agent reply stops the first-response SLA clock.
+        if (actor.IsAgentOrAdmin && !comment.IsInternal)
+            sla.OnAgentReply(ticket);
         await db.SaveChangesAsync(ct);
 
         // Internal notes stay internal — no external notification. External
@@ -389,5 +403,8 @@ public class TicketService(TracklyDbContext db, NotificationService notification
         isAgentOrAdmin ? t.ProblemId : null,
         isAgentOrAdmin ? t.TeamId : null,
         isAgentOrAdmin ? t.Team?.Name : null,
+        isAgentOrAdmin ? t.FirstResponseDueAt : null,
+        isAgentOrAdmin ? t.ResolveDueAt : null,
+        isAgentOrAdmin ? t.FirstResponseAt : null,
         t.CreatedAt, t.UpdatedAt);
 }

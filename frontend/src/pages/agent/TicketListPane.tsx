@@ -2,6 +2,7 @@ import { Avatar, Box, Chip, CircularProgress, MenuItem, Stack, TextField, Typogr
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { listTickets } from '../../api/tickets'
+import { SlaBadge } from '../../components/SlaBadge'
 import { avatarColor, initials, timeAgo } from '../../lib/format'
 
 interface TicketListPaneProps {
@@ -121,9 +122,12 @@ export function TicketListPane({ selectedId, onSelect }: TicketListPaneProps) {
                       {timeAgo(ticket.updatedAt)}
                     </Typography>
                   </Stack>
-                  <Typography sx={{ fontSize: 13.5, fontWeight: 600 }} noWrap>
-                    {ticket.subject}
-                  </Typography>
+                  <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
+                    <Typography sx={{ fontSize: 13.5, fontWeight: 600, flex: 1 }} noWrap>
+                      {ticket.subject}
+                    </Typography>
+                    <SlaBadge ticket={ticket} />
+                  </Stack>
                   <Typography sx={{ fontSize: 12.5, color: 'text.secondary' }} noWrap>
                     {ticket.assignee
                       ? `Assigned to ${ticket.assignee.name ?? ticket.assignee.email}`

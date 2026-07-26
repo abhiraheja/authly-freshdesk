@@ -32,6 +32,9 @@ export interface TicketSummary {
   assignee: UserSummary | null
   commentCount: number
   tags: Tag[]
+  firstResponseDueAt: string | null
+  resolveDueAt: string | null
+  firstResponseAt: string | null
   createdAt: string
   updatedAt: string
 }

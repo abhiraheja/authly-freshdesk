@@ -11,6 +11,7 @@ import { AnnouncementsPage } from './pages/admin/AnnouncementsPage'
 import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
 import { DomainsPage } from './pages/admin/DomainsPage'
 import { EmailSettingsPage } from './pages/admin/EmailSettingsPage'
+import { SlaSettingsPage } from './pages/admin/SlaSettingsPage'
 import { SsoSettingsPage } from './pages/admin/SsoSettingsPage'
 import { TeamsPage } from './pages/admin/TeamsPage'
 import { UsersPage } from './pages/admin/UsersPage'
@@ -52,6 +53,7 @@ function App() {
           <Route path="/admin/announcements" element={<AnnouncementsPage />} />
           <Route path="/admin/settings/branding" element={<BrandingSettingsPage />} />
           <Route path="/admin/settings/email" element={<EmailSettingsPage />} />
+          <Route path="/admin/settings/sla" element={<SlaSettingsPage />} />
           <Route path="/admin/settings/sso" element={<SsoSettingsPage />} />
           <Route path="/admin/settings/domains" element={<DomainsPage />} />
           <Route path="/admin/widget" element={<WidgetPage />} />
