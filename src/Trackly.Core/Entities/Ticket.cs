@@ -20,6 +20,8 @@ public class Ticket
     public User? Assignee { get; set; }
     public Guid? ProblemId { get; set; }            // groups related tickets (agent-only)
     public Problem? Problem { get; set; }
+    public Guid? TeamId { get; set; }               // routed team (round-robin within)
+    public Team? Team { get; set; }
     public string Channel { get; set; } = TicketChannel.Web;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

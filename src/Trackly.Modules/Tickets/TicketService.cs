@@ -32,6 +32,8 @@ public class TicketService(TracklyDbContext db, NotificationService notification
             tickets = tickets.Where(t => t.AssigneeId == query.AssigneeId);
         if (!string.IsNullOrWhiteSpace(query.Tag) && actor.IsAgentOrAdmin)
             tickets = tickets.Where(t => t.TicketTags.Any(tt => tt.Tag.Name == query.Tag));
+        if (query.TeamId is not null && actor.IsAgentOrAdmin)
+            tickets = tickets.Where(t => t.TeamId == query.TeamId);
         if (!string.IsNullOrWhiteSpace(query.Search))
             tickets = tickets.Where(t => EF.Functions.ILike(t.Subject, $"%{query.Search}%"));
 
@@ -68,6 +70,7 @@ public class TicketService(TracklyDbContext db, NotificationService notification
             .Include(t => t.Assignee)
             .Include(t => t.Watchers).ThenInclude(w => w.Agent)
             .Include(t => t.TicketTags).ThenInclude(tt => tt.Tag)
+            .Include(t => t.Team)
             .SingleOrDefaultAsync(t => t.Id == ticketId, ct);
         // Problem grouping and tags are internal — never expose them to a customer.
         return ticket is null ? null : ToDetail(ticket, actor.IsAgentOrAdmin);
@@ -104,7 +107,7 @@ public class TicketService(TracklyDbContext db, NotificationService notification
         };
         db.Tickets.Add(ticket);
 
-        var assigneeId = await PickRoundRobinAssigneeAsync(actor.WorkspaceId, ct);
+        var assigneeId = await PickRoundRobinAssigneeAsync(actor.WorkspaceId, null, ct);
         if (assigneeId is not null)
         {
             ticket.AssigneeId = assigneeId;
@@ -122,10 +125,16 @@ public class TicketService(TracklyDbContext db, NotificationService notification
     }
 
     // Active agent with the fewest open/pending tickets. Also used for guest tickets.
-    public async Task<Guid?> PickRoundRobinAssigneeAsync(Guid workspaceId, CancellationToken ct)
+    // When teamId is given, only that team's members are considered (team routing).
+    public async Task<Guid?> PickRoundRobinAssigneeAsync(
+        Guid workspaceId, Guid? teamId, CancellationToken ct)
     {
-        return await db.Users
-            .Where(u => u.WorkspaceId == workspaceId && u.IsActive && u.Role == TracklyRoles.Agent)
+        var candidates = db.Users
+            .Where(u => u.WorkspaceId == workspaceId && u.IsActive && u.Role == TracklyRoles.Agent);
+        if (teamId is not null)
+            candidates = candidates.Where(u => db.TeamMembers.Any(m => m.TeamId == teamId && m.UserId == u.Id));
+
+        return await candidates
             .Select(u => new
             {
                 u.Id,
@@ -187,6 +196,32 @@ public class TicketService(TracklyDbContext db, NotificationService notification
             if (!exists)
                 throw new ArgumentException("Unknown category.");
             ticket.CategoryId = request.CategoryId;
+        }
+
+        if (request.ClearTeam)
+        {
+            ticket.TeamId = null;
+        }
+        else if (request.TeamId is not null && request.TeamId != ticket.TeamId)
+        {
+            var teamExists = await db.Teams.AnyAsync(
+                t => t.WorkspaceId == actor.WorkspaceId && t.Id == request.TeamId, ct);
+            if (!teamExists)
+                throw new ArgumentException("Unknown team.");
+            ticket.TeamId = request.TeamId;
+
+            // Route: round-robin within the team (an explicit assignee below still wins).
+            var teamAssignee = await PickRoundRobinAssigneeAsync(actor.WorkspaceId, request.TeamId, ct);
+            if (teamAssignee is not null)
+            {
+                ticket.AssigneeId = teamAssignee;
+                db.TicketAssignments.Add(new TicketAssignment
+                {
+                    TicketId = ticket.Id,
+                    AssignedTo = teamAssignee.Value,
+                    AssignedBy = actor.UserId,
+                });
+            }
         }
 
         if (request.Unassign)
@@ -352,5 +387,7 @@ public class TicketService(TracklyDbContext db, NotificationService notification
             ? t.TicketTags.Select(tt => new TagDto(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList()
             : new List<TagDto>(),
         isAgentOrAdmin ? t.ProblemId : null,
+        isAgentOrAdmin ? t.TeamId : null,
+        isAgentOrAdmin ? t.Team?.Name : null,
         t.CreatedAt, t.UpdatedAt);
 }

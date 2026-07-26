@@ -2,6 +2,7 @@ import { Autocomplete, Avatar, Box, Chip, IconButton, Link, MenuItem, Stack, Tex
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { listTags } from '../../api/tags'
+import { listTeams } from '../../api/teams'
 import {
   addWatcher,
   getTicket,
@@ -51,6 +52,7 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
   const agentsQuery = useQuery({ queryKey: ['agents'], queryFn: listAgents })
   const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: listCategories })
   const tagsQuery = useQuery({ queryKey: ['tags'], queryFn: listTags })
+  const teamsQuery = useQuery({ queryKey: ['teams'], queryFn: listTeams })
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] })
@@ -80,6 +82,7 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
 
   const agents = agentsQuery.data ?? []
   const categories = categoriesQuery.data ?? []
+  const teams = teamsQuery.data ?? []
   const watcherIds = new Set(ticket.watchers.map((w) => w.agent.id))
   const priorityChip = PRIORITY_CHIP[ticket.priority] ?? PRIORITY_CHIP.medium
   const requesterName = ticket.requester?.name ?? ticket.requester?.email ?? ticket.guestName ?? 'Guest'
@@ -267,6 +270,24 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
               <MenuItem key={c.id} value={c.id}>
                 {c.name}
               </MenuItem>
+            ))}
+          </TextField>
+        </Row>
+        <Row k="Team">
+          <TextField
+            select
+            size="small"
+            variant="standard"
+            value={ticket.teamId ?? ''}
+            onChange={(e) =>
+              e.target.value ? update.mutate({ teamId: e.target.value }) : update.mutate({ clearTeam: true })
+            }
+            slotProps={{ input: { disableUnderline: true } }}
+            sx={{ '& .MuiSelect-select': { py: 0, fontSize: 13.5, fontWeight: 600 } }}
+          >
+            <MenuItem value="">None</MenuItem>
+            {teams.map((t) => (
+              <MenuItem key={t.id} value={t.id}>{t.name}</MenuItem>
             ))}
           </TextField>
         </Row>

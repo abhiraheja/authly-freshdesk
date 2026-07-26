@@ -49,6 +49,8 @@ public record TicketDetailDto(
     IReadOnlyList<WatcherDto> Watchers,
     IReadOnlyList<TagDto> Tags,
     Guid? ProblemId,
+    Guid? TeamId,
+    string? TeamName,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
@@ -79,7 +81,9 @@ public record UpdateTicketRequest(
     Guid? CategoryId,
     bool ClearCategory = false,
     Guid? AssigneeId = null,
-    bool Unassign = false);
+    bool Unassign = false,
+    Guid? TeamId = null,
+    bool ClearTeam = false);
 
 public record CreateCommentRequest(string Body, bool IsInternal);
 
@@ -89,5 +93,6 @@ public record TicketListQuery(
     Guid? AssigneeId,
     string? Search,
     string? Tag,
+    Guid? TeamId,
     int Page = 1,
     int PageSize = 25);

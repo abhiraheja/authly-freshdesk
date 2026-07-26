@@ -218,7 +218,7 @@ public class InboundEmailService(
         }
         db.Tickets.Add(ticket);                        // ticket.Id assigned client-side here
 
-        var assigneeId = await ticketService.PickRoundRobinAssigneeAsync(workspaceId, ct);
+        var assigneeId = await ticketService.PickRoundRobinAssigneeAsync(workspaceId, null, ct);
         if (assigneeId is not null)
         {
             ticket.AssigneeId = assigneeId;

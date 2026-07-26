@@ -28,6 +28,8 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<Problem> Problems => Set<Problem>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<TicketTag> TicketTags => Set<TicketTag>();
+    public DbSet<Team> Teams => Set<Team>();
+    public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
     public DbSet<WidgetConfig> WidgetConfigs => Set<WidgetConfig>();
@@ -102,6 +104,8 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.HasOne(t => t.Assignee).WithMany().HasForeignKey(t => t.AssigneeId)
                 .OnDelete(DeleteBehavior.SetNull);
             e.HasOne(t => t.Problem).WithMany().HasForeignKey(t => t.ProblemId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.Team).WithMany().HasForeignKey(t => t.TeamId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
@@ -276,6 +280,24 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.Property(w => w.EmbedType).HasDefaultValue(WidgetEmbedType.Floating);
             e.Property(w => w.Theme).HasDefaultValue("light");
             e.HasOne(w => w.Workspace).WithMany().HasForeignKey(w => w.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Team>(e =>
+        {
+            e.ToTable("teams");
+            e.HasIndex(t => new { t.WorkspaceId, t.Name }).IsUnique();
+            e.HasOne(t => t.Workspace).WithMany().HasForeignKey(t => t.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TeamMember>(e =>
+        {
+            e.ToTable("team_members");
+            e.HasKey(m => new { m.TeamId, m.UserId });
+            e.HasOne(m => m.Team).WithMany(t => t.Members).HasForeignKey(m => m.TeamId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(m => m.User).WithMany().HasForeignKey(m => m.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

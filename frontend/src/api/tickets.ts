@@ -45,6 +45,8 @@ export interface TicketDetail extends Omit<TicketSummary, 'commentCount'> {
   description: string
   watchers: Watcher[]
   problemId: string | null
+  teamId: string | null
+  teamName: string | null
 }
 
 export function setTicketTags(id: string, tags: string[]) {
@@ -125,6 +127,8 @@ export interface UpdateTicketBody {
   clearCategory?: boolean
   assigneeId?: string
   unassign?: boolean
+  teamId?: string
+  clearTeam?: boolean
 }
 
 export function updateTicket(id: string, body: UpdateTicketBody) {

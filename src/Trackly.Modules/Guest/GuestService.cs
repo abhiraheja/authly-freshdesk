@@ -148,7 +148,7 @@ public class GuestService(
         db.Tickets.Add(ticket);
         token.ConsumedAt = now;
 
-        var assigneeId = await ticketService.PickRoundRobinAssigneeAsync(ticket.WorkspaceId, ct);
+        var assigneeId = await ticketService.PickRoundRobinAssigneeAsync(ticket.WorkspaceId, null, ct);
         if (assigneeId is not null)
         {
             ticket.AssigneeId = assigneeId;

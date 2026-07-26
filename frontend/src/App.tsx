@@ -12,6 +12,7 @@ import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
 import { DomainsPage } from './pages/admin/DomainsPage'
 import { EmailSettingsPage } from './pages/admin/EmailSettingsPage'
 import { SsoSettingsPage } from './pages/admin/SsoSettingsPage'
+import { TeamsPage } from './pages/admin/TeamsPage'
 import { UsersPage } from './pages/admin/UsersPage'
 import { WidgetPage } from './pages/admin/WidgetPage'
 import { SsoCompletePage } from './pages/auth/SsoCompletePage'
@@ -47,6 +48,7 @@ function App() {
         </Route>
         <Route element={<RequireRole roles={['admin']} />}>
           <Route path="/admin/users" element={<UsersPage />} />
+          <Route path="/admin/teams" element={<TeamsPage />} />
           <Route path="/admin/announcements" element={<AnnouncementsPage />} />
           <Route path="/admin/settings/branding" element={<BrandingSettingsPage />} />
           <Route path="/admin/settings/email" element={<EmailSettingsPage />} />
