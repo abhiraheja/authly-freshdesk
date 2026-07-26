@@ -197,5 +197,10 @@ Append here as phases land, so nothing is missed later.
     sends — reinforces the **single-instance** guidance until leader election
     exists (§4).
   - No new config keys or secrets.
-- **Phase 7:** _TBD — AI copilot API key (`Anthropic`/Claude) as a deployment
-  secret, omnichannel connector credentials._
+- **Phase 7A (service desk fundamentals):** tags, teams, SLA policies, knowledge
+  base, canned responses, automation rules. No new config keys or secrets — all
+  per-workspace data. The public KB endpoints (`/api/public/workspaces/{slug}/kb`,
+  `/suggest`) and the branded `/kb` SPA route must be reachable over HTTPS like the
+  other public surfaces (§5).
+- **Phase 7B (AI copilot):** _TBD — Claude API key as a deployment secret._
+- **Phase 7C (omnichannel):** _TBD — connector credentials (WhatsApp/Slack/Teams)._

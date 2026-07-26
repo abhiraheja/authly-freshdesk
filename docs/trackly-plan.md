@@ -1402,22 +1402,28 @@ Build in this order — each phase is independently shippable and testable:
 Everything in Phases 1–6 brings Trackly to parity with a basic help desk. Phase 7
 is what makes it competitive; it splits into three independently shippable slices.
 
-*7A — Service desk fundamentals*
+*7A — Service desk fundamentals* — **built.**
 - **SLA policies** — per workspace, per priority: first-response and resolution
-  targets, business-hours calendars, pause-while-pending. Tickets carry
-  `first_response_due_at` / `resolve_due_at`; a background worker flags breaches
-  and the agent list shows a countdown chip (green → amber → red).
+  targets (`sla_policies`), pause-while-pending (deadlines shift by the paused
+  duration so `first_response_due_at`/`resolve_due_at` stay comparable
+  timestamps). The agent list + detail show a green→amber→red countdown
+  (`SlaBadge`). _Business-hours calendars and a dedicated breach worker are
+  deferred — targets are wall-clock and breach state is derived in the UI;
+  SLA-breach escalation will ride the automation engine's future time-based
+  trigger._
 - **Tags** — free-form `tags` + `ticket_tags`, type-ahead entry, filterable in the
-  agent workspace and reportable.
-- **Teams / groups** — `teams`, `team_members`; tickets route to a team, then
-  round-robin within it. Replaces the workspace-wide round robin from Phase 2.
+  agent workspace. Agent-only (never on customer surfaces).
+- **Teams / groups** — `teams`, `team_members`; a ticket routed to a team is
+  round-robin assigned within it (`PickRoundRobinAssigneeAsync(workspace, team)`).
 - **Knowledge base** — `kb_articles` (draft/published, per-category), a public
-  branded `/kb` reachable from the submit form, and article suggestions shown
-  while a customer types a subject (deflection).
-- **Automation rules** — `automation_rules` as trigger + conditions + actions
-  (on create / on update / time-based): auto-assign, auto-tag, set priority,
-  send a canned reply, escalate on SLA breach.
-- **Canned responses** — per workspace, insertable into the agent reply box.
+  branded `/kb`, and title-match suggestions on the submit form (deflection).
+- **Automation rules** — `automation_rules` (trigger `on_create`/`on_update` +
+  conditions + actions): set priority/status, assign team (round-robin), add tag,
+  add internal note. Runs inside the create/update transaction; a rule's own
+  mutations aren't re-evaluated (no loops). _Time-based triggers and canned-reply
+  actions are deferred._
+- **Canned responses** — `canned_responses`, inserted from the ⚡ button in the
+  reply box.
 
 *7B — AI copilot (Claude API)*
 - Reply drafting from the thread plus the workspace's KB, agent edits before send
@@ -1463,9 +1469,11 @@ is what makes it competitive; it splits into three independently shippable slice
 - [ ] From-address spoofing: email from a non-participant address is rejected, no comment created
 - [ ] Suspend user in Trackly → session invalidated, access denied immediately
 - [ ] Workspace B cannot see Workspace A's tickets (workspace isolation)
-- [ ] Phase 7A: SLA breach on a paused (pending) ticket does not tick while pending
-- [ ] Phase 7A: automation rule fires exactly once per matching transition, never loops
-- [ ] Phase 7A: KB article suggestions on the submit form leak nothing beyond published articles of that workspace
+- [x] Phase 7A: SLA resolve clock pauses while a ticket is pending (deadline shifts by the paused duration)
+- [x] Phase 7A: automation rule mutations are not re-evaluated within the same op (no loops); a malformed rule is skipped, not fatal
+- [x] Phase 7A: KB suggestions/list expose only published articles of that workspace; drafts and other workspaces never leak
+- [x] Phase 7A: tags are agent-only — a customer's ticket view never includes them
+- [x] Phase 7A: a ticket routed to a team is round-robin assigned among that team's members only
 - [ ] Phase 7B: AI copilot prompt contains no private notes and no other workspace's data
 - [ ] Phase 7B: AI never sends a reply without an explicit agent action; workspace AI toggle off disables all calls
 - [ ] Phase 7C: chat transcript becomes a ticket in the right workspace; CSAT score cannot be submitted twice
