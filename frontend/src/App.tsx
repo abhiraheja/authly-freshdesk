@@ -22,7 +22,9 @@ import { PortalTicketDetailPage } from './pages/portal/PortalTicketDetailPage'
 import { PortalTicketsPage } from './pages/portal/PortalTicketsPage'
 import { GuestTicketPage } from './pages/public/GuestTicketPage'
 import { InviteAcceptPage } from './pages/public/InviteAcceptPage'
+import { PublicKbPage } from './pages/public/PublicKbPage'
 import { SubmitPage } from './pages/public/SubmitPage'
+import { KbPage } from './pages/admin/KbPage'
 
 function App() {
   return (
@@ -34,6 +36,7 @@ function App() {
       <Route path="/onboarding/workspace" element={<OnboardingWorkspacePage />} />
       {/* Public, workspace-branded surfaces */}
       <Route path="/submit" element={<SubmitPage />} />
+      <Route path="/kb" element={<PublicKbPage />} />
       <Route path="/tickets/:id" element={<GuestTicketPage />} />
       <Route path="/invite/:token" element={<InviteAcceptPage />} />
       <Route element={<RequireAuth />}>
@@ -46,6 +49,7 @@ function App() {
           <Route path="/dashboard/tickets" element={<AgentWorkspacePage />} />
           <Route path="/dashboard/tickets/:id" element={<AgentWorkspacePage />} />
           <Route path="/dashboard/problems" element={<ProblemsPage />} />
+          <Route path="/dashboard/kb" element={<KbPage />} />
         </Route>
         <Route element={<RequireRole roles={['admin']} />}>
           <Route path="/admin/users" element={<UsersPage />} />

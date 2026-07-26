@@ -31,6 +31,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<Team> Teams => Set<Team>();
     public DbSet<TeamMember> TeamMembers => Set<TeamMember>();
     public DbSet<SlaPolicy> SlaPolicies => Set<SlaPolicy>();
+    public DbSet<KbArticle> KbArticles => Set<KbArticle>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
     public DbSet<WidgetConfig> WidgetConfigs => Set<WidgetConfig>();
@@ -282,6 +283,19 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.Property(w => w.Theme).HasDefaultValue("light");
             e.HasOne(w => w.Workspace).WithMany().HasForeignKey(w => w.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<KbArticle>(e =>
+        {
+            e.ToTable("kb_articles");
+            e.HasIndex(a => new { a.WorkspaceId, a.Status });
+            e.Property(a => a.Status).HasDefaultValue(KbArticleStatus.Draft);
+            e.HasOne(a => a.Workspace).WithMany().HasForeignKey(a => a.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(a => a.Category).WithMany().HasForeignKey(a => a.CategoryId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(a => a.CreatedByUser).WithMany().HasForeignKey(a => a.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<SlaPolicy>(e =>

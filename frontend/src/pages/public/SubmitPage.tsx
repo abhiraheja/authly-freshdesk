@@ -21,6 +21,7 @@ import {
   verifyGuestOtp,
   type GuestTicketCreated,
 } from '../../api/guest'
+import { suggestKb } from '../../api/kb'
 import { BrandedCard, BrandedFrame } from '../../components/BrandedFrame'
 import { CodeInput } from '../../components/CodeInput'
 import { formatBytes } from '../../lib/format'
@@ -50,6 +51,14 @@ export function SubmitPage() {
     queryFn: () => getPublicBranding(slug),
     enabled: !!slug,
     retry: false,
+  })
+
+  // Deflection: suggest published KB articles as the customer types a subject.
+  const suggestionsQuery = useQuery({
+    queryKey: ['kb-suggest', slug, subject],
+    queryFn: () => suggestKb(slug, subject),
+    enabled: !!slug && subject.trim().length >= 3,
+    staleTime: 30_000,
   })
 
   const sendOtp = useMutation({
@@ -188,6 +197,25 @@ export function SubmitPage() {
               Subject <Box component="span" sx={{ color: '#DC2626' }}>*</Box>
             </Typography>
             <TextField fullWidth value={subject} onChange={(e) => setSubject(e.target.value)} />
+
+            {(suggestionsQuery.data?.length ?? 0) > 0 && (
+              <Box sx={{ mt: 1.5, bgcolor: '#F8FAFC', border: '1px solid #E9E4F5', borderRadius: '10px', p: 1.5 }}>
+                <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: '#6B7280', mb: 0.5 }}>
+                  💡 These might already answer your question:
+                </Typography>
+                {suggestionsQuery.data!.map((s) => (
+                  <Link
+                    key={s.id}
+                    component={RouterLink}
+                    to={`/kb?workspace=${slug}&article=${s.id}`}
+                    target="_blank"
+                    sx={{ display: 'block', fontSize: 13.5, color: branding.primaryColor, py: 0.4, textDecoration: 'none' }}
+                  >
+                    {s.title} →
+                  </Link>
+                ))}
+              </Box>
+            )}
 
             <Typography sx={{ ...label, mt: 2 }}>
               Describe the issue <Box component="span" sx={{ color: '#DC2626' }}>*</Box>
