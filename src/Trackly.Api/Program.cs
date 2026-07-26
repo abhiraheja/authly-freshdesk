@@ -28,6 +28,7 @@ builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<InboundEmailService>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<AttachmentService>();
+builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<GuestService>();
 builder.Services.AddScoped<InvitationService>();
 builder.Services.AddScoped<SsoLoginService>();

@@ -13,6 +13,12 @@ export interface UserSummary {
   role: string
 }
 
+export interface Tag {
+  id: string
+  name: string
+  color: string | null
+}
+
 export interface TicketSummary {
   id: string
   subject: string
@@ -25,6 +31,7 @@ export interface TicketSummary {
   guestEmail: string | null
   assignee: UserSummary | null
   commentCount: number
+  tags: Tag[]
   createdAt: string
   updatedAt: string
 }
@@ -38,6 +45,10 @@ export interface TicketDetail extends Omit<TicketSummary, 'commentCount'> {
   description: string
   watchers: Watcher[]
   problemId: string | null
+}
+
+export function setTicketTags(id: string, tags: string[]) {
+  return api<Tag[]>(`/api/tickets/${id}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) })
 }
 
 export interface Attachment {

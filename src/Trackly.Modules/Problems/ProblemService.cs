@@ -43,6 +43,7 @@ public class ProblemService(TracklyDbContext db, NotificationService notificatio
                 t.GuestName, t.GuestEmail,
                 UserSummaryDto.From(t.Assignee),
                 t.Comments.Count(),
+                t.TicketTags.Select(tt => new TagDto(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList(),
                 t.CreatedAt, t.UpdatedAt))
             .ToListAsync(ct);
 

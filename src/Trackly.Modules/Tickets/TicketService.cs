@@ -30,6 +30,8 @@ public class TicketService(TracklyDbContext db, NotificationService notification
             tickets = tickets.Where(t => t.Priority == query.Priority);
         if (query.AssigneeId is not null && actor.IsAgentOrAdmin)
             tickets = tickets.Where(t => t.AssigneeId == query.AssigneeId);
+        if (!string.IsNullOrWhiteSpace(query.Tag) && actor.IsAgentOrAdmin)
+            tickets = tickets.Where(t => t.TicketTags.Any(tt => tt.Tag.Name == query.Tag));
         if (!string.IsNullOrWhiteSpace(query.Search))
             tickets = tickets.Where(t => EF.Functions.ILike(t.Subject, $"%{query.Search}%"));
 
@@ -48,6 +50,10 @@ public class TicketService(TracklyDbContext db, NotificationService notification
                 t.GuestName, t.GuestEmail,
                 UserSummaryDto.From(t.Assignee),
                 t.Comments.Count(c => !c.IsInternal || actor.IsAgentOrAdmin),
+                // Tags are agent-facing metadata — never on customer surfaces.
+                actor.IsAgentOrAdmin
+                    ? t.TicketTags.Select(tt => new TagDto(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList()
+                    : new List<TagDto>(),
                 t.CreatedAt, t.UpdatedAt))
             .ToListAsync(ct);
 
@@ -61,8 +67,9 @@ public class TicketService(TracklyDbContext db, NotificationService notification
             .Include(t => t.Requester)
             .Include(t => t.Assignee)
             .Include(t => t.Watchers).ThenInclude(w => w.Agent)
+            .Include(t => t.TicketTags).ThenInclude(tt => tt.Tag)
             .SingleOrDefaultAsync(t => t.Id == ticketId, ct);
-        // Problem grouping is internal — never expose it to a customer.
+        // Problem grouping and tags are internal — never expose them to a customer.
         return ticket is null ? null : ToDetail(ticket, actor.IsAgentOrAdmin);
     }
 
@@ -341,6 +348,9 @@ public class TicketService(TracklyDbContext db, NotificationService notification
         t.GuestName, t.GuestEmail,
         UserSummaryDto.From(t.Assignee),
         t.Watchers.Select(w => new WatcherDto(UserSummaryDto.From(w.Agent)!, w.AddedAt)).ToList(),
+        isAgentOrAdmin
+            ? t.TicketTags.Select(tt => new TagDto(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList()
+            : new List<TagDto>(),
         isAgentOrAdmin ? t.ProblemId : null,
         t.CreatedAt, t.UpdatedAt);
 }

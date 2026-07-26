@@ -26,6 +26,7 @@ public class Ticket
 
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
     public ICollection<TicketWatcher> Watchers { get; set; } = new List<TicketWatcher>();
+    public ICollection<TicketTag> TicketTags { get; set; } = new List<TicketTag>();
 }
 
 public static class TicketStatus

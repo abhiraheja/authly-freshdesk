@@ -1,12 +1,14 @@
-import { Avatar, Box, Chip, IconButton, Link, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { Autocomplete, Avatar, Box, Chip, IconButton, Link, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { listTags } from '../../api/tags'
 import {
   addWatcher,
   getTicket,
   listAgents,
   listCategories,
   removeWatcher,
+  setTicketTags,
   updateTicket,
   type UpdateTicketBody,
 } from '../../api/tickets'
@@ -48,11 +50,20 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
   const ticketQuery = useQuery({ queryKey: ['ticket', ticketId], queryFn: () => getTicket(ticketId) })
   const agentsQuery = useQuery({ queryKey: ['agents'], queryFn: listAgents })
   const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: listCategories })
+  const tagsQuery = useQuery({ queryKey: ['tags'], queryFn: listTags })
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] })
     queryClient.invalidateQueries({ queryKey: ['agent-tickets'] })
   }
+
+  const setTags = useMutation({
+    mutationFn: (names: string[]) => setTicketTags(ticketId, names),
+    onSuccess: () => {
+      invalidate()
+      queryClient.invalidateQueries({ queryKey: ['tags'] })
+    },
+  })
 
   const update = useMutation({
     mutationFn: (body: UpdateTicketBody) => updateTicket(ticketId, body),
@@ -200,6 +211,22 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
             + Add watcher
           </Link>
         )}
+      </Box>
+
+      {/* Tags */}
+      <Box sx={{ mb: 2.25, pb: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+        <Label>Tags</Label>
+        <Autocomplete
+          multiple
+          freeSolo
+          size="small"
+          options={(tagsQuery.data ?? []).map((t) => t.name)}
+          value={ticket.tags.map((t) => t.name)}
+          onChange={(_, value) => setTags.mutate(value as string[])}
+          renderInput={(params) => (
+            <TextField {...params} variant="standard" placeholder="Add tags…" />
+          )}
+        />
       </Box>
 
       {/* Facts */}

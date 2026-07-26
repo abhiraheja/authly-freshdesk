@@ -14,6 +14,8 @@ public record CategoryDto(Guid Id, string Name, string? Color)
         category is null ? null : new CategoryDto(category.Id, category.Name, category.Color);
 }
 
+public record TagDto(Guid Id, string Name, string? Color);
+
 public record TicketSummaryDto(
     Guid Id,
     string Subject,
@@ -26,6 +28,7 @@ public record TicketSummaryDto(
     string? GuestEmail,
     UserSummaryDto? Assignee,
     int CommentCount,
+    IReadOnlyList<TagDto> Tags,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
@@ -44,6 +47,7 @@ public record TicketDetailDto(
     string? GuestEmail,
     UserSummaryDto? Assignee,
     IReadOnlyList<WatcherDto> Watchers,
+    IReadOnlyList<TagDto> Tags,
     Guid? ProblemId,
     DateTime CreatedAt,
     DateTime UpdatedAt);
@@ -84,5 +88,6 @@ public record TicketListQuery(
     string? Priority,
     Guid? AssigneeId,
     string? Search,
+    string? Tag,
     int Page = 1,
     int PageSize = 25);

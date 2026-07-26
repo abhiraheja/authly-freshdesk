@@ -8,8 +8,20 @@ namespace Trackly.Api.Controllers;
 [ApiController]
 [Route("api/tickets")]
 [Authorize]
-public class TicketsController(TicketService tickets, AttachmentService attachments) : ControllerBase
+public class TicketsController(TicketService tickets, AttachmentService attachments, TagService tags) : ControllerBase
 {
+    public record SetTagsRequest(List<string> Tags);
+
+    // ---- Tags (agent/admin) ----
+
+    [HttpPut("{id:guid}/tags")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> SetTags(Guid id, [FromBody] SetTagsRequest request, CancellationToken ct)
+    {
+        var result = await tags.SetTicketTagsAsync(User.GetActor(), id, request.Tags ?? [], ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
     [HttpGet]
     public async Task<IActionResult> List([FromQuery] TicketListQuery query, CancellationToken ct)
     {

@@ -1,4 +1,4 @@
-import { Avatar, Box, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import { Avatar, Box, Chip, CircularProgress, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { listTickets } from '../../api/tickets'
@@ -130,6 +130,18 @@ export function TicketListPane({ selectedId, onSelect }: TicketListPaneProps) {
                       : 'Unassigned'}
                     {` · ${ticket.priority}`}
                   </Typography>
+                  {ticket.tags.length > 0 && (
+                    <Stack direction="row" spacing={0.5} sx={{ mt: 0.6, flexWrap: 'wrap', gap: 0.5 }}>
+                      {ticket.tags.slice(0, 3).map((tag) => (
+                        <Chip
+                          key={tag.id}
+                          label={tag.name}
+                          size="small"
+                          sx={{ height: 18, fontSize: 10.5, bgcolor: 'action.selected', color: 'text.secondary' }}
+                        />
+                      ))}
+                    </Stack>
+                  )}
                 </Box>
               </Stack>
             )

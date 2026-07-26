@@ -26,6 +26,8 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<WorkspaceDomain> WorkspaceDomains => Set<WorkspaceDomain>();
     public DbSet<SsoLoginState> SsoLoginStates => Set<SsoLoginState>();
     public DbSet<Problem> Problems => Set<Problem>();
+    public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<TicketTag> TicketTags => Set<TicketTag>();
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
     public DbSet<WidgetConfig> WidgetConfigs => Set<WidgetConfig>();
@@ -274,6 +276,24 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.Property(w => w.EmbedType).HasDefaultValue(WidgetEmbedType.Floating);
             e.Property(w => w.Theme).HasDefaultValue("light");
             e.HasOne(w => w.Workspace).WithMany().HasForeignKey(w => w.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Tag>(e =>
+        {
+            e.ToTable("tags");
+            e.HasIndex(t => new { t.WorkspaceId, t.Name }).IsUnique();
+            e.HasOne(t => t.Workspace).WithMany().HasForeignKey(t => t.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TicketTag>(e =>
+        {
+            e.ToTable("ticket_tags");
+            e.HasKey(tt => new { tt.TicketId, tt.TagId });
+            e.HasOne(tt => tt.Ticket).WithMany(t => t.TicketTags).HasForeignKey(tt => tt.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(tt => tt.Tag).WithMany().HasForeignKey(tt => tt.TagId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
