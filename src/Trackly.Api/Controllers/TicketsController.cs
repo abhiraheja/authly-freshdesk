@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Trackly.Api.Auth;
+using Trackly.Modules.Csat;
 using Trackly.Modules.Tickets;
 
 namespace Trackly.Api.Controllers;
@@ -8,7 +9,7 @@ namespace Trackly.Api.Controllers;
 [ApiController]
 [Route("api/tickets")]
 [Authorize]
-public class TicketsController(TicketService tickets, AttachmentService attachments, TagService tags) : ControllerBase
+public class TicketsController(TicketService tickets, AttachmentService attachments, TagService tags, CsatService csat) : ControllerBase
 {
     public record SetTagsRequest(List<string> Tags);
 
@@ -43,6 +44,15 @@ public class TicketsController(TicketService tickets, AttachmentService attachme
     {
         var ticket = await tickets.GetAsync(User.GetActor(), id, ct);
         return ticket is null ? NotFound() : Ok(ticket);
+    }
+
+    // Satisfaction result for a ticket (agent/admin). null ⇒ no survey issued yet.
+    [HttpGet("{id:guid}/csat")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> Csat(Guid id, CancellationToken ct)
+    {
+        var result = await csat.GetForTicketAsync(User.GetActor().WorkspaceId, id, ct);
+        return result is null ? NoContent() : Ok(result);
     }
 
     [HttpPatch("{id:guid}")]

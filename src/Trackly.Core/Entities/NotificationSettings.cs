@@ -15,5 +15,8 @@ public class NotificationSettings
     public bool NotifyAgentOnReply { get; set; } = true;
     public bool NotifyAgentOnReassign { get; set; } = true;
 
+    // Send a CSAT survey link in the resolution email (Phase 7C).
+    public bool CsatEnabled { get; set; } = true;
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

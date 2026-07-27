@@ -23,6 +23,7 @@ import { SsoCompletePage } from './pages/auth/SsoCompletePage'
 import { NewTicketPage } from './pages/portal/NewTicketPage'
 import { PortalTicketDetailPage } from './pages/portal/PortalTicketDetailPage'
 import { PortalTicketsPage } from './pages/portal/PortalTicketsPage'
+import { CsatPage } from './pages/public/CsatPage'
 import { GuestTicketPage } from './pages/public/GuestTicketPage'
 import { InviteAcceptPage } from './pages/public/InviteAcceptPage'
 import { PublicKbPage } from './pages/public/PublicKbPage'
@@ -40,6 +41,7 @@ function App() {
       {/* Public, workspace-branded surfaces */}
       <Route path="/submit" element={<SubmitPage />} />
       <Route path="/kb" element={<PublicKbPage />} />
+      <Route path="/csat/:ticketId" element={<CsatPage />} />
       <Route path="/tickets/:id" element={<GuestTicketPage />} />
       <Route path="/invite/:token" element={<InviteAcceptPage />} />
       <Route element={<RequireAuth />}>

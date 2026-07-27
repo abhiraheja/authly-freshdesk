@@ -37,6 +37,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
     public DbSet<WidgetConfig> WidgetConfigs => Set<WidgetConfig>();
+    public DbSet<CsatSurvey> CsatSurveys => Set<CsatSurvey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -303,6 +304,17 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.ToTable("canned_responses");
             e.HasIndex(c => c.WorkspaceId);
             e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CsatSurvey>(e =>
+        {
+            e.ToTable("csat_surveys");
+            e.HasIndex(c => c.TicketId).IsUnique();               // one survey per ticket
+            e.HasIndex(c => new { c.WorkspaceId, c.AgentId });    // per-agent CSAT reporting
+            e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(c => c.Ticket).WithMany().HasForeignKey(c => c.TicketId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

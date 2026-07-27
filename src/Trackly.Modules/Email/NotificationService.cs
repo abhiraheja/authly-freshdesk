@@ -113,6 +113,32 @@ public class NotificationService(
         catch (Exception ex) { logger.LogWarning(ex, "OnStatusChanged notify failed for {TicketId}", ticketId); }
     }
 
+    // Resolution email, optionally carrying a CSAT rating link (Phase 7C). Uses
+    // the same NotifyCustomerOnStatus toggle as other status emails.
+    public async Task OnResolvedAsync(Guid ticketId, string? csatToken, CancellationToken ct)
+    {
+        try
+        {
+            var ticket = await LoadAsync(ticketId, ct);
+            if (ticket is null) return;
+            var ctx = await ResolveAsync(ticket.WorkspaceId, ct);
+            if (!ctx.Settings.NotifyCustomerOnStatus) return;
+
+            var (email, name) = Requester(ticket);
+            if (email is null) return;
+
+            var body = $"Your ticket {Ref(ticket)} is now marked \"resolved\".";
+            if (csatToken is not null)
+                body += $"\n\nHow did we do? Rate your support experience:\n{CsatLink(ticket, csatToken)}";
+            body += $"\n\n{PortalOrTrackingHint(ticket)}";
+
+            await SendAsync(ctx, email, name,
+                $"[{Ref(ticket)}] Resolved — {ticket.Subject}",
+                body, ticketId, null, replyable: ctx.ReplyTo is not null);
+        }
+        catch (Exception ex) { logger.LogWarning(ex, "OnResolved notify failed for {TicketId}", ticketId); }
+    }
+
     public async Task OnAssignmentAsync(Guid ticketId, Guid assigneeId, bool reassigned, CancellationToken ct)
     {
         try
@@ -220,6 +246,7 @@ public class NotificationService(
     private static string Ref(Ticket t) => GuestService.Reference(t.Id);
     private string AgentLink(Ticket t) => $"{FrontendBaseUrl}/dashboard/tickets/{t.Id}";
     private string PortalLink(Ticket t) => $"{FrontendBaseUrl}/portal/tickets/{t.Id}";
+    private string CsatLink(Ticket t, string token) => $"{FrontendBaseUrl}/csat/{t.Id}?token={token}";
 
     private string PortalOrTrackingHint(Ticket t) => t.RequesterId is not null
         ? $"View your ticket: {PortalLink(t)}"

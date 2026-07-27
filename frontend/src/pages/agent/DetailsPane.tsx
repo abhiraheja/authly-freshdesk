@@ -12,6 +12,7 @@ import {
   IconButton,
   Link,
   MenuItem,
+  Rating,
   Stack,
   TextField,
   Typography,
@@ -19,6 +20,7 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { draftKbArticle, getAiAvailability, suggestTriage, type TriageSuggestion } from '../../api/ai'
+import { getTicketCsat } from '../../api/csat'
 import { createKbArticle } from '../../api/kb'
 import { listTags } from '../../api/tags'
 import { listTeams } from '../../api/teams'
@@ -73,6 +75,7 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
   const categoriesQuery = useQuery({ queryKey: ['categories'], queryFn: listCategories })
   const tagsQuery = useQuery({ queryKey: ['tags'], queryFn: listTags })
   const teamsQuery = useQuery({ queryKey: ['teams'], queryFn: listTeams })
+  const csatQuery = useQuery({ queryKey: ['csat', ticketId], queryFn: () => getTicketCsat(ticketId) })
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['ticket', ticketId] })
@@ -408,6 +411,11 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
         {(ticket.firstResponseDueAt || ticket.resolveDueAt) && (
           <Row k="SLA">
             <SlaBadge ticket={ticket} showPrefix />
+          </Row>
+        )}
+        {csatQuery.data?.submitted && csatQuery.data.rating != null && (
+          <Row k="Satisfaction">
+            <Rating value={csatQuery.data.rating} max={5} readOnly size="small" />
           </Row>
         )}
         <Row k="Channel">{ticket.channel}</Row>

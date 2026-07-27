@@ -58,6 +58,7 @@ export interface NotificationSettings {
   notifyAgentOnAssign: boolean
   notifyAgentOnReply: boolean
   notifyAgentOnReassign: boolean
+  csatEnabled: boolean
 }
 
 export function getEmailConfig() {

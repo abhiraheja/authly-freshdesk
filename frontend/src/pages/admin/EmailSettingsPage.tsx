@@ -247,6 +247,7 @@ export function EmailSettingsPage() {
               ['notifyAgentOnAssign', 'Email the agent when a ticket is assigned to them'],
               ['notifyAgentOnReply', 'Email the agent when the customer replies'],
               ['notifyAgentOnReassign', 'Email the agent when a ticket is reassigned'],
+              ['csatEnabled', 'Include a satisfaction survey link in the resolution email'],
             ] as [keyof NotificationSettings, string][]).map(([key, text]) => (
               <Stack key={key} direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', py: 0.75 }}>
                 <Typography sx={{ fontSize: 14 }}>{text}</Typography>

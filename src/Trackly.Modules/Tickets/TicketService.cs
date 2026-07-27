@@ -1,12 +1,14 @@
 using Microsoft.EntityFrameworkCore;
 using Trackly.Core.Entities;
 using Trackly.Infrastructure.Data;
+using Trackly.Modules.Csat;
 using Trackly.Modules.Email;
 
 namespace Trackly.Modules.Tickets;
 
 public class TicketService(
-    TracklyDbContext db, NotificationService notifications, SlaService sla, AutomationService automation)
+    TracklyDbContext db, NotificationService notifications, SlaService sla, AutomationService automation,
+    CsatService csat)
 {
     // ---- Queries ------------------------------------------------------------
 
@@ -266,7 +268,18 @@ public class TicketService(
         await db.SaveChangesAsync(ct);
 
         if (ticket.Status != previousStatus)
-            await notifications.OnStatusChangedAsync(ticket.Id, ticket.Status, ct);
+        {
+            if (ticket.Status == TicketStatus.Resolved)
+            {
+                // Issue a CSAT survey and fold its rating link into the resolution email.
+                var csatToken = await csat.IssueForResolutionAsync(ticket, ct);
+                await notifications.OnResolvedAsync(ticket.Id, csatToken, ct);
+            }
+            else
+            {
+                await notifications.OnStatusChangedAsync(ticket.Id, ticket.Status, ct);
+            }
+        }
         if (ticket.AssigneeId is { } newAssignee && newAssignee != previousAssignee)
             await notifications.OnAssignmentAsync(ticket.Id, newAssignee, reassigned: previousAssignee is not null, ct);
 

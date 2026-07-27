@@ -27,7 +27,8 @@ public class EmailSettingsController(TracklyDbContext db, ISecretProtector secre
 
     public record UpdateNotificationSettingsRequest(
         bool NotifyCustomerOnCreate, bool NotifyCustomerOnReply, bool NotifyCustomerOnStatus,
-        bool NotifyAgentOnAssign, bool NotifyAgentOnReply, bool NotifyAgentOnReassign);
+        bool NotifyAgentOnAssign, bool NotifyAgentOnReply, bool NotifyAgentOnReassign,
+        bool CsatEnabled);
 
     // ---- Email config --------------------------------------------------------
 
@@ -96,6 +97,7 @@ public class EmailSettingsController(TracklyDbContext db, ISecretProtector secre
         s.NotifyAgentOnAssign = req.NotifyAgentOnAssign;
         s.NotifyAgentOnReply = req.NotifyAgentOnReply;
         s.NotifyAgentOnReassign = req.NotifyAgentOnReassign;
+        s.CsatEnabled = req.CsatEnabled;
         s.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         return Ok(ToResponse(s));
@@ -169,6 +171,7 @@ public class EmailSettingsController(TracklyDbContext db, ISecretProtector secre
         notifyAgentOnAssign = s.NotifyAgentOnAssign,
         notifyAgentOnReply = s.NotifyAgentOnReply,
         notifyAgentOnReassign = s.NotifyAgentOnReassign,
+        csatEnabled = s.CsatEnabled,
     };
 
     private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
