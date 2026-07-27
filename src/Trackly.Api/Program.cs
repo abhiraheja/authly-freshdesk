@@ -7,6 +7,7 @@ using Trackly.Api.Auth;
 using Trackly.Core.Entities;
 using Trackly.Infrastructure;
 using Trackly.Infrastructure.Data;
+using Trackly.Modules.Ai;
 using Trackly.Modules.Announcements;
 using Trackly.Modules.Auth;
 using Trackly.Modules.Dashboard;
@@ -42,6 +43,7 @@ builder.Services.AddScoped<SsoLoginService>();
 builder.Services.AddScoped<ProblemService>();
 builder.Services.AddScoped<AnnouncementService>();
 builder.Services.AddScoped<DashboardService>();
+builder.Services.AddScoped<AiService>();
 builder.Services.AddHostedService<AnnouncementWorker>();
 builder.Services.AddHostedService<EmailPollingWorker>();
 

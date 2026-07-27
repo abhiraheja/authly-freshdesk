@@ -12,6 +12,7 @@ import {
 } from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
+import { draftReply, getAiAvailability, summarizeTicket } from '../../api/ai'
 import { listCannedResponses } from '../../api/canned'
 import {
   addComment,
@@ -60,9 +61,33 @@ export function ConversationPane({ ticketId }: { ticketId: string }) {
   const [file, setFile] = useState<File | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [cannedAnchor, setCannedAnchor] = useState<null | HTMLElement>(null)
+  const [summary, setSummary] = useState<string | null>(null)
   const fileInput = useRef<HTMLInputElement>(null)
 
   const cannedQuery = useQuery({ queryKey: ['canned'], queryFn: listCannedResponses })
+  const aiQuery = useQuery({ queryKey: ['ai-available'], queryFn: getAiAvailability, staleTime: 60_000 })
+  const aiOn = aiQuery.data?.available === true
+
+  // AI copilot: draft fills the composer (agent edits before sending);
+  // summarize shows a dismissible recap above the composer. Nothing auto-sends.
+  const aiDraft = useMutation({
+    mutationFn: () => draftReply(ticketId),
+    onSuccess: ({ draft }) => {
+      setMode('reply')
+      setBody((prev) => (prev.trim() ? `${prev}\n\n${draft}` : draft))
+      setError(null)
+    },
+    onError: (e: Error) => setError(e.message),
+  })
+  const aiSummary = useMutation({
+    mutationFn: () => summarizeTicket(ticketId),
+    onSuccess: ({ summary }) => {
+      setSummary(summary)
+      setError(null)
+    },
+    onError: (e: Error) => setError(e.message),
+  })
+  const aiBusy = aiDraft.isPending || aiSummary.isPending
 
   const ticketQuery = useQuery({ queryKey: ['ticket', ticketId], queryFn: () => getTicket(ticketId) })
   const commentsQuery = useQuery({ queryKey: ['comments', ticketId], queryFn: () => listComments(ticketId) })
@@ -229,6 +254,19 @@ export function ConversationPane({ ticketId }: { ticketId: string }) {
         {comments.map(renderComment)}
       </Stack>
 
+      {/* AI thread summary (agent-only, dismissible) */}
+      {summary && (
+        <Alert
+          severity="info"
+          icon={<span>✨</span>}
+          onClose={() => setSummary(null)}
+          sx={{ mx: 2.75, mb: 0, alignItems: 'flex-start', '& .MuiAlert-message': { whiteSpace: 'pre-wrap' } }}
+        >
+          <Typography sx={{ fontSize: 12.5, fontWeight: 700, mb: 0.25 }}>AI summary</Typography>
+          {summary}
+        </Alert>
+      )}
+
       {/* Composer */}
       <Box
         sx={{
@@ -310,6 +348,28 @@ export function ConversationPane({ ticketId }: { ticketId: string }) {
                 </MenuItem>
               ))}
             </Menu>
+            {aiOn && (
+              <>
+                {mode === 'reply' && (
+                  <Button
+                    size="small"
+                    sx={{ color: 'primary.main' }}
+                    disabled={aiBusy}
+                    onClick={() => aiDraft.mutate()}
+                  >
+                    {aiDraft.isPending ? '✨ Drafting…' : '✨ Draft reply'}
+                  </Button>
+                )}
+                <Button
+                  size="small"
+                  sx={{ color: 'primary.main' }}
+                  disabled={aiBusy}
+                  onClick={() => aiSummary.mutate()}
+                >
+                  {aiSummary.isPending ? '✨ Summarizing…' : '✨ Summarize'}
+                </Button>
+              </>
+            )}
           </Stack>
           <Button variant="contained" disabled={!body.trim() || send.isPending} onClick={() => send.mutate()}>
             {mode === 'reply' ? 'Send reply' : 'Add note'}
