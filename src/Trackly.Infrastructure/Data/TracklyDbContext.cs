@@ -38,6 +38,9 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
     public DbSet<WidgetConfig> WidgetConfigs => Set<WidgetConfig>();
     public DbSet<CsatSurvey> CsatSurveys => Set<CsatSurvey>();
+    public DbSet<ChannelConnector> ChannelConnectors => Set<ChannelConnector>();
+    public DbSet<ChannelConversation> ChannelConversations => Set<ChannelConversation>();
+    public DbSet<InboundChannelEvent> InboundChannelEvents => Set<InboundChannelEvent>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -316,6 +319,30 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasOne(c => c.Ticket).WithMany().HasForeignKey(c => c.TicketId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ChannelConnector>(e =>
+        {
+            e.ToTable("channel_connectors");
+            e.HasIndex(c => new { c.WorkspaceId, c.Provider }).IsUnique();  // one per provider
+            e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<ChannelConversation>(e =>
+        {
+            e.ToTable("channel_conversations");
+            e.HasIndex(c => new { c.WorkspaceId, c.Provider, c.ConversationKey }).IsUnique(); // threading key
+            e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(c => c.Ticket).WithMany().HasForeignKey(c => c.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<InboundChannelEvent>(e =>
+        {
+            e.ToTable("inbound_channel_events");
+            e.HasIndex(c => new { c.WorkspaceId, c.Provider, c.ExternalMessageId }).IsUnique(); // dedup
         });
 
         modelBuilder.Entity<KbArticle>(e =>

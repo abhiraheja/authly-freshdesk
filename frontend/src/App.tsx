@@ -13,6 +13,7 @@ import { AnalyticsPage } from './pages/admin/AnalyticsPage'
 import { AnnouncementsPage } from './pages/admin/AnnouncementsPage'
 import { AutomationPage } from './pages/admin/AutomationPage'
 import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
+import { ChannelsPage } from './pages/admin/ChannelsPage'
 import { DomainsPage } from './pages/admin/DomainsPage'
 import { EmailSettingsPage } from './pages/admin/EmailSettingsPage'
 import { SlaSettingsPage } from './pages/admin/SlaSettingsPage'
@@ -70,6 +71,7 @@ function App() {
           <Route path="/admin/settings/ai" element={<AiSettingsPage />} />
           <Route path="/admin/settings/sso" element={<SsoSettingsPage />} />
           <Route path="/admin/settings/domains" element={<DomainsPage />} />
+          <Route path="/admin/channels" element={<ChannelsPage />} />
           <Route path="/admin/widget" element={<WidgetPage />} />
         </Route>
       </Route>

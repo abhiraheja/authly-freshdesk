@@ -66,4 +66,8 @@ public static class TicketChannel
     public const string Web = "web";
     public const string Widget = "widget";
     public const string Email = "email";
+    public const string Slack = "slack";
+    public const string WhatsApp = "whatsapp";
+    public const string Teams = "teams";
+    public const string Chat = "chat";
 }
