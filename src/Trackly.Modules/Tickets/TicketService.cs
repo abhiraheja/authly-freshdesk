@@ -186,6 +186,16 @@ public class TicketService(
             if (!TicketStatus.All.Contains(request.Status))
                 throw new ArgumentException("Invalid status.");
             ticket.Status = request.Status;
+            // Track the resolution time for analytics (Phase 7C). Resolved re-stamps;
+            // Closed keeps an existing stamp (or sets one if closed directly);
+            // reopening to Open/Pending clears it.
+            if (ticket.Status != previousStatus)
+                ticket.ResolvedAt = ticket.Status switch
+                {
+                    TicketStatus.Resolved => DateTime.UtcNow,
+                    TicketStatus.Closed => ticket.ResolvedAt ?? DateTime.UtcNow,
+                    _ => null,
+                };
         }
 
         if (request.Priority is not null)

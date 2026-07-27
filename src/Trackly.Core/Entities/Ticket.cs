@@ -31,6 +31,10 @@ public class Ticket
     public DateTime? FirstResponseAt { get; set; }
     public DateTime? SlaPausedAt { get; set; }
 
+    // Set each time the ticket transitions into Resolved; cleared on reopen.
+    // Drives resolution-time and SLA-attainment analytics (Phase 7C).
+    public DateTime? ResolvedAt { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

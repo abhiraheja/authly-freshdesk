@@ -44,6 +44,7 @@ builder.Services.AddScoped<SsoLoginService>();
 builder.Services.AddScoped<ProblemService>();
 builder.Services.AddScoped<AnnouncementService>();
 builder.Services.AddScoped<DashboardService>();
+builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddScoped<AiService>();
 builder.Services.AddScoped<CsatService>();
 builder.Services.AddHostedService<AnnouncementWorker>();
