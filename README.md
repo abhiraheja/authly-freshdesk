@@ -18,10 +18,11 @@ A standalone, multi-tenant ticket management SaaS — submit, track, and resolve
 | `docs/trackly-plan.md` | Complete design document (architecture, schema, API, phases) |
 | `docs/mockups/` | Approved HTML design mockups — open `index.html` in a browser |
 | `src/Trackly.Core` | Entities, interfaces, enums |
-| `src/Trackly.Modules` | Business logic (auth, signup; tickets et al. in later phases) |
-| `src/Trackly.Infrastructure` | EF Core DbContext + migrations, email senders |
-| `src/Trackly.Api` | Controllers, session auth scheme, middleware |
+| `src/Trackly.Modules` | Business logic — auth, tickets, guest flow, email, SSO, problems, KB, SLA, automation |
+| `src/Trackly.Infrastructure` | EF Core DbContext + migrations, email (SMTP/IMAP), storage, crypto, OIDC/DNS |
+| `src/Trackly.Api` | Controllers, session auth scheme, background workers, middleware |
 | `frontend/` | React 18 + TypeScript + Vite SPA (Material UI, TanStack Query, Zustand) |
+| `scripts/` | Per-phase PowerShell verification suites + demo-data seeder |
 
 ## Tech stack
 
@@ -57,6 +58,22 @@ npm run dev
 
 With no SMTP configured (`Email:Smtp:Host` empty), sign-in emails are written to the API console log — grab the magic link or 6-digit code from there.
 
+### Demo data (Development only)
+
+To fill a freshly-created workspace with realistic sample data (agents, customers, ~10 tickets across statuses/priorities with SLA countdowns, a problem, tags, a team, SLA policies, KB articles, canned responses, an automation rule, a draft announcement):
+
+- **From the browser** — sign in as your workspace admin, open devtools (F12), and run:
+  ```js
+  fetch('/api/dev/seed', { method: 'POST' }).then(r => r.json()).then(console.log)
+  ```
+- **Or from a terminal:** `powershell -File .\scripts\seed-demo.ps1 -AdminEmail <your-admin-email>`
+
+It's one-time (refuses if the workspace already has tickets) and the endpoint (`POST /api/dev/seed`) 404s outside Development.
+
+### Verification scripts
+
+Each phase has a PowerShell suite in `scripts/` that drives the running API and asserts behaviour (`verify-phase4.ps1` … `verify-phase7a.ps1`). Run one against a live API, e.g. `powershell -File .\scripts\verify-phase7a.ps1 -AdminEmail <email>`. SSO/SAML need a real IdP and aren't fully automatable.
+
 EF migrations:
 
 ```powershell
@@ -66,4 +83,14 @@ dotnet ef database update --project src/Trackly.Infrastructure --startup-project
 
 ## Status
 
-Phase 1 (foundation / walking skeleton) complete: solution scaffold, PostgreSQL schema for workspaces/users/sessions/email_tokens, passwordless magic-link + 6-digit-code auth, workspace signup with onboarding steps 1–2, session cookie auth, and placeholder dashboard/portal. Next: Phase 2 — core ticketing (see `docs/trackly-plan.md` → Implementation Phases).
+Phases 1–6 and 7A complete (see `docs/trackly-plan.md` → Implementation Phases):
+
+- **1 — Foundation:** scaffold, magic-link + 6-digit auth, workspace signup, session cookies.
+- **2 — Ticketing:** tickets/comments/categories/attachments, private notes, round-robin, watchers, customer portal + three-pane agent workspace.
+- **3 — Guest flow + branding:** OTP guest submission, magic-link tracking, workspace branding, invitations.
+- **4 — Email:** outbound notifications, inbound parse webhook + IMAP polling, encrypted secrets, admin email settings.
+- **5 — SSO:** per-workspace OIDC (auth-code + PKCE) and SAML, JIT provisioning + group→role mapping, domain verification + login-page routing.
+- **6 — Problems, announcements, embeddable widget, dashboard stats.**
+- **7A — Service desk fundamentals:** tags, teams (team round-robin), SLA policies with live countdown, knowledge base + submit-form deflection, canned responses, automation rules.
+
+Next: **Phase 7B** — AI copilot (Claude API: reply drafting, summarization, triage), then **7C** — omnichannel & analytics. `docs/go-live.md` is the living deployment checklist.
