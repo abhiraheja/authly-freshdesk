@@ -1425,14 +1425,25 @@ is what makes it competitive; it splits into three independently shippable slice
 - **Canned responses** — `canned_responses`, inserted from the ⚡ button in the
   reply box.
 
-*7B — AI copilot (Claude API)*
-- Reply drafting from the thread plus the workspace's KB, agent edits before send
-- Thread summarisation for handoffs and long escalations
-- Auto-categorisation, priority and tag suggestions at intake
-- Sentiment / frustration flag surfaced on the ticket list
-- Draft a KB article from a resolved ticket, queued for agent approval
-- Guardrails: never auto-send without an agent action; a workspace toggle to
-  disable AI entirely; **private notes and other workspaces' data are never sent**
+*7B — AI copilot (Claude API)* — **delivered**
+- ✅ Reply drafting from the thread plus the workspace's KB, agent edits before
+  send (`✨ Draft reply` in the composer; fills the box, never auto-sends)
+- ✅ Thread summarisation for handoffs and long escalations (`✨ Summarize`)
+- ✅ Auto-categorisation, priority and tag suggestions (`✨ Suggest triage` in the
+  details pane → one-click Apply). _Delivered as an on-demand agent action rather
+  than automatic at intake — the agent stays in control._
+- ✅ Sentiment / frustration flag — surfaced inside the triage suggestion panel
+  (part of the `✨ Suggest triage` result), not yet persisted as a ticket-list
+  column. _Deviation from "surfaced on the ticket list"; list badge is deferred._
+- ✅ Draft a KB article from a resolved ticket (`✨ Draft KB article` → editable
+  dialog → saved as a **draft**, agent publishes separately)
+- ✅ Guardrails: never auto-send without an agent action; per-workspace AI toggle
+  (`workspaces.ai_enabled`) + deployment key both required; **private notes and
+  other workspaces' data are never sent** (enforced in `AiService`, not the UI)
+- **Backend:** `IAiCopilot`/`AnthropicAiCopilot` (Anthropic .NET SDK, default
+  `claude-opus-5`), `AiService` (prompt building + guardrails), `AiController`
+  (`/api/tickets/{id}/ai/{draft-reply,summary,triage,kb-draft}`, `/api/ai/available`),
+  `AiSettingsController` (`/api/admin/ai`). Config: `Ai:ApiKey` (secret), `Ai:Model`.
 
 *7C — Omnichannel & insight*
 - Live-chat upgrade of the Phase 6 widget (agent presence, typing, transcript
@@ -1474,6 +1485,6 @@ is what makes it competitive; it splits into three independently shippable slice
 - [x] Phase 7A: KB suggestions/list expose only published articles of that workspace; drafts and other workspaces never leak
 - [x] Phase 7A: tags are agent-only — a customer's ticket view never includes them
 - [x] Phase 7A: a ticket routed to a team is round-robin assigned among that team's members only
-- [ ] Phase 7B: AI copilot prompt contains no private notes and no other workspace's data
-- [ ] Phase 7B: AI never sends a reply without an explicit agent action; workspace AI toggle off disables all calls
+- [x] Phase 7B: AI copilot prompt contains no private notes and no other workspace's data (filtered + workspace-scoped in `AiService`)
+- [x] Phase 7B: AI never sends a reply without an explicit agent action; workspace AI toggle off (or no `Ai:ApiKey`) disables all calls (409)
 - [ ] Phase 7C: chat transcript becomes a ticket in the right workspace; CSAT score cannot be submitted twice

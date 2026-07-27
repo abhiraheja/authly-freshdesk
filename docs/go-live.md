@@ -207,5 +207,19 @@ Append here as phases land, so nothing is missed later.
   per-workspace data. The public KB endpoints (`/api/public/workspaces/{slug}/kb`,
   `/suggest`) and the branded `/kb` SPA route must be reachable over HTTPS like the
   other public surfaces (§5).
-- **Phase 7B (AI copilot):** _TBD — Claude API key as a deployment secret._
+- **Phase 7B (AI copilot):** Claude-powered agent assists (draft reply, summarize
+  thread, triage suggestion, KB-article draft). New config:
+  - `Ai:ApiKey` — Anthropic API key, a **deployment secret**. **Unset ⇒ AI is off
+    everywhere** (the API reports `configured: false` and every AI endpoint returns
+    409); no key means no external calls, so this is the safe default.
+  - `Ai:Model` — optional, defaults to `claude-opus-5`.
+  - Per-workspace `workspaces.ai_enabled` (default true, `Phase7bAi` migration) is a
+    tenant kill switch **and** must be on for any AI call — both the deployment key
+    and the workspace toggle are required.
+  - **Data-egress note:** AI features send ticket subject/description, the public
+    thread, and (for drafts) published KB excerpts to Anthropic. **Private notes
+    (`is_internal`) and other workspaces' data are never sent** — enforced in
+    `AiService`. Nothing is auto-sent to customers; every output is agent-reviewed.
+    Confirm the tenant is comfortable with this before enabling AI in their workspace.
+  - Outbound HTTPS to `api.anthropic.com` must be allowed from the API host.
 - **Phase 7C (omnichannel):** _TBD — connector credentials (WhatsApp/Slack/Teams)._
