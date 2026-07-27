@@ -41,6 +41,8 @@ store. Empty strings in the committed `appsettings.json` are placeholders.
 |-----|---------|------------------|--------|
 | `ConnectionStrings:Trackly` | PostgreSQL connection string | per-env | secret |
 | `Security:MasterKey` | base64 **32-byte** AES-256-GCM key for secrets at rest | per-env, generate once, back up | secret |
+| `Ai:ApiKey` | Anthropic (Claude) API key for the AI copilot. Unset ⇒ AI features stay off everywhere | per-env (only if using AI) | secret |
+| `Ai:Model` | Claude model id for the copilot (defaults to `claude-opus-5`) | optional | no |
 | `App:FrontendBaseUrl` | Absolute base URL of the SPA; used to build links in **emails** (magic links, invites, guest tracking, notifications) and SSO redirects | per-env (e.g. `https://app.trackly.com`) | no |
 | `App:ApiBaseUrl` | Public base URL of the API; used to build the **OIDC/SAML redirect (callback) URI**. Falls back to the request scheme+host if unset — set it explicitly behind a proxy | per-env (e.g. `https://app.trackly.com`) | no |
 | `Storage:LocalPath` | Directory for uploaded attachments + logos | per-env (see §3) | no |

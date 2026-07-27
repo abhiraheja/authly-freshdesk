@@ -45,6 +45,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.ToTable("workspaces");
             e.HasIndex(w => w.Slug).IsUnique();
             e.Property(w => w.EmailLoginEnabled).HasDefaultValue(true);
+            e.Property(w => w.AiEnabled).HasDefaultValue(true);
         });
 
         modelBuilder.Entity<User>(e =>

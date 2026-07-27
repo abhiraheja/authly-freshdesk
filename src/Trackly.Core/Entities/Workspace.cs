@@ -6,6 +6,7 @@ public class Workspace
     public string Name { get; set; } = null!;
     public string Slug { get; set; } = null!;
     public bool EmailLoginEnabled { get; set; } = true;
+    public bool AiEnabled { get; set; } = true;   // per-workspace kill switch for the AI copilot
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 

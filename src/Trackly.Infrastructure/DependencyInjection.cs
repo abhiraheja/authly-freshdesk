@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
+using Trackly.Infrastructure.Ai;
 using Trackly.Infrastructure.Email;
 using Trackly.Infrastructure.Security;
 using Trackly.Infrastructure.Sso;
@@ -42,6 +43,7 @@ public static class DependencyInjection
         services.AddHttpClient("oidc");
         services.AddSingleton<IOidcClient, OidcClient>();
         services.AddSingleton<IDnsTxtLookup, DnsClientTxtLookup>();
+        services.AddScoped<IAiCopilot, AnthropicAiCopilot>();
 
         return services;
     }

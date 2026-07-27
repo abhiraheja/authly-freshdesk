@@ -8,6 +8,7 @@ import { VerifyPage } from './pages/VerifyPage'
 import { AgentWorkspacePage } from './pages/agent/AgentWorkspacePage'
 import { CannedResponsesPage } from './pages/agent/CannedResponsesPage'
 import { ProblemsPage } from './pages/agent/ProblemsPage'
+import { AiSettingsPage } from './pages/admin/AiSettingsPage'
 import { AnnouncementsPage } from './pages/admin/AnnouncementsPage'
 import { AutomationPage } from './pages/admin/AutomationPage'
 import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
@@ -62,6 +63,7 @@ function App() {
           <Route path="/admin/settings/branding" element={<BrandingSettingsPage />} />
           <Route path="/admin/settings/email" element={<EmailSettingsPage />} />
           <Route path="/admin/settings/sla" element={<SlaSettingsPage />} />
+          <Route path="/admin/settings/ai" element={<AiSettingsPage />} />
           <Route path="/admin/settings/sso" element={<SsoSettingsPage />} />
           <Route path="/admin/settings/domains" element={<DomainsPage />} />
           <Route path="/admin/widget" element={<WidgetPage />} />
