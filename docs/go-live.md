@@ -146,6 +146,9 @@ worker on all but one) if any workspace uses mailbox polling.
 - Secrets: `Security:MasterKey`, DB password, SMTP password → secret store only.
 - Confirm the dev master-key fallback is **not** in effect (set a real
   `Security:MasterKey`).
+- `POST /api/dev/seed` (demo-data seeder) is **Development-only** — it 404s when
+  `ASPNETCORE_ENVIRONMENT` isn't Development, so it can't run in prod. Nothing to
+  do beyond keeping the environment set correctly.
 
 ---
 
