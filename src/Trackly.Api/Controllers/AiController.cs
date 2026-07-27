@@ -29,6 +29,26 @@ public class AiController(AiService ai) : ControllerBase
     public Task<IActionResult> Summarize(Guid ticketId, CancellationToken ct)
         => RunAsync(ticketId, ct, (a, id, c) => ai.SummarizeAsync(a, id, c), r => new { summary = r });
 
+    [HttpPost("triage")]
+    public async Task<IActionResult> Triage(Guid ticketId, CancellationToken ct)
+    {
+        var actor = User.GetActor();
+        if (!await ai.IsAvailableAsync(actor.WorkspaceId, ct))
+            return Conflict(new { error = "AI copilot is not available for this workspace." });
+        var result = await ai.SuggestTriageAsync(actor, ticketId, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
+    [HttpPost("kb-draft")]
+    public async Task<IActionResult> KbDraft(Guid ticketId, CancellationToken ct)
+    {
+        var actor = User.GetActor();
+        if (!await ai.IsAvailableAsync(actor.WorkspaceId, ct))
+            return Conflict(new { error = "AI copilot is not available for this workspace." });
+        var result = await ai.DraftKbArticleAsync(actor, ticketId, ct);
+        return result is null ? NotFound() : Ok(result);
+    }
+
     private async Task<IActionResult> RunAsync(
         Guid ticketId,
         CancellationToken ct,

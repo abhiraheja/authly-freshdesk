@@ -1,6 +1,25 @@
-import { Autocomplete, Avatar, Box, Chip, IconButton, Link, MenuItem, Stack, TextField, Typography } from '@mui/material'
+import {
+  Alert,
+  Autocomplete,
+  Avatar,
+  Box,
+  Button,
+  Chip,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Link,
+  MenuItem,
+  Stack,
+  TextField,
+  Typography,
+} from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
+import { draftKbArticle, getAiAvailability, suggestTriage, type TriageSuggestion } from '../../api/ai'
+import { createKbArticle } from '../../api/kb'
 import { listTags } from '../../api/tags'
 import { listTeams } from '../../api/teams'
 import {
@@ -78,6 +97,38 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
     onSuccess: invalidate,
   })
 
+  // AI copilot (agent-reviewed suggestions; never auto-applied)
+  const aiQuery = useQuery({ queryKey: ['ai-available'], queryFn: getAiAvailability, staleTime: 60_000 })
+  const aiOn = aiQuery.data?.available === true
+  const [triage, setTriage] = useState<TriageSuggestion | null>(null)
+  const [kbDraft, setKbDraft] = useState<{ title: string; body: string } | null>(null)
+  const [aiError, setAiError] = useState<string | null>(null)
+
+  const suggest = useMutation({
+    mutationFn: () => suggestTriage(ticketId),
+    onSuccess: (s) => {
+      setTriage(s)
+      setAiError(null)
+    },
+    onError: (e: Error) => setAiError(e.message),
+  })
+  const draftKb = useMutation({
+    mutationFn: () => draftKbArticle(ticketId),
+    onSuccess: (d) => {
+      setKbDraft(d)
+      setAiError(null)
+    },
+    onError: (e: Error) => setAiError(e.message),
+  })
+  const createArticle = useMutation({
+    mutationFn: (d: { title: string; body: string }) => createKbArticle({ title: d.title, body: d.body, status: 'draft' }),
+    onSuccess: () => {
+      setKbDraft(null)
+      queryClient.invalidateQueries({ queryKey: ['kb'] })
+    },
+    onError: (e: Error) => setAiError(e.message),
+  })
+
   const ticket = ticketQuery.data
   if (!ticket) return <Box sx={{ bgcolor: 'background.paper', borderLeft: '1px solid', borderColor: 'divider' }} />
 
@@ -87,6 +138,18 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
   const watcherIds = new Set(ticket.watchers.map((w) => w.agent.id))
   const priorityChip = PRIORITY_CHIP[ticket.priority] ?? PRIORITY_CHIP.medium
   const requesterName = ticket.requester?.name ?? ticket.requester?.email ?? ticket.guestName ?? 'Guest'
+
+  const applyTriage = () => {
+    if (!triage) return
+    const body: UpdateTicketBody = { priority: triage.priority }
+    const cat = categories.find((c) => c.name === triage.category)
+    if (cat) body.categoryId = cat.id
+    update.mutate(body)
+    if (triage.tags.length) {
+      setTags.mutate(Array.from(new Set([...ticket.tags.map((t) => t.name), ...triage.tags])))
+    }
+    setTriage(null)
+  }
 
   return (
     <Box
@@ -99,6 +162,56 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
       }}
     >
       <Typography sx={{ fontSize: 14.5, fontWeight: 700, mb: 2 }}>Ticket details</Typography>
+
+      {/* AI copilot — suggestions only; the agent applies them */}
+      {aiOn && (
+        <Box sx={{ mb: 2.25, pb: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
+          <Label>AI copilot</Label>
+          <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 1 }}>
+            <Button size="small" variant="outlined" disabled={suggest.isPending} onClick={() => suggest.mutate()}>
+              {suggest.isPending ? 'Analyzing…' : '✨ Suggest triage'}
+            </Button>
+            <Button size="small" variant="outlined" disabled={draftKb.isPending} onClick={() => draftKb.mutate()}>
+              {draftKb.isPending ? 'Drafting…' : '✨ Draft KB article'}
+            </Button>
+          </Stack>
+          {aiError && (
+            <Alert severity="error" sx={{ mt: 1.25 }} onClose={() => setAiError(null)}>
+              {aiError}
+            </Alert>
+          )}
+          {triage && (
+            <Box
+              sx={{
+                mt: 1.5,
+                p: 1.5,
+                borderRadius: '10px',
+                border: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'action.hover',
+              }}
+            >
+              <Stack direction="row" sx={{ flexWrap: 'wrap', gap: 0.75, mb: 1 }}>
+                <Chip size="small" label={`priority: ${triage.priority}`} />
+                {triage.category && <Chip size="small" label={`category: ${triage.category}`} />}
+                <Chip size="small" label={`sentiment: ${triage.sentiment}`} />
+                {triage.tags.map((t) => (
+                  <Chip key={t} size="small" variant="outlined" label={t} />
+                ))}
+              </Stack>
+              <Typography sx={{ fontSize: 12.5, color: 'text.secondary', mb: 1.25 }}>{triage.rationale}</Typography>
+              <Stack direction="row" spacing={1}>
+                <Button size="small" variant="contained" onClick={applyTriage}>
+                  Apply
+                </Button>
+                <Button size="small" sx={{ color: 'text.secondary' }} onClick={() => setTriage(null)}>
+                  Dismiss
+                </Button>
+              </Stack>
+            </Box>
+          )}
+        </Box>
+      )}
 
       {/* Assignee */}
       <Box sx={{ mb: 2.25, pb: 2, borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -323,6 +436,41 @@ export function DetailsPane({ ticketId }: { ticketId: string }) {
           </Typography>
         </Row>
       </Box>
+
+      {/* AI-drafted KB article — reviewed and edited before it is saved as a draft */}
+      <Dialog open={!!kbDraft} onClose={() => setKbDraft(null)} fullWidth maxWidth="sm">
+        <DialogTitle>✨ Draft knowledge-base article</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ fontSize: 12.5, color: 'text.secondary', mb: 2 }}>
+            Generated from this ticket. Review and edit — it will be saved as a <b>draft</b>, not published.
+          </Typography>
+          <TextField
+            fullWidth
+            label="Title"
+            value={kbDraft?.title ?? ''}
+            onChange={(e) => setKbDraft((d) => (d ? { ...d, title: e.target.value } : d))}
+            sx={{ mb: 2 }}
+          />
+          <TextField
+            fullWidth
+            multiline
+            minRows={8}
+            label="Body (Markdown)"
+            value={kbDraft?.body ?? ''}
+            onChange={(e) => setKbDraft((d) => (d ? { ...d, body: e.target.value } : d))}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setKbDraft(null)}>Cancel</Button>
+          <Button
+            variant="contained"
+            disabled={createArticle.isPending || !kbDraft?.title.trim() || !kbDraft?.body.trim()}
+            onClick={() => kbDraft && createArticle.mutate(kbDraft)}
+          >
+            {createArticle.isPending ? 'Saving…' : 'Create draft article'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   )
 }

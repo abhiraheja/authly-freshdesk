@@ -27,3 +27,19 @@ export function draftReply(ticketId: string) {
 export function summarizeTicket(ticketId: string) {
   return api<{ summary: string }>(`/api/tickets/${ticketId}/ai/summary`, { method: 'POST' })
 }
+
+export interface TriageSuggestion {
+  priority: string
+  category: string | null
+  tags: string[]
+  sentiment: string
+  rationale: string
+}
+
+export function suggestTriage(ticketId: string) {
+  return api<TriageSuggestion>(`/api/tickets/${ticketId}/ai/triage`, { method: 'POST' })
+}
+
+export function draftKbArticle(ticketId: string) {
+  return api<{ title: string; body: string }>(`/api/tickets/${ticketId}/ai/kb-draft`, { method: 'POST' })
+}
