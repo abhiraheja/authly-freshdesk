@@ -44,6 +44,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const links = [
     { label: 'Dashboard', path: '/dashboard' },
     { label: 'Tickets', path: '/dashboard/tickets' },
+    { label: 'Chat', path: '/dashboard/chat' },
     { label: 'Problems', path: '/dashboard/problems' },
     { label: 'Knowledge', path: '/dashboard/kb' },
     { label: 'Canned', path: '/dashboard/canned' },

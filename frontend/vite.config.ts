@@ -7,6 +7,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': 'http://localhost:5210',
+      // SignalR live-chat hub (WebSocket upgrade must be proxied too).
+      '/hubs': { target: 'http://localhost:5210', ws: true },
     },
   },
 })

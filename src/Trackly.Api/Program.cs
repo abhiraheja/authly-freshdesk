@@ -9,8 +9,10 @@ using Trackly.Infrastructure;
 using Trackly.Infrastructure.Data;
 using Trackly.Modules.Ai;
 using Trackly.Modules.Announcements;
+using Trackly.Api.Chat;
 using Trackly.Modules.Auth;
 using Trackly.Modules.Channels;
+using Trackly.Modules.Chat;
 using Trackly.Modules.Csat;
 using Trackly.Modules.Dashboard;
 using Trackly.Modules.Email;
@@ -49,6 +51,8 @@ builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddScoped<AiService>();
 builder.Services.AddScoped<CsatService>();
 builder.Services.AddScoped<ChannelInboundService>();
+builder.Services.AddScoped<ChatService>();
+builder.Services.AddSignalR();
 builder.Services.AddHostedService<AnnouncementWorker>();
 builder.Services.AddHostedService<EmailPollingWorker>();
 
@@ -88,5 +92,6 @@ app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+app.MapHub<ChatHub>("/hubs/chat");
 
 app.Run();

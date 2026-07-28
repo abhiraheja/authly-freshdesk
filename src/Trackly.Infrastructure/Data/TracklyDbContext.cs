@@ -41,6 +41,8 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<ChannelConnector> ChannelConnectors => Set<ChannelConnector>();
     public DbSet<ChannelConversation> ChannelConversations => Set<ChannelConversation>();
     public DbSet<InboundChannelEvent> InboundChannelEvents => Set<InboundChannelEvent>();
+    public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
+    public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -343,6 +345,24 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
         {
             e.ToTable("inbound_channel_events");
             e.HasIndex(c => new { c.WorkspaceId, c.Provider, c.ExternalMessageId }).IsUnique(); // dedup
+        });
+
+        modelBuilder.Entity<ChatSession>(e =>
+        {
+            e.ToTable("chat_sessions");
+            e.HasIndex(c => new { c.WorkspaceId, c.Status });
+            e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(c => c.Agent).WithMany().HasForeignKey(c => c.AgentId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ChatMessage>(e =>
+        {
+            e.ToTable("chat_messages");
+            e.HasIndex(c => new { c.SessionId, c.CreatedAt });
+            e.HasOne(c => c.Session).WithMany(s => s.Messages).HasForeignKey(c => c.SessionId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<KbArticle>(e =>

@@ -7,6 +7,7 @@ import { OnboardingWorkspacePage } from './pages/OnboardingWorkspacePage'
 import { VerifyPage } from './pages/VerifyPage'
 import { AgentWorkspacePage } from './pages/agent/AgentWorkspacePage'
 import { CannedResponsesPage } from './pages/agent/CannedResponsesPage'
+import { ChatConsolePage } from './pages/agent/ChatConsolePage'
 import { ProblemsPage } from './pages/agent/ProblemsPage'
 import { AiSettingsPage } from './pages/admin/AiSettingsPage'
 import { AnalyticsPage } from './pages/admin/AnalyticsPage'
@@ -25,6 +26,7 @@ import { SsoCompletePage } from './pages/auth/SsoCompletePage'
 import { NewTicketPage } from './pages/portal/NewTicketPage'
 import { PortalTicketDetailPage } from './pages/portal/PortalTicketDetailPage'
 import { PortalTicketsPage } from './pages/portal/PortalTicketsPage'
+import { ChatPage } from './pages/public/ChatPage'
 import { CsatPage } from './pages/public/CsatPage'
 import { GuestTicketPage } from './pages/public/GuestTicketPage'
 import { InviteAcceptPage } from './pages/public/InviteAcceptPage'
@@ -43,6 +45,7 @@ function App() {
       {/* Public, workspace-branded surfaces */}
       <Route path="/submit" element={<SubmitPage />} />
       <Route path="/kb" element={<PublicKbPage />} />
+      <Route path="/chat" element={<ChatPage />} />
       <Route path="/csat/:ticketId" element={<CsatPage />} />
       <Route path="/tickets/:id" element={<GuestTicketPage />} />
       <Route path="/invite/:token" element={<InviteAcceptPage />} />
@@ -58,6 +61,7 @@ function App() {
           <Route path="/dashboard/problems" element={<ProblemsPage />} />
           <Route path="/dashboard/kb" element={<KbPage />} />
           <Route path="/dashboard/canned" element={<CannedResponsesPage />} />
+          <Route path="/dashboard/chat" element={<ChatConsolePage />} />
         </Route>
         <Route element={<RequireRole roles={['admin']} />}>
           <Route path="/admin/analytics" element={<AnalyticsPage />} />
