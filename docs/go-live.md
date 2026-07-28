@@ -164,7 +164,8 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] Shared SMTP relay configured + SPF/DKIM, or a conscious decision to rely only on per-workspace relays
 - [ ] SPA served same-origin with `/api/*` reverse-proxied over HTTPS
 - [ ] `AllowedHosts` restricted; forwarded headers configured behind the proxy
-- [ ] One API instance if any workspace uses IMAP polling (until leader election exists)
+- [ ] One API instance if any workspace uses IMAP polling **or live chat** (or add a SignalR backplane) — until leader election / a backplane exists
+- [ ] Proxy allows the WebSocket upgrade on `/hubs/*` (live chat)
 - [ ] Inbound webhook endpoint publicly reachable over HTTPS (if any tenant uses Option A)
 - [ ] Smoke test: sign in, create a ticket, agent reply → notification email sent, inbound reply → comment added
 
@@ -222,4 +223,24 @@ Append here as phases land, so nothing is missed later.
     `AiService`. Nothing is auto-sent to customers; every output is agent-reviewed.
     Confirm the tenant is comfortable with this before enabling AI in their workspace.
   - Outbound HTTPS to `api.anthropic.com` must be allowed from the API host.
-- **Phase 7C (omnichannel):** _TBD — connector credentials (WhatsApp/Slack/Teams)._
+- **Phase 7C (omnichannel & insight):** CSAT, analytics, messaging connectors,
+  live chat. No new server config **keys**, but real deployment concerns:
+  - **Public surfaces** (reachable over HTTPS, same origin as the SPA — §5): the
+    branded `/csat/:ticketId` and `/chat` pages, `POST /api/public/csat/*`,
+    `POST /api/public/chat/*`, and `POST /api/channels/inbound/{provider}/{slug}`.
+  - **Live chat needs WebSockets.** SignalR is mapped at `/hubs/chat`; the reverse
+    proxy must allow the WebSocket upgrade on `/hubs/*` (nginx: `Upgrade`/
+    `Connection` headers). The hub is **in-process**, so with more than one API
+    instance either add a **SignalR backplane** (Redis) or run a **single
+    instance** — the same single-instance guidance the IMAP/announcement workers
+    already impose (§4). Cookie auth flows over the same-origin WS handshake, so
+    keep the SPA and API same-origin (§5).
+  - **Connector signing secrets** are per-workspace, AES-256-GCM encrypted (data,
+    not env). Inbound uses `X-Trackly-Signature` (HMAC-SHA256 over the raw body);
+    a provider-native relay (Slack/WhatsApp/Teams) translates the provider payload
+    and re-signs. That relay + provider app credentials are configured per tenant,
+    outside Trackly.
+  - **CSAT** rides existing email config; no new keys. **Analytics** is DB-only.
+  - Data note: `Ticket.ResolvedAt` (analytics), `csat_surveys`, `channel_*`,
+    `inbound_channel_events`, and `chat_*` tables ship via the Phase 7C migrations
+    — apply them (§0.1).

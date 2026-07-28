@@ -1445,14 +1445,32 @@ is what makes it competitive; it splits into three independently shippable slice
   (`/api/tickets/{id}/ai/{draft-reply,summary,triage,kb-draft}`, `/api/ai/available`),
   `AiSettingsController` (`/api/admin/ai`). Config: `Ai:ApiKey` (secret), `Ai:Model`.
 
-*7C — Omnichannel & insight*
-- Live-chat upgrade of the Phase 6 widget (agent presence, typing, transcript
-  becomes a ticket)
-- Connectors: WhatsApp, Slack, Microsoft Teams — all feeding the shared inbound
-  pipeline built in Phase 4
-- CSAT survey on resolution, score stored per ticket and per agent
-- Analytics: volume, first-response and resolution times, SLA attainment,
-  deflection rate, agent leaderboards
+*7C — Omnichannel & insight* — **delivered** (deflection deferred)
+- ✅ CSAT survey on resolution — `csat_surveys`, single-use hashed token in the
+  resolution email, score stored per ticket and attributed per agent; branded
+  `/csat/:ticketId` page; agent sees the rating on the ticket. Toggle in email
+  settings. `CsatService` + public/agent controllers.
+- ✅ Analytics — `AnalyticsService` + `/api/dashboard/analytics` (Admin) and the
+  `/admin/analytics` page: volume, first-response/resolution times, first-response
+  & resolution SLA attainment, CSAT, per-agent leaderboard. Needed `Ticket
+  .ResolvedAt`. _Deflection rate deferred — it needs KB self-service-session
+  instrumentation Trackly doesn't yet capture; recording it truthfully is its own
+  slice._
+- ✅ Connectors (Slack / WhatsApp / Teams) — `ChannelConnector` (encrypted signing
+  secret), `ChannelConversation` (threading), `InboundChannelEvent` (idempotency).
+  `ChannelInboundService` mirrors the Phase 4 pipeline on a connector identity
+  model: HMAC-verified `POST /api/channels/inbound/{provider}/{slug}` (X-Trackly-
+  Signature over the raw body), new conversation → guest ticket, follow-up →
+  threaded comment, retry → dedup. Admin `/admin/channels`. _Provider-native
+  envelopes (Slack Events API, WhatsApp Cloud API, Bot Framework) are normalized +
+  re-signed by a thin relay — the same model the email parse webhook already uses;
+  native signature adapters are a deployment concern._
+- ✅ Live chat — `chat_sessions`/`chat_messages`; `ChatService` (REST source of
+  truth) + `ChatHub` (SignalR `/hubs/chat`) for presence/typing/live delivery;
+  branded visitor `/chat?workspace=slug` and agent `/dashboard/chat` console;
+  **ending a chat turns the transcript into a ticket** (channel=chat, each message
+  a comment). _Real-time needs WebSockets + a single API instance (or a SignalR
+  backplane) — see go-live._
 
 ---
 
@@ -1487,4 +1505,5 @@ is what makes it competitive; it splits into three independently shippable slice
 - [x] Phase 7A: a ticket routed to a team is round-robin assigned among that team's members only
 - [x] Phase 7B: AI copilot prompt contains no private notes and no other workspace's data (filtered + workspace-scoped in `AiService`)
 - [x] Phase 7B: AI never sends a reply without an explicit agent action; workspace AI toggle off (or no `Ai:ApiKey`) disables all calls (409)
-- [ ] Phase 7C: chat transcript becomes a ticket in the right workspace; CSAT score cannot be submitted twice
+- [x] Phase 7C: chat transcript becomes a ticket in the right workspace; CSAT score cannot be submitted twice (single-use token + submitted_at guard)
+- [x] Phase 7C: connector inbound is HMAC-verified, idempotent, and threads a conversation into one ticket; a bad signature is rejected

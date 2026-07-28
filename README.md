@@ -83,7 +83,7 @@ dotnet ef database update --project src/Trackly.Infrastructure --startup-project
 
 ## Status
 
-Phases 1–6, 7A and 7B complete (see `docs/trackly-plan.md` → Implementation Phases):
+Phases 1–6, 7A, 7B and 7C complete (see `docs/trackly-plan.md` → Implementation Phases):
 
 - **1 — Foundation:** scaffold, magic-link + 6-digit auth, workspace signup, session cookies.
 - **2 — Ticketing:** tickets/comments/categories/attachments, private notes, round-robin, watchers, customer portal + three-pane agent workspace.
@@ -93,5 +93,6 @@ Phases 1–6, 7A and 7B complete (see `docs/trackly-plan.md` → Implementation 
 - **6 — Problems, announcements, embeddable widget, dashboard stats.**
 - **7A — Service desk fundamentals:** tags, teams (team round-robin), SLA policies with live countdown, knowledge base + submit-form deflection, canned responses, automation rules.
 - **7B — AI copilot (Claude API):** agent-reviewed reply drafting, thread summarization, triage suggestions (priority/category/tags/sentiment), and KB-article drafting from resolved tickets. Per-workspace toggle + deployment key both required; private notes and other workspaces' data are never sent to the model.
+- **7C — Omnichannel & insight:** CSAT surveys (single-use rating link → per-agent scores), analytics (volume, response/resolution times, SLA attainment, agent leaderboard), messaging connectors (Slack/WhatsApp/Teams inbound → shared pipeline, HMAC-verified), and live chat (SignalR real-time; ending a chat files the transcript as a ticket). Deflection-rate reporting is deferred (needs self-service instrumentation).
 
-Next: **Phase 7C** — omnichannel & analytics (live chat, WhatsApp/Slack/Teams, CSAT, reporting). `docs/go-live.md` is the living deployment checklist; set `Ai:ApiKey` to enable the copilot.
+The core plan (Phases 1–7) is complete. `docs/go-live.md` is the living deployment checklist; set `Ai:ApiKey` to enable the copilot, and allow the WebSocket upgrade on `/hubs/*` for live chat.
