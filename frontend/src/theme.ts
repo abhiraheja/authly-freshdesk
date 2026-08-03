@@ -19,9 +19,10 @@ export const shadows = {
 } as const
 
 // Frosted app bar / rail. Pass the current mode's value via sx.
+// Dark uses a neutral zinc tint (not slate) so the chrome doesn't read as blue.
 export const glass = {
   light: { backdropFilter: 'blur(16px) saturate(160%)', backgroundColor: 'rgba(255,255,255,.72)' },
-  dark: { backdropFilter: 'blur(16px) saturate(160%)', backgroundColor: 'rgba(15,23,42,.62)' },
+  dark: { backdropFilter: 'blur(16px) saturate(160%)', backgroundColor: 'rgba(24,24,27,.66)' },
 } as const
 
 export const theme = createTheme({
@@ -43,17 +44,19 @@ export const theme = createTheme({
       },
     },
     dark: {
+      // Neutral zinc surfaces (no blue undertone). The indigo accent is kept as
+      // the brand colour; only the greys changed from slate → zinc.
       palette: {
-        primary: { main: '#818CF8', dark: brand.primary },
-        secondary: { main: '#A78BFA' },
+        primary: { main: '#A5B4FC', dark: brand.primary },
+        secondary: { main: '#C4B5FD' },
         success: { main: '#34D399' },
         warning: { main: '#FBBF24' },
         error: { main: '#F87171' },
-        info: { main: '#60A5FA' },
-        background: { default: '#0F172A', paper: '#1E293B' },
-        text: { primary: '#F1F5F9', secondary: '#94A3B8' },
-        divider: 'rgba(255,255,255,0.10)',
-        surfaceMuted: 'rgba(255,255,255,0.05)',
+        info: { main: '#818CF8' },
+        background: { default: '#101013', paper: '#1B1B1F' },
+        text: { primary: '#F4F4F5', secondary: '#A1A1AA' },
+        divider: 'rgba(255,255,255,0.09)',
+        surfaceMuted: 'rgba(255,255,255,0.045)',
       },
     },
   },

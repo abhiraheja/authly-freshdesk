@@ -1,6 +1,19 @@
-import { AppBar, Avatar, Box, Button, Stack, Toolbar, Typography, useColorScheme } from '@mui/material'
+import {
+  AppBar,
+  Avatar,
+  Box,
+  Button,
+  Divider,
+  ListSubheader,
+  Menu,
+  MenuItem,
+  Stack,
+  Toolbar,
+  Typography,
+  useColorScheme,
+} from '@mui/material'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { logout } from '../api/auth'
 import { getPublicBranding } from '../api/guest'
@@ -41,27 +54,66 @@ export function AppShell({ children }: { children: ReactNode }) {
     },
   })
 
-  const links = [
+  const [adminAnchor, setAdminAnchor] = useState<null | HTMLElement>(null)
+
+  // Primary agent workspace links stay inline; the many admin surfaces live in a
+  // single grouped "Admin" dropdown so the bar can't overflow as features grow.
+  const primaryLinks = [
     { label: 'Dashboard', path: '/dashboard' },
     { label: 'Tickets', path: '/dashboard/tickets' },
     { label: 'Chat', path: '/dashboard/chat' },
     { label: 'Problems', path: '/dashboard/problems' },
     { label: 'Knowledge', path: '/dashboard/kb' },
     { label: 'Canned', path: '/dashboard/canned' },
-    { label: 'Analytics', path: '/admin/analytics', adminOnly: true },
-    { label: 'Announcements', path: '/admin/announcements', adminOnly: true },
-    { label: 'Members', path: '/admin/users', adminOnly: true },
-    { label: 'Teams', path: '/admin/teams', adminOnly: true },
-    { label: 'SLA', path: '/admin/settings/sla', adminOnly: true },
-    { label: 'Automation', path: '/admin/automation', adminOnly: true },
-    { label: 'AI', path: '/admin/settings/ai', adminOnly: true },
-    { label: 'Branding', path: '/admin/settings/branding', adminOnly: true },
-    { label: 'Email', path: '/admin/settings/email', adminOnly: true },
-    { label: 'SSO', path: '/admin/settings/sso', adminOnly: true },
-    { label: 'Domains', path: '/admin/settings/domains', adminOnly: true },
-    { label: 'Channels', path: '/admin/channels', adminOnly: true },
-    { label: 'Widget', path: '/admin/widget', adminOnly: true },
-  ].filter((l) => !l.adminOnly || user?.role === 'admin')
+  ]
+
+  const adminGroups: { heading: string; items: { label: string; path: string }[] }[] = [
+    {
+      heading: 'Insights',
+      items: [
+        { label: 'Analytics', path: '/admin/analytics' },
+        { label: 'Announcements', path: '/admin/announcements' },
+      ],
+    },
+    {
+      heading: 'People',
+      items: [
+        { label: 'Members', path: '/admin/users' },
+        { label: 'Teams', path: '/admin/teams' },
+      ],
+    },
+    {
+      heading: 'Workflow',
+      items: [
+        { label: 'SLA policies', path: '/admin/settings/sla' },
+        { label: 'Automation', path: '/admin/automation' },
+        { label: 'AI copilot', path: '/admin/settings/ai' },
+      ],
+    },
+    {
+      heading: 'Channels',
+      items: [
+        { label: 'Messaging', path: '/admin/channels' },
+        { label: 'Widget', path: '/admin/widget' },
+        { label: 'Email', path: '/admin/settings/email' },
+      ],
+    },
+    {
+      heading: 'Workspace',
+      items: [
+        { label: 'Branding', path: '/admin/settings/branding' },
+        { label: 'SSO', path: '/admin/settings/sso' },
+        { label: 'Domains', path: '/admin/settings/domains' },
+      ],
+    },
+  ]
+
+  const isAdmin = user?.role === 'admin'
+  const adminActive = location.pathname.startsWith('/admin')
+  const goto = (path: string) => {
+    setAdminAnchor(null)
+    navigate(path)
+  }
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: isCustomer ? '#F6F4FA' : 'background.default' }}>
@@ -123,8 +175,12 @@ export function AppShell({ children }: { children: ReactNode }) {
               </>
             )}
             {user && isAgent && (
-              <Stack direction="row" spacing={0.5} sx={{ pl: 2 }}>
-                {links.map((link) => {
+              <Stack
+                direction="row"
+                spacing={0.5}
+                sx={{ pl: 2, alignItems: 'center', overflow: 'hidden', flexShrink: 1, minWidth: 0 }}
+              >
+                {primaryLinks.map((link) => {
                   const active = location.pathname === link.path
                   return (
                     <Button
@@ -133,6 +189,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                       onClick={() => navigate(link.path)}
                       sx={{
                         fontSize: 13.5,
+                        flexShrink: 0,
                         color: active ? 'primary.main' : 'text.secondary',
                         bgcolor: active ? 'action.selected' : 'transparent',
                       }}
@@ -141,6 +198,53 @@ export function AppShell({ children }: { children: ReactNode }) {
                     </Button>
                   )
                 })}
+
+                {isAdmin && (
+                  <>
+                    <Button
+                      size="small"
+                      onClick={(e) => setAdminAnchor(e.currentTarget)}
+                      sx={{
+                        fontSize: 13.5,
+                        flexShrink: 0,
+                        color: adminActive ? 'primary.main' : 'text.secondary',
+                        bgcolor: adminActive || adminAnchor ? 'action.selected' : 'transparent',
+                      }}
+                    >
+                      Admin
+                      <Box component="span" sx={{ fontSize: 10, ml: 0.5, opacity: 0.8 }}>▾</Box>
+                    </Button>
+                    <Menu
+                      anchorEl={adminAnchor}
+                      open={!!adminAnchor}
+                      onClose={() => setAdminAnchor(null)}
+                      anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+                      transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                      slotProps={{ paper: { sx: { minWidth: 210, mt: 0.5 } } }}
+                    >
+                      {adminGroups.flatMap((group, gi) => [
+                        gi > 0 ? <Divider key={`d-${group.heading}`} sx={{ my: 0.5 }} /> : null,
+                        <ListSubheader
+                          key={`h-${group.heading}`}
+                          disableSticky
+                          sx={{ fontSize: 11, fontWeight: 700, letterSpacing: '.6px', textTransform: 'uppercase', lineHeight: 2.2, bgcolor: 'transparent' }}
+                        >
+                          {group.heading}
+                        </ListSubheader>,
+                        ...group.items.map((item) => (
+                          <MenuItem
+                            key={item.path}
+                            selected={location.pathname === item.path}
+                            onClick={() => goto(item.path)}
+                            sx={{ fontSize: 13.5, py: 0.75 }}
+                          >
+                            {item.label}
+                          </MenuItem>
+                        )),
+                      ])}
+                    </Menu>
+                  </>
+                )}
               </Stack>
             )}
           </Stack>

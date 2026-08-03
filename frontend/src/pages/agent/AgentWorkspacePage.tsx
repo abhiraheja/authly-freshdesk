@@ -69,7 +69,7 @@ export function AgentWorkspacePage() {
       {/* Icon rail — always dark, it is chrome rather than content */}
       <Box
         sx={{
-          bgcolor: '#0F172A',
+          bgcolor: '#18181B',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'center',
