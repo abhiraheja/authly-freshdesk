@@ -91,6 +91,29 @@ npm run dev
 Open **http://localhost:5173**. Vite proxies `/api` **and** `/hubs` (the SignalR
 live-chat WebSocket) to the API at `:5210`, so the browser sees one origin.
 
+### Run both together in VS Code (one F5)
+
+The repo already ships VS Code configs, so you don't have to create anything:
+
+- **`.vscode/launch.json`** — an `API (Trackly.Api)` config (coreclr, on `:5210`), a
+  `Frontend (Vite)` config, and a **compound** `Full stack (API + Frontend)` that
+  starts both with `stopAll` (stopping tears both down).
+- **`.vscode/tasks.json`** — `postgres: up` (`docker compose up -d`), `build: api`
+  (depends on `postgres: up`, so the DB comes up first), and `frontend: dev`.
+
+**To use it:** open the **Run and Debug** panel (Ctrl+Shift+D), pick
+**“Full stack (API + Frontend)”** from the dropdown, and press **F5**. That brings
+up Postgres, builds and debugs the API on `:5210`, and runs the SPA on `:5173`.
+Breakpoints work in both C# and the SPA's TypeScript.
+
+Requires the **C#** (or C# Dev Kit) extension for the .NET debugger; the JavaScript
+debugger is built in. Run `npm install` in `frontend/` once before the first launch.
+
+> If you customise these, they’re just JSON under `.vscode/` — edit the config
+> names/ports there. The `API (Trackly.Api)` config sets
+> `ASPNETCORE_URLS=http://localhost:5210` so it matches the Vite proxy in
+> `frontend/vite.config.ts`.
+
 ---
 
 ## 5. First login + create a workspace
