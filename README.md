@@ -5,10 +5,14 @@ A standalone, multi-tenant ticket management SaaS — submit, track, and resolve
 ## Key capabilities
 
 - **Multi-IdP authentication** — each workspace connects its own identity provider (Okta, Google Workspace, Microsoft Entra ID, Authly, custom SAML/OIDC) or uses passwordless email magic links. No passwords stored, ever.
-- **Ticketing** — round-robin assignment, watchers, private internal notes, problem grouping, categories, priorities.
-- **Email** — outbound notifications plus two-way email threading via either an inbound parse webhook (MX record) or polling an existing support mailbox (IMAP / Microsoft Graph / Gmail API).
-- **Customer surfaces in *your* brand** — branded submit form, customer portal, embeddable widget, and guest submissions verified by one-time codes with magic-link tracking.
-- **Workspace admin** — SSO wizard with group→role mapping, domain verification, branding editor, user/role management, outage announcements.
+- **Ticketing** — statuses/priorities/categories, round-robin assignment, teams, watchers, private internal notes, tags, attachments, and problem grouping.
+- **Service desk** — SLA policies with a live countdown, automation rules, a public knowledge base (with submit-form deflection), and canned responses.
+- **Omnichannel** — email (below), an embeddable widget, real-time **live chat** (transcript becomes a ticket), and inbound **Slack / WhatsApp / Teams** connectors feeding one shared pipeline.
+- **AI copilot (Claude)** — agent-reviewed reply drafting, thread summarization, triage suggestions, and KB drafting. Opt-in per workspace; private notes and other workspaces' data are never sent to the model.
+- **Insight** — CSAT surveys on resolution (per-agent scores) and an analytics dashboard (volume, response/resolution times, SLA attainment, leaderboard).
+- **Email** — outbound notifications plus two-way threading via either an inbound parse webhook (MX record) or polling a support mailbox over **IMAP** (`ms_graph` / `gmail_api` are reserved transports, not yet implemented).
+- **Customer surfaces in *your* brand** — branded submit form, customer portal, KB, widget, live chat, CSAT, and guest submissions verified by one-time codes with magic-link tracking.
+- **Workspace admin** — SSO with group→role mapping, domain verification, branding editor, member/role management, messaging connectors, and outage announcements.
 
 ## Repository layout
 
@@ -16,19 +20,26 @@ A standalone, multi-tenant ticket management SaaS — submit, track, and resolve
 |------|----------|
 | `CLAUDE.md` | Working agreement + invariants for AI-assisted development |
 | `docs/trackly-plan.md` | Complete design document (architecture, schema, API, phases) |
+| `docs/dev-setup.md` | **Developer setup** — run locally, dev workflow, troubleshooting |
+| `docs/admin-guide.md` | **Admin handbook** — every feature with setup + usage |
+| `docs/go-live.md` | Living deployment checklist (config, secrets, infra) |
 | `docs/mockups/` | Approved HTML design mockups — open `index.html` in a browser |
 | `src/Trackly.Core` | Entities, interfaces, enums |
-| `src/Trackly.Modules` | Business logic — auth, tickets, guest flow, email, SSO, problems, KB, SLA, automation |
-| `src/Trackly.Infrastructure` | EF Core DbContext + migrations, email (SMTP/IMAP), storage, crypto, OIDC/DNS |
-| `src/Trackly.Api` | Controllers, session auth scheme, background workers, middleware |
+| `src/Trackly.Modules` | Business logic — auth, tickets, guest flow, email, SSO, problems, KB, SLA, automation, AI, channels (connectors), chat, CSAT, analytics |
+| `src/Trackly.Infrastructure` | EF Core DbContext + migrations, email (SMTP/IMAP), storage, crypto, OIDC/DNS, Anthropic AI client |
+| `src/Trackly.Api` | Controllers, session auth scheme, SignalR chat hub, background workers, middleware |
 | `frontend/` | React 18 + TypeScript + Vite SPA (Material UI, TanStack Query, Zustand) |
 | `scripts/` | Per-phase PowerShell verification suites + demo-data seeder |
 
 ## Tech stack
 
-ASP.NET Core (.NET 10) · EF Core · PostgreSQL · React 18 + TypeScript + Vite · Material UI · MailKit
+ASP.NET Core (.NET 10) · EF Core · PostgreSQL · SignalR (live chat) · React 18 + TypeScript + Vite · Material UI · MailKit · Anthropic SDK (AI copilot)
 
 ## Running locally
+
+> New to the project? **[`docs/dev-setup.md`](docs/dev-setup.md)** is the full
+> first-time setup walkthrough (prerequisites → config → run → first login → dev
+> workflow → troubleshooting). The quick version follows.
 
 Prerequisites: .NET 10 SDK, Node 20+, Docker Desktop.
 
@@ -72,7 +83,7 @@ It's one-time (refuses if the workspace already has tickets) and the endpoint (`
 
 ### Verification scripts
 
-Each phase has a PowerShell suite in `scripts/` that drives the running API and asserts behaviour (`verify-phase4.ps1` … `verify-phase7a.ps1`). Run one against a live API, e.g. `powershell -File .\scripts\verify-phase7a.ps1 -AdminEmail <email>`. SSO/SAML need a real IdP and aren't fully automatable.
+Each phase has a PowerShell suite in `scripts/` that drives the running API and asserts behaviour (`verify-phase4.ps1` … `verify-phase7b.ps1`, plus `verify-phase7c-{csat,analytics,channels,chat}.ps1`). Run one against a live API, e.g. `powershell -File .\scripts\verify-phase7c-chat.ps1 -AdminEmail <email>`. SSO/SAML need a real IdP, and live-chat real-time (SignalR) needs a browser — those aren't fully automatable.
 
 EF migrations:
 

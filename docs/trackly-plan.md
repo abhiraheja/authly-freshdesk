@@ -550,6 +550,10 @@ Infrastructure needed: **one MX record + one webhook endpoint**. No mail daemon,
 
 #### Option B — Mailbox Polling (IMAP / Microsoft Graph / Gmail API)
 
+> **Status:** only **IMAP** is implemented today (`ImapMailboxReader`). Microsoft
+> Graph and Gmail API are the designed OAuth-mailbox transports but are not yet
+> built — `ms_graph` / `gmail_api` exist as reserved enum values only.
+
 The enterprise already has `support@acme.com` in Microsoft 365 or Google Workspace and wants to keep using it. Trackly connects to that mailbox and polls for new messages on an interval (default 60s):
 
 ```
@@ -1012,16 +1016,41 @@ be paired with `borderColor: 'divider'` or it falls back to `currentColor`.
 ```
 src/
   Trackly.Core/           # Entities, interfaces, enums
-  Trackly.Modules/        # Tickets, Comments, Auth, Users, Notifications, Announcements
-  Trackly.Infrastructure/ # EF Core, OIDC/SAML handlers, email adapters, session store
-  Trackly.Api/            # Controllers, middleware, session auth
+  Trackly.Modules/        # Business logic: auth, tickets, guest, email, sso, problems,
+                          #   announcements, kb, sla, automation, ai, channels, chat, csat, dashboard
+  Trackly.Infrastructure/ # EF Core, OIDC/SAML handlers, email adapters, storage, crypto, Anthropic client
+  Trackly.Api/            # Controllers, SignalR chat hub, background workers, middleware, session auth
 ```
 
-**Email components (in Trackly.Infrastructure):**
-- `IInboundEmailPipeline` — the shared resolve-ticket → resolve-sender → strip-quotes → insert-comment pipeline; both connectors feed it
-- `InboundWebhookController` — `POST /api/email/inbound` for Option A (HMAC-verified)
-- `EmailPollingWorker` — ASP.NET Core `BackgroundService` for Option B; iterates workspaces with `inbound_connector = 'mailbox_poll'`, polls each mailbox (IMAP via **MailKit**, or Microsoft Graph / Gmail API), marks messages processed
-- `IOutboundEmailSender` — SMTP relay (MailKit) or Graph/Gmail sendMail depending on config
+**Email components (as built):**
+- `InboundEmailService` (Trackly.Modules.Email) — the shared resolve-ticket →
+  resolve-sender → strip-quotes → insert-comment pipeline; both connectors feed it.
+- `EmailInboundController` — `POST /api/email/inbound/{slug}` for Option A
+  (HMAC-verified against the workspace's stored webhook secret).
+- `EmailPollingWorker` (Trackly.Api.Workers) — `BackgroundService` for Option B;
+  iterates workspaces with `inbound_connector = 'mailbox_poll'` and polls each
+  mailbox via `ImapMailboxReader` (**IMAP over MailKit**).
+- `SmtpEmailSender` / `WorkspaceEmailSender` — SMTP send via MailKit (shared relay
+  or the workspace's own); `LoggingEmailSender` writes mail to the log when no
+  relay is configured (dev).
+
+> **Not implemented:** `ms_graph` and `gmail_api` exist only as reserved
+> `mailbox_protocol` enum values (`EmailConfig`); the sole inbound transport today
+> is IMAP. Treat any earlier "Graph / Gmail API" wording as forward-looking.
+
+**API surface added after the original design (Phase 6–7C).** Controllers are the
+source of truth; the admin-facing behaviour is documented in `docs/admin-guide.md`:
+- **Phase 6:** problems, announcements, `GET /widget.js` + public widget config,
+  `GET /api/dashboard/stats`.
+- **Phase 7A:** `/api/tags`, `/api/teams`, `/api/admin/sla`, `/api/kb/*` (+ public
+  `/api/public/workspaces/{slug}/kb`), `/api/canned-responses`,
+  `/api/automation-rules`.
+- **Phase 7B (AI):** `/api/admin/ai`, `/api/ai/available`,
+  `/api/tickets/{id}/ai/{draft-reply,summary,triage,kb-draft}`.
+- **Phase 7C:** `/api/public/csat/{ticketId}` + `/api/tickets/{id}/csat`;
+  `/api/dashboard/analytics`; `/api/admin/channels` + public
+  `/api/channels/inbound/{provider}/{slug}`; live chat `/api/chat/*`,
+  `/api/public/chat/*`, and the SignalR hub at `/hubs/chat`.
 
 **Authentication middleware:**
 ```csharp
@@ -1107,6 +1136,22 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 ---
 
 ### 3. Database Schema (PostgreSQL — `trackly` database)
+
+> **Source-of-truth note (kept current).** The SQL below captures the **Phase 1–5
+> core**. From Phase 6 on, tables are defined by the **EF Core entities in
+> `src/Trackly.Core/Entities` + the migrations in
+> `src/Trackly.Infrastructure/Data/Migrations`** — those are authoritative for
+> columns, types, and indexes. The DDL here is illustrative and is **not**
+> regenerated per migration. Tables added after this block (apply migrations to
+> get them all — see go-live.md §0.1):
+>
+> | Phase | Tables / columns added |
+> |------|------------------------|
+> | 5 | `sso_login_states` (OIDC/SAML in-flight state) |
+> | 6 | `problems`, `announcements`, `announcement_deliveries`, `widget_configs` (some shown inline in feature sections above) |
+> | 7A | `tags`, `ticket_tags`, `teams`, `team_members`, `sla_policies`, `kb_articles`, `canned_responses`, `automation_rules`; `tickets` gains `first_response_due_at`, `resolve_due_at`, `first_response_at`, `sla_paused_at` |
+> | 7B | `workspaces.ai_enabled` |
+> | 7C | `csat_surveys`; `channel_connectors`, `channel_conversations`, `inbound_channel_events`; `chat_sessions`, `chat_messages`; `tickets.resolved_at`; `notification_settings.csat_enabled` |
 
 ```sql
 -- Workspaces (Trackly's own multi-tenancy — no dependency on external IdP)
@@ -1343,14 +1388,16 @@ Authly is treated exactly the same as any other OIDC provider. No special code p
 |-------|--------|--------|
 | Frontend | React 18 + Vite + MUI + TanStack Query + Zustand + RHF + Zod | Type-safe, fast SPA |
 | State | Zustand | Auth state is minimal |
-| Backend | ASP.NET Core Web API (.NET 9+) | Strong auth middleware ecosystem |
+| Backend | ASP.NET Core Web API (.NET 10) | Strong auth middleware ecosystem |
 | OIDC | Built-in `Microsoft.AspNetCore.Authentication.OpenIdConnect` | Generic OIDC support |
 | SAML | `ITfoxtec.Identity.Saml2` NuGet | SAML 2.0 for enterprise providers |
-| Email | `MailKit` NuGet (SMTP + IMAP) · Graph/Gmail SDKs for OAuth mailboxes | Outbound relay + Option B polling |
+| Email | `MailKit` NuGet (SMTP out, IMAP in) | Outbound relay + Option B polling. (`ms_graph`/`gmail_api` reserved, not yet built) |
+| Real-time | ASP.NET Core **SignalR** (`/hubs/chat`) | Live-chat presence/typing/message push |
+| AI copilot | **Anthropic SDK** (Claude), default `claude-opus-5` | Reply drafting, summarization, triage, KB drafting (opt-in) |
 | ORM | Entity Framework Core | Consistent, well-supported |
 | Database | PostgreSQL (`trackly` DB) | No external infra dependency |
 | Session | HttpOnly cookie → Trackly `sessions` table | Provider-agnostic, fully controlled |
-| Secrets encryption | AES-256-GCM | For client secrets and SMTP passwords at rest |
+| Secrets encryption | AES-256-GCM | Client/SMTP/IMAP + connector signing secrets at rest |
 
 ---
 

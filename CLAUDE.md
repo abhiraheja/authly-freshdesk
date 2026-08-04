@@ -7,10 +7,12 @@ Trackly is a standalone, multi-tenant ticket management SaaS (FreshDesk/Zendesk-
 - **`docs/trackly-plan.md`** — the complete, reviewed design document: architecture, auth flows, full PostgreSQL schema, API endpoint list, email architecture (two inbound connector options), wireframes, implementation phases, and verification checklist. **Read it before designing or building anything.** If implementation needs to deviate from the plan, update the plan in the same change.
 - **`docs/mockups/`** — 9 self-contained HTML mockups (open in a browser). These are the approved visual design. `index.html` is the gallery. Match their layout; styling is Material UI with the design tokens they demonstrate.
 - **`docs/go-live.md`** — living deployment checklist. Whenever a change adds a config key, secret, external dependency, or a prod-only concern, record it there in the same change so nothing is missed when deploying to a new environment.
+- **`docs/admin-guide.md`** — admin-facing handbook: every feature with what-it-is / setup / usage. When you add or change a user-visible feature or admin setting, update this in the same change so admins have an accurate reference.
+- **`docs/dev-setup.md`** — first-time developer setup + everyday dev workflow + troubleshooting. Update it when the local-run steps, prerequisites, or common pitfalls change.
 
 ## Tech stack (decided — do not re-litigate)
 
-- **Backend:** ASP.NET Core Web API (.NET 9+), EF Core, PostgreSQL (`trackly` DB)
+- **Backend:** ASP.NET Core Web API (.NET 10), EF Core, PostgreSQL (`trackly` DB), SignalR (live-chat hub), Anthropic SDK (AI copilot)
 - **Frontend:** React 18 + TypeScript + Vite, Material UI, TanStack Query, React Router v6, React Hook Form + Zod, Zustand
 - **Auth:** Trackly's own HttpOnly session cookie (hash stored in `sessions` table). SSO via one generic OIDC scheme (per-workspace config resolved at request time — see plan caveat) + `ITfoxtec.Identity.Saml2` for SAML. Passwordless magic link + 6-digit code as native fallback. **No passwords, ever.**
 - **Email:** MailKit (SMTP out, IMAP polling in) + inbound parse webhooks; both connectors feed one shared pipeline
@@ -20,10 +22,10 @@ Trackly is a standalone, multi-tenant ticket management SaaS (FreshDesk/Zendesk-
 
 1. **Workspace isolation:** every query filters by `workspace_id`. No cross-workspace data access, ever.
 2. **Roles live in Trackly's DB** (`users.role`), never derived from IdP tokens at request time. Group→role mapping is applied at login only.
-3. **Secrets at rest** (SSO client secrets, SMTP/IMAP credentials, OAuth tokens) are AES-256-GCM encrypted.
-4. **Tokens are stored hashed** (sessions, magic links, OTPs, invite tokens, guest magic links) — SHA-256, single-use where applicable.
-5. **Private notes (`is_internal`)** must never reach customers or guest magic-link views — enforce in the API, not the UI.
-6. **Customer-facing surfaces** (submit form, portal, widget, notification emails) render the **workspace's branding**, not Trackly's.
+3. **Secrets at rest** (SSO client secrets, SMTP/IMAP credentials, OAuth tokens, messaging-connector signing secrets) are AES-256-GCM encrypted.
+4. **Tokens are stored hashed** (sessions, magic links, OTPs, invite tokens, guest magic links, CSAT rating tokens, chat visitor tokens) — SHA-256, single-use where applicable.
+5. **Private notes (`is_internal`)** must never reach customers, guest views, messaging connectors, or the AI model — enforce in the API, not the UI.
+6. **Customer-facing surfaces** (submit form, portal, guest view, knowledge base, widget, live chat, CSAT survey, notification emails) render the **workspace's branding**, not Trackly's, and are always light.
 7. **Magic-link verify pages never consume the token on GET** — only the confirm POST does (email scanners prefetch GETs).
 
 ## Build order
