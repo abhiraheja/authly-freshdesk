@@ -1,0 +1,242 @@
+{
+  "common": {
+    "appName": "Trackly",
+    "none": "—",
+    "close": "Close",
+    "closeMenu": "Close menu",
+    "cancel": "Cancel",
+    "dismiss": "Dismiss",
+    "loading": "Loading…",
+    "retry": "Try again",
+    "search": "Search",
+    "signOut": "Sign out",
+    "lightMode": "Light mode",
+    "darkMode": "Dark mode",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode",
+    "poweredBy": "Powered by Trackly"
+  },
+
+  "nav": {
+    "main": "Main",
+    "open": "Open navigation",
+    "close": "Close navigation",
+    "newTicket": "New ticket",
+    "notifications": "Notifications",
+    "allCaughtUp": "You're all caught up.",
+    "searchPlaceholder": "Search tickets, people, articles…",
+    "groups": {
+      "overview": "Overview",
+      "tickets": "Tickets",
+      "workspace": "Workspace",
+      "admin": "Admin",
+      "support": "Support"
+    },
+    "items": {
+      "dashboard": "Dashboard",
+      "allTickets": "All tickets",
+      "assignedToMe": "Assigned to me",
+      "open": "Open",
+      "pending": "Pending",
+      "resolved": "Resolved",
+      "closed": "Closed",
+      "liveChat": "Live chat",
+      "problems": "Problems",
+      "knowledgeBase": "Knowledge base",
+      "cannedResponses": "Canned responses",
+      "analytics": "Analytics",
+      "announcements": "Announcements",
+      "members": "Members",
+      "teams": "Teams",
+      "sla": "SLA policies",
+      "automation": "Automation",
+      "aiCopilot": "AI copilot",
+      "messaging": "Messaging",
+      "widget": "Widget",
+      "email": "Email",
+      "branding": "Branding",
+      "sso": "SSO",
+      "domains": "Domains",
+      "myTickets": "My tickets",
+      "newTicket": "New ticket"
+    }
+  },
+
+  "palette": {
+    "title": "Command palette",
+    "placeholder": "Type a command or search…",
+    "searchLabel": "Search commands",
+    "empty": "Nothing matches “{{query}}”."
+  },
+
+  "login": {
+    "signIn": "Sign in to Trackly",
+    "signInTo": "Sign in to {{name}}",
+    "createAccount": "Create your account",
+    "welcomeBack": "Track your support requests in one place.",
+    "signupSubhead": "You'll be the administrator of your new workspace.",
+    "workEmail": "Work email",
+    "emailPlaceholder": "you@company.com",
+    "continue": "Continue",
+    "checkingSso": "Checking your organisation…",
+    "magicLinkHint": "We'll email a sign-in link and a 6-digit code. Click the link or type the code — there's no password to remember.",
+    "newToTrackly": "New to Trackly?",
+    "startFree": "Start free",
+    "haveWorkspace": "Already have a workspace?",
+    "signInLink": "Sign in",
+    "sendFailed": "Could not send the sign-in email.",
+
+    "checkEmail": "Check your email",
+    "sentTo": "We sent a sign-in link and a 6-digit code to",
+    "linkExpires": "The link expires in 10 minutes.",
+    "codeLabel": "Code from the email",
+    "verify": "Verify and continue",
+    "didntGetIt": "Didn't get it?",
+    "resend": "Resend the email",
+    "useDifferentEmail": "Use a different email",
+    "codeFailed": "That code did not work. Try again, or resend the email.",
+
+    "chooseWorkspace": "Choose a workspace",
+    "belongsToMany": "{{email}} belongs to more than one workspace.",
+
+    "panel": {
+      "signInTitle": "Every conversation, in one place.",
+      "signUpTitle": "Your support desk, running today.",
+      "body": "Email, chat and web requests land in a single queue — with SLAs, automation and an AI copilot behind them.",
+      "aiDrafted": "AI drafted a reply",
+      "statResponse": "median first response",
+      "statCsat": "CSAT",
+      "statChannels": "channels, one inbox"
+    }
+  },
+
+  "dashboard": {
+    "welcome": "Welcome back",
+    "welcomeNamed": "Welcome back, {{name}}",
+    "subtitle": "Here's what's happening across your support desk today.",
+    "openWorkspace": "Open ticket workspace",
+    "loadFailed": "Couldn't load your dashboard",
+    "statusBreakdown": "Status breakdown",
+    "statusBreakdownSub": "Every ticket in this workspace",
+    "noTicketsYet": "No tickets yet — this fills in as they arrive.",
+    "yourQueue": "Your queue",
+    "viewAll": "View all tickets",
+    "total": "Total",
+    "kpi": {
+      "total": "Total tickets",
+      "open": "Open",
+      "pending": "Pending",
+      "unassigned": "Unassigned",
+      "openProblems": "Open problems"
+    },
+    "queue": {
+      "assignedToYou": "Assigned to you",
+      "unassigned": "Unassigned",
+      "waiting": "Waiting on a reply"
+    }
+  },
+
+  "tickets": {
+    "title": "Tickets",
+    "assignedToMe": "Assigned to me",
+    "newTicket": "New ticket",
+    "loading": "Loading…",
+    "count": "{{count}} tickets",
+    "countOne": "1 ticket",
+    "countFiltered": "{{count}} tickets matching these filters",
+    "countOneFiltered": "1 ticket matching these filters",
+    "searchPlaceholder": "Search subject or requester…",
+    "searchLabel": "Search tickets",
+    "allStatus": "All status",
+    "allPriority": "All priority",
+    "clear": "Clear",
+    "loadFailed": "Couldn't load tickets",
+    "unassigned": "Unassigned",
+    "guest": "Guest",
+    "columns": {
+      "ticket": "Ticket",
+      "requester": "Requester",
+      "priority": "Priority",
+      "status": "Status",
+      "assignee": "Assignee",
+      "sla": "SLA",
+      "updated": "Updated"
+    },
+    "empty": {
+      "noMatchTitle": "No tickets match",
+      "noMatchBody": "No ticket matches these filters. Try widening them.",
+      "clearFilters": "Clear filters",
+      "noneTitle": "No tickets yet",
+      "noneBody": "When a customer emails, chats or submits the form, their ticket lands here.",
+      "createFirst": "Create the first ticket"
+    }
+  },
+
+  "status": {
+    "open": "Open",
+    "pending": "Pending",
+    "resolved": "Resolved",
+    "closed": "Closed"
+  },
+  "priority": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "urgent": "Urgent"
+  },
+  "role": {
+    "admin": "Admin",
+    "agent": "Agent",
+    "customer": "Customer"
+  },
+  "sla": {
+    "response": "Response",
+    "resolve": "Resolve",
+    "inTime": "in {{time}}",
+    "overdue": "Overdue {{time}}"
+  },
+
+  "ui": {
+    "pagination": {
+      "label": "Pagination",
+      "showing": "Showing {{from}}–{{to}} of {{total}}",
+      "previous": "Previous page",
+      "next": "Next page"
+    }
+  },
+
+  "comingSoon": {
+    "heading": "Not migrated yet",
+    "body": "This screen is being ported to Angular.",
+    "bodyFrom": "This screen is being ported to Angular. The React implementation is at {{from}}.",
+    "titles": {
+      "verifySignIn": "Verify sign-in",
+      "signingIn": "Signing you in",
+      "createWorkspace": "Create your workspace",
+      "submitTicket": "Submit a ticket",
+      "knowledgeBase": "Knowledge base",
+      "liveChat": "Live chat",
+      "rateSupport": "Rate your support",
+      "yourTicket": "Your ticket",
+      "acceptInvitation": "Accept invitation",
+      "myTickets": "My tickets",
+      "newTicket": "New ticket",
+      "ticket": "Ticket",
+      "problems": "Problems",
+      "cannedResponses": "Canned responses",
+      "analytics": "Analytics",
+      "announcements": "Announcements",
+      "members": "Members",
+      "teams": "Teams",
+      "automation": "Automation",
+      "messagingChannels": "Messaging channels",
+      "widget": "Widget",
+      "sla": "SLA policies",
+      "aiCopilot": "AI copilot",
+      "email": "Email",
+      "branding": "Branding",
+      "sso": "SSO",
+      "domains": "Domains"
+    }
+  }
+}

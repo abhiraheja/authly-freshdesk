@@ -1,12 +1,27 @@
 import {
   type ApplicationConfig,
+  inject,
+  provideAppInitializer,
   provideBrowserGlobalErrorListeners,
   provideZonelessChangeDetection,
 } from '@angular/core';
+import { TranslocoService } from '@jsverse/transloco';
+import { firstValueFrom } from 'rxjs';
 import { provideRouter, withComponentInputBinding, withInMemoryScrolling } from '@angular/router';
+import { provideTransloco } from '@jsverse/transloco';
 import { provideTracklyCore } from '@trackly/core';
 import { routes } from './app.routes';
 import { environment } from '../environments/environment';
+import { TranslocoHttpLoader } from './i18n/transloco-loader';
+
+/** Restores the visitor's chosen language, defaulting to English. */
+function savedLang(): string {
+  try {
+    return localStorage.getItem('trackly-lang') === 'hi' ? 'hi' : 'en';
+  } catch {
+    return 'en';
+  }
+}
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -26,6 +41,29 @@ export const appConfig: ApplicationConfig = {
     provideTracklyCore({
       apiBaseUrl: environment.apiBaseUrl,
       chatHubPath: environment.chatHubPath,
+    }),
+    // Localisation. No user-visible string is hard-coded anywhere in this
+    // workspace — see the `trackly-i18n` skill. Messages load from
+    // public/i18n/<lang>.json.
+    provideTransloco({
+      config: {
+        availableLangs: ['en', 'hi'],
+        defaultLang: savedLang(),
+        fallbackLang: 'en',
+        reRenderOnLangChange: true,
+        prodMode: environment.production,
+      },
+      loader: TranslocoHttpLoader,
+    }),
+    // Load the active language BEFORE the first render.
+    //
+    // Without this, Transloco resolves every key to an empty string until the
+    // JSON arrives, so the first paint shows a blank page title and empty
+    // `<option>` labels that fill in a moment later. Blocking bootstrap on one
+    // small JSON file is far cheaper than that flash.
+    provideAppInitializer(() => {
+      const transloco = inject(TranslocoService);
+      return firstValueFrom(transloco.load(transloco.getActiveLang()));
     }),
   ],
 };

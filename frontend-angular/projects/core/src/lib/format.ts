@@ -9,35 +9,49 @@
 /** Every coloured state in the product resolves to one of these six. */
 export type Tone = 'primary' | 'info' | 'success' | 'warning' | 'danger' | 'neutral';
 
+/**
+ * A tone plus a **translation key** — never a label.
+ *
+ * The key is resolved where it renders (`{{ s.labelKey | transloco }}`), because
+ * a sentence built in TypeScript cannot be translated. See the `trackly-i18n`
+ * skill.
+ */
 export interface ToneLabel {
   tone: Tone;
-  label: string;
+  labelKey: string;
 }
 
 export const STATUS_TONE: Record<string, ToneLabel> = {
-  open: { tone: 'info', label: 'Open' },
-  pending: { tone: 'warning', label: 'Pending' },
-  resolved: { tone: 'success', label: 'Resolved' },
-  closed: { tone: 'neutral', label: 'Closed' },
+  open: { tone: 'info', labelKey: 'status.open' },
+  pending: { tone: 'warning', labelKey: 'status.pending' },
+  resolved: { tone: 'success', labelKey: 'status.resolved' },
+  closed: { tone: 'neutral', labelKey: 'status.closed' },
 };
 
 export const PRIORITY_TONE: Record<string, ToneLabel> = {
-  low: { tone: 'neutral', label: 'Low' },
-  medium: { tone: 'info', label: 'Medium' },
-  high: { tone: 'warning', label: 'High' },
-  urgent: { tone: 'danger', label: 'Urgent' },
+  low: { tone: 'neutral', labelKey: 'priority.low' },
+  medium: { tone: 'info', labelKey: 'priority.medium' },
+  high: { tone: 'warning', labelKey: 'priority.high' },
+  urgent: { tone: 'danger', labelKey: 'priority.urgent' },
 };
 
 export const ROLE_TONE: Record<string, ToneLabel> = {
-  admin: { tone: 'primary', label: 'Admin' },
-  agent: { tone: 'info', label: 'Agent' },
-  customer: { tone: 'neutral', label: 'Customer' },
+  admin: { tone: 'primary', labelKey: 'role.admin' },
+  agent: { tone: 'info', labelKey: 'role.agent' },
+  customer: { tone: 'neutral', labelKey: 'role.customer' },
 };
 
-/** Falls back to a neutral chip with the raw value rather than rendering nothing. */
+/**
+ * Resolves a state to its tone + key.
+ *
+ * An unrecognised value falls back to a neutral chip carrying the RAW value as
+ * its key. Transloco renders an unknown key as the key itself, so a status the
+ * UI doesn't know about shows up visibly rather than disappearing — which is
+ * what you want when the backend adds one before the frontend catches up.
+ */
 export function toneFor(map: Record<string, ToneLabel>, key: string | null | undefined): ToneLabel {
-  if (!key) return { tone: 'neutral', label: '—' };
-  return map[key] ?? { tone: 'neutral', label: key };
+  if (!key) return { tone: 'neutral', labelKey: 'common.none' };
+  return map[key] ?? { tone: 'neutral', labelKey: key };
 }
 
 // ── Dates ───────────────────────────────────────────────────────────────────

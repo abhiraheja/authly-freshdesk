@@ -26,16 +26,16 @@ export const authRoutes: Routes = [
     // otherwise burn the token before the recipient ever clicked (invariant 7).
     path: 'auth/verify',
     loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
-    data: { title: 'Verify sign-in', from: 'frontend/src/pages/VerifyPage.tsx' },
+    data: { titleKey: 'comingSoon.titles.verifySignIn', from: 'frontend/src/pages/VerifyPage.tsx' },
   },
   {
     path: 'auth/sso/complete',
     loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
-    data: { title: 'Signing you in', from: 'frontend/src/pages/auth/SsoCompletePage.tsx' },
+    data: { titleKey: 'comingSoon.titles.signingIn', from: 'frontend/src/pages/auth/SsoCompletePage.tsx' },
   },
   {
     path: 'onboarding/workspace',
     loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
-    data: { title: 'Create your workspace', from: 'frontend/src/pages/OnboardingWorkspacePage.tsx' },
+    data: { titleKey: 'comingSoon.titles.createWorkspace', from: 'frontend/src/pages/OnboardingWorkspacePage.tsx' },
   },
 ];

@@ -13,6 +13,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
   AuthApi,
   PublicApi,
@@ -46,6 +47,7 @@ type Phase = 'email' | 'code' | 'choose';
   imports: [
     FormsModule,
     RouterLink,
+    TranslocoPipe,
     AuthLayout,
     Alert,
     Button,
@@ -59,18 +61,19 @@ type Phase = 'email' | 'code' | 'choose';
       [brandName]="brandName()"
       [logoUrl]="branding.value()?.logoUrl ?? null"
       [accent]="accent()"
-      [panelTitle]="panelTitle()"
+      [panelTitle]="panelTitleKey() | transloco"
+      [panelBody]="'login.panel.body' | transloco"
     >
       @switch (phase()) {
         <!-- ─────────── 1. Email ─────────── -->
         @case ('email') {
           <h1 class="font-display text-[30px] font-extrabold leading-tight tracking-tight">
-            {{ headline() }}
+            {{ headlineKey() | transloco: { name: brandName() } }}
           </h1>
           <p class="mt-2 text-[15px] text-muted-foreground">{{ subhead() }}</p>
 
           <form class="mt-8" (ngSubmit)="begin()">
-            <label tkLabel for="email">Work email</label>
+            <label tkLabel for="email">{{ 'login.workEmail' | transloco }}</label>
             <input
               #emailInput
               tkInput
@@ -78,7 +81,7 @@ type Phase = 'email' | 'code' | 'choose';
               name="email"
               type="email"
               autocomplete="email"
-              placeholder="you@company.com"
+              [placeholder]="'login.emailPlaceholder' | transloco"
               [ngModel]="email()"
               (ngModelChange)="email.set($event)"
             />
@@ -98,24 +101,23 @@ type Phase = 'email' | 'code' | 'choose';
               @if (busy()) {
                 <tk-spinner [size]="16" />
               }
-              {{ checkingSso() ? 'Checking your organisation…' : 'Continue' }}
+              {{ (checkingSso() ? 'login.checkingSso' : 'login.continue') | transloco }}
             </button>
           </form>
 
           <p class="mt-4 text-meta leading-relaxed text-muted-foreground">
-            We'll email a sign-in link and a 6-digit code. Click the link or type
-            the code — there's no password to remember.
+            {{ 'login.magicLinkHint' | transloco }}
           </p>
 
           <!-- Never advertise Trackly on a workspace's own sign-in page. -->
           @if (!accent()) {
             <p class="mt-8 text-body">
               @if (isSignup()) {
-                Already have a workspace?
-                <a routerLink="/login" class="font-semibold text-primary hover:underline">Sign in</a>
+                {{ 'login.haveWorkspace' | transloco }}
+                <a routerLink="/login" class="font-semibold text-primary hover:underline">{{ 'login.signInLink' | transloco }}</a>
               } @else {
-                New to Trackly?
-                <a routerLink="/signup" class="font-semibold text-primary hover:underline">Start free</a>
+                {{ 'login.newToTrackly' | transloco }}
+                <a routerLink="/signup" class="font-semibold text-primary hover:underline">{{ 'login.startFree' | transloco }}</a>
               }
             </p>
           }
@@ -129,20 +131,20 @@ type Phase = 'email' | 'code' | 'choose';
             (click)="backToEmail()"
           >
             <tk-icon name="arrow-left" [size]="16" />
-            Use a different email
+            {{ 'login.useDifferentEmail' | transloco }}
           </button>
 
           <h1 class="font-display text-[30px] font-extrabold leading-tight tracking-tight">
-            Check your email
+            {{ 'login.checkEmail' | transloco }}
           </h1>
           <p class="mt-2 text-[15px] leading-relaxed text-muted-foreground">
-            We sent a sign-in link and a 6-digit code to
-            <span class="font-semibold text-foreground">{{ email() }}</span
-            >. The link expires in 10 minutes.
+            {{ 'login.sentTo' | transloco }}
+            <span class="font-semibold text-foreground">{{ email() }}</span>.
+            {{ 'login.linkExpires' | transloco }}
           </p>
 
           <form class="mt-8" (ngSubmit)="verify()">
-            <label tkLabel for="code">Code from the email</label>
+            <label tkLabel for="code">{{ 'login.codeLabel' | transloco }}</label>
             <input
               #codeInput
               tkInput
@@ -172,19 +174,19 @@ type Phase = 'email' | 'code' | 'choose';
               @if (busy()) {
                 <tk-spinner [size]="16" />
               }
-              Verify and continue
+              {{ 'login.verify' | transloco }}
             </button>
           </form>
 
           <p class="mt-5 text-body text-muted-foreground">
-            Didn't get it?
+            {{ 'login.didntGetIt' | transloco }}
             <button
               type="button"
               class="font-semibold text-primary hover:underline disabled:opacity-50"
               [disabled]="busy()"
               (click)="send()"
             >
-              Resend the email
+              {{ 'login.resend' | transloco }}
             </button>
           </p>
         }
@@ -192,10 +194,10 @@ type Phase = 'email' | 'code' | 'choose';
         <!-- ─────────── 3. Choose a workspace ─────────── -->
         @case ('choose') {
           <h1 class="font-display text-[30px] font-extrabold leading-tight tracking-tight">
-            Choose a workspace
+            {{ 'login.chooseWorkspace' | transloco }}
           </h1>
           <p class="mt-2 text-[15px] text-muted-foreground">
-            {{ email() }} belongs to more than one workspace.
+            {{ 'login.belongsToMany' | transloco: { email: email() } }}
           </p>
 
           <div class="mt-8 space-y-2">
@@ -223,7 +225,7 @@ type Phase = 'email' | 'code' | 'choose';
 
       <ng-container auth-footer>
         @if (accent() && !branding.value()?.hidePoweredBy) {
-          <span>Powered by Trackly</span>
+          <span>{{ 'common.poweredBy' | transloco }}</span>
         }
       </ng-container>
     </tk-auth-layout>
@@ -236,6 +238,9 @@ export class Login {
   private readonly theme = inject(ThemeService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
+  private readonly transloco = inject(TranslocoService);
+  /** Re-resolve TS-side copy when the language changes. */
+  private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
 
   private readonly routeData = toSignal(this.route.data, {
     initialValue: {} as Record<string, unknown>,
@@ -267,19 +272,24 @@ export class Login {
 
   protected readonly isValidEmail = computed(() => /.+@.+\..+/.test(this.email()));
 
-  protected readonly headline = computed(() => {
-    if (this.isSignup()) return 'Create your account';
-    const name = this.branding.value()?.workspaceName;
-    return name ? `Sign in to ${name}` : 'Sign in to Trackly';
+  /** One key per whole sentence; the workspace name travels as a parameter. */
+  protected readonly headlineKey = computed(() => {
+    if (this.isSignup()) return 'login.createAccount';
+    return this.branding.value()?.workspaceName ? 'login.signInTo' : 'login.signIn';
   });
 
+  /**
+   * A workspace's own `welcomeText` is admin-authored content, not UI copy, so
+   * it is shown verbatim when set. Trackly's own default comes from a key.
+   */
   protected readonly subhead = computed(() => {
-    if (this.isSignup()) return "You'll be the administrator of your new workspace.";
-    return this.branding.value()?.welcomeText || 'Track your support requests in one place.';
+    this.lang();
+    if (this.isSignup()) return this.transloco.translate('login.signupSubhead');
+    return this.branding.value()?.welcomeText || this.transloco.translate('login.welcomeBack');
   });
 
-  protected readonly panelTitle = computed(() =>
-    this.isSignup() ? 'Your support desk, running today.' : 'Every conversation, in one place.',
+  protected readonly panelTitleKey = computed(() =>
+    this.isSignup() ? 'login.panel.signUpTitle' : 'login.panel.signInTitle',
   );
 
   private readonly emailInput = viewChild<ElementRef<HTMLInputElement>>('emailInput');
@@ -349,7 +359,7 @@ export class Login {
       this.code.set('');
       this.phase.set('code');
     } catch (err) {
-      this.error.set(errorMessage(err, 'Could not send the sign-in email.'));
+      this.error.set(errorMessage(err, this.transloco.translate('login.sendFailed')));
     } finally {
       this.busy.set(false);
     }
@@ -380,7 +390,7 @@ export class Login {
           break;
       }
     } catch (err) {
-      this.error.set(errorMessage(err, 'That code did not work. Try again, or resend the email.'));
+      this.error.set(errorMessage(err, this.transloco.translate('login.codeFailed')));
     } finally {
       this.busy.set(false);
     }

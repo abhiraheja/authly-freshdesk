@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, Directive, computed, input } from '@angular/core';
 import { Icon, type IconName } from '../icon/icon';
 import type { Tone } from '@trackly/core';
@@ -19,6 +20,7 @@ export class SkeletonDirective {}
 @Component({
   selector: 'tk-spinner',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TranslocoPipe],
   host: { class: 'inline-flex', role: 'status' },
   template: `
     <span
@@ -27,7 +29,7 @@ export class SkeletonDirective {}
       [style.height.px]="size()"
       aria-hidden="true"
     ></span>
-    <span class="sr-only">Loading…</span>
+    <span class="sr-only">{{ 'common.loading' | transloco }}</span>
   `,
 })
 export class Spinner {
@@ -53,7 +55,7 @@ export class Kbd {}
 @Component({
   selector: 'tk-alert',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon],
+  imports: [Icon, TranslocoPipe],
   host: { role: 'alert', '[class]': 'classes()' },
   template: `
     <tk-icon [name]="icon()" [size]="18" class="mt-0.5 shrink-0" />
@@ -102,7 +104,7 @@ export class Alert {
 @Component({
   selector: 'tk-empty-state',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon],
+  imports: [Icon, TranslocoPipe],
   host: { class: 'empty-state' },
   template: `
     <div class="empty-icon">

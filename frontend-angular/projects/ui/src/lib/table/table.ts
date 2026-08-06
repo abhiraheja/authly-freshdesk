@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, Directive, booleanAttribute, computed, input, model } from '@angular/core';
 import { Icon } from '../icon/icon';
 
@@ -42,20 +43,21 @@ export class TableDirective {
 @Component({
   selector: 'tk-pagination',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon],
+  imports: [Icon, TranslocoPipe],
   host: {
     class: 'flex flex-wrap items-center justify-between gap-3 border-t border-border p-4 text-body',
   },
   template: `
+    <!-- One key with parameters, never glued fragments — languages reorder. -->
     <p class="text-muted-foreground">
-      Showing <b class="text-foreground">{{ from() }}–{{ to() }}</b> of {{ total() }}
+      {{ 'ui.pagination.showing' | transloco: { from: from(), to: to(), total: total() } }}
     </p>
 
-    <nav class="flex items-center gap-1" aria-label="Pagination">
+    <nav class="flex items-center gap-1" [attr.aria-label]="'ui.pagination.label' | transloco">
       <button
         type="button"
         class="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-accent disabled:opacity-40"
-        aria-label="Previous page"
+        [attr.aria-label]="'ui.pagination.previous' | transloco"
         [disabled]="page() <= 1"
         (click)="go(page() - 1)"
       >
@@ -85,7 +87,7 @@ export class TableDirective {
       <button
         type="button"
         class="grid size-9 place-items-center rounded-lg text-muted-foreground hover:bg-accent disabled:opacity-40"
-        aria-label="Next page"
+        [attr.aria-label]="'ui.pagination.next' | transloco"
         [disabled]="page() >= pageCount()"
         (click)="go(page() + 1)"
       >

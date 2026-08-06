@@ -2,7 +2,7 @@ import type { Tone } from '@trackly/core';
 import type { IconName } from '@trackly/ui';
 
 export interface NavItem {
-  readonly label: string;
+  readonly labelKey: string;
   readonly icon?: IconName;
   readonly route: string;
   /** Saved-view query params, e.g. `{ view: 'open' }`. */
@@ -16,7 +16,7 @@ export interface NavItem {
 }
 
 export interface NavGroup {
-  readonly label: string;
+  readonly labelKey: string;
   readonly items: readonly NavItem[];
   /** The whole group collapses behind a toggle when true. */
   readonly collapsible?: boolean;
@@ -37,51 +37,51 @@ export interface NavGroup {
  */
 export const NAV: readonly NavGroup[] = [
   {
-    label: 'Overview',
-    items: [{ label: 'Dashboard', icon: 'layout-dashboard', route: '/dashboard' }],
+    labelKey: 'nav.groups.overview',
+    items: [{ labelKey: 'nav.items.dashboard', icon: 'layout-dashboard', route: '/dashboard' }],
   },
   {
-    label: 'Tickets',
+    labelKey: 'nav.groups.tickets',
     items: [
-      { label: 'All tickets', icon: 'ticket', route: '/dashboard/tickets', countKey: 'total' },
-      { label: 'Assigned to me', icon: 'user-check', route: '/dashboard/tickets', params: { view: 'mine' }, countKey: 'assignedToMe' },
+      { labelKey: 'nav.items.allTickets', icon: 'ticket', route: '/dashboard/tickets', countKey: 'total' },
+      { labelKey: 'nav.items.assignedToMe', icon: 'user-check', route: '/dashboard/tickets', params: { view: 'mine' }, countKey: 'assignedToMe' },
       // An "Unassigned" view belongs here too, but `GET /api/tickets` has no way
       // to express it — `assigneeId` only matches a specific agent. Adding the
       // row before the API can filter would give a view that silently shows the
       // wrong tickets. It lands with the API change.
-      { label: 'Open', tone: 'info', route: '/dashboard/tickets', params: { view: 'open' }, countKey: 'open' },
-      { label: 'Pending', tone: 'warning', route: '/dashboard/tickets', params: { view: 'pending' }, countKey: 'pending' },
-      { label: 'Resolved', tone: 'success', route: '/dashboard/tickets', params: { view: 'resolved' }, countKey: 'resolved' },
-      { label: 'Closed', tone: 'neutral', route: '/dashboard/tickets', params: { view: 'closed' }, countKey: 'closed' },
+      { labelKey: 'nav.items.open', tone: 'info', route: '/dashboard/tickets', params: { view: 'open' }, countKey: 'open' },
+      { labelKey: 'nav.items.pending', tone: 'warning', route: '/dashboard/tickets', params: { view: 'pending' }, countKey: 'pending' },
+      { labelKey: 'nav.items.resolved', tone: 'success', route: '/dashboard/tickets', params: { view: 'resolved' }, countKey: 'resolved' },
+      { labelKey: 'nav.items.closed', tone: 'neutral', route: '/dashboard/tickets', params: { view: 'closed' }, countKey: 'closed' },
     ],
   },
   {
-    label: 'Workspace',
+    labelKey: 'nav.groups.workspace',
     items: [
-      { label: 'Live chat', icon: 'messages-square', route: '/dashboard/chat' },
-      { label: 'Problems', icon: 'puzzle', route: '/dashboard/problems', countKey: 'openProblems' },
-      { label: 'Knowledge base', icon: 'book-open', route: '/dashboard/kb' },
-      { label: 'Canned responses', icon: 'zap', route: '/dashboard/canned' },
+      { labelKey: 'nav.items.liveChat', icon: 'messages-square', route: '/dashboard/chat' },
+      { labelKey: 'nav.items.problems', icon: 'puzzle', route: '/dashboard/problems', countKey: 'openProblems' },
+      { labelKey: 'nav.items.knowledgeBase', icon: 'book-open', route: '/dashboard/kb' },
+      { labelKey: 'nav.items.cannedResponses', icon: 'zap', route: '/dashboard/canned' },
     ],
   },
   {
-    label: 'Admin',
+    labelKey: 'nav.groups.admin',
     collapsible: true,
     adminOnly: true,
     items: [
-      { label: 'Analytics', icon: 'bar-chart-3', route: '/admin/analytics' },
-      { label: 'Announcements', icon: 'megaphone', route: '/admin/announcements' },
-      { label: 'Members', icon: 'users', route: '/admin/users' },
-      { label: 'Teams', icon: 'user-cog', route: '/admin/teams' },
-      { label: 'SLA policies', icon: 'timer', route: '/admin/settings/sla' },
-      { label: 'Automation', icon: 'workflow', route: '/admin/automation' },
-      { label: 'AI copilot', icon: 'sparkles', route: '/admin/settings/ai' },
-      { label: 'Messaging', icon: 'message-circle', route: '/admin/channels' },
-      { label: 'Widget', icon: 'globe', route: '/admin/widget' },
-      { label: 'Email', icon: 'mail', route: '/admin/settings/email' },
-      { label: 'Branding', icon: 'palette', route: '/admin/settings/branding' },
-      { label: 'SSO', icon: 'shield-check', route: '/admin/settings/sso' },
-      { label: 'Domains', icon: 'at-sign', route: '/admin/settings/domains' },
+      { labelKey: 'nav.items.analytics', icon: 'bar-chart-3', route: '/admin/analytics' },
+      { labelKey: 'nav.items.announcements', icon: 'megaphone', route: '/admin/announcements' },
+      { labelKey: 'nav.items.members', icon: 'users', route: '/admin/users' },
+      { labelKey: 'nav.items.teams', icon: 'user-cog', route: '/admin/teams' },
+      { labelKey: 'nav.items.sla', icon: 'timer', route: '/admin/settings/sla' },
+      { labelKey: 'nav.items.automation', icon: 'workflow', route: '/admin/automation' },
+      { labelKey: 'nav.items.aiCopilot', icon: 'sparkles', route: '/admin/settings/ai' },
+      { labelKey: 'nav.items.messaging', icon: 'message-circle', route: '/admin/channels' },
+      { labelKey: 'nav.items.widget', icon: 'globe', route: '/admin/widget' },
+      { labelKey: 'nav.items.email', icon: 'mail', route: '/admin/settings/email' },
+      { labelKey: 'nav.items.branding', icon: 'palette', route: '/admin/settings/branding' },
+      { labelKey: 'nav.items.sso', icon: 'shield-check', route: '/admin/settings/sso' },
+      { labelKey: 'nav.items.domains', icon: 'at-sign', route: '/admin/settings/domains' },
     ],
   },
 ];
@@ -89,10 +89,10 @@ export const NAV: readonly NavGroup[] = [
 /** The customer portal's much shorter rail. */
 export const PORTAL_NAV: readonly NavGroup[] = [
   {
-    label: 'Support',
+    labelKey: 'nav.groups.support',
     items: [
-      { label: 'My tickets', icon: 'ticket', route: '/portal' },
-      { label: 'New ticket', icon: 'plus', route: '/portal/tickets/new' },
+      { labelKey: 'nav.items.myTickets', icon: 'ticket', route: '/portal' },
+      { labelKey: 'nav.items.newTicket', icon: 'plus', route: '/portal/tickets/new' },
     ],
   },
 ];

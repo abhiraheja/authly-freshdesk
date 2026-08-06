@@ -1,3 +1,5 @@
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import { toSignal } from '@angular/core/rxjs-interop';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -15,8 +17,8 @@ import { Icon, Kbd, type IconName } from '@trackly/ui';
 import { NAV } from './nav';
 
 interface Command {
-  readonly label: string;
-  readonly group: string;
+  readonly labelKey: string;
+  readonly groupKey: string;
   readonly icon: IconName;
   readonly route: string;
   readonly params?: Readonly<Record<string, string>>;
@@ -36,7 +38,7 @@ interface Command {
 @Component({
   selector: 'tk-command-palette',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, Kbd],
+  imports: [Icon, Kbd, TranslocoPipe],
   template: `
     @if (open()) {
       <div class="overlay" (click)="close()" aria-hidden="true"></div>
@@ -44,7 +46,7 @@ interface Command {
         class="palette glass animate-float-in"
         role="dialog"
         aria-modal="true"
-        aria-label="Command palette"
+        [attr.aria-label]="'palette.title' | transloco"
         (keydown)="onKeydown($event)"
       >
         <div class="flex h-14 items-center gap-3 border-b border-border px-4">
@@ -52,18 +54,18 @@ interface Command {
           <input
             #search
             class="flex-1 bg-transparent text-body outline-none"
-            placeholder="Type a command or search…"
+            [placeholder]="'palette.placeholder' | transloco"
             [value]="query()"
             (input)="onQuery($event)"
-            aria-label="Search commands"
+            [attr.aria-label]="'palette.searchLabel' | transloco"
           />
           <tk-kbd>ESC</tk-kbd>
         </div>
 
         <div class="scroll-thin max-h-80 overflow-y-auto p-2">
-          @for (group of grouped(); track group.name) {
-            <p class="menu-label">{{ group.name }}</p>
-            @for (command of group.items; track command.label) {
+          @for (group of grouped(); track group.nameKey) {
+            <p class="menu-label">{{ group.nameKey | transloco }}</p>
+            @for (command of group.items; track command.labelKey) {
               <button
                 type="button"
                 class="menu-item"
@@ -72,12 +74,12 @@ interface Command {
                 (mouseenter)="highlight(command)"
               >
                 <tk-icon [name]="command.icon" [size]="16" />
-                {{ command.label }}
+                {{ command.labelKey | transloco }}
               </button>
             }
           } @empty {
             <p class="px-3 py-8 text-center text-body text-muted-foreground">
-              Nothing matches “{{ query() }}”.
+              {{ 'palette.empty' | transloco: { query: query() } }}
             </p>
           }
         </div>
@@ -90,6 +92,9 @@ export class CommandPalette {
 
   private readonly router = inject(Router);
   private readonly session = inject(SessionStore);
+  private readonly transloco = inject(TranslocoService);
+  /** Re-filter when the language changes, so results follow the active locale. */
+  private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
   private readonly search = viewChild<ElementRef<HTMLInputElement>>('search');
 
   protected readonly query = signal('');
@@ -102,8 +107,8 @@ export class CommandPalette {
       group.items
         .filter((item) => !item.adminOnly || isAdmin)
         .map((item) => ({
-          label: item.label,
-          group: group.label,
+          labelKey: item.labelKey,
+          groupKey: group.labelKey,
           icon: item.icon ?? 'ticket',
           route: item.route,
           params: item.params,
@@ -112,9 +117,13 @@ export class CommandPalette {
   });
 
   protected readonly results = computed(() => {
+    this.lang();
     const query = this.query().trim().toLowerCase();
     if (!query) return this.commands();
-    return this.commands().filter((c) => c.label.toLowerCase().includes(query));
+    // Search the TRANSLATED label: a Hindi user types Hindi.
+    return this.commands().filter((c) =>
+      this.transloco.translate(c.labelKey).toLowerCase().includes(query),
+    );
   });
 
   protected readonly active = computed(() => this.results()[this.activeIndex()] ?? null);
@@ -122,11 +131,11 @@ export class CommandPalette {
   protected readonly grouped = computed(() => {
     const groups = new Map<string, Command[]>();
     for (const command of this.results()) {
-      const list = groups.get(command.group) ?? [];
+      const list = groups.get(command.groupKey) ?? [];
       list.push(command);
-      groups.set(command.group, list);
+      groups.set(command.groupKey, list);
     }
-    return [...groups].map(([name, items]) => ({ name, items }));
+    return [...groups].map(([nameKey, items]) => ({ nameKey, items }));
   });
 
   constructor() {

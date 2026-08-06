@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -20,7 +21,7 @@ import { Icon } from '../icon/icon';
 @Component({
   selector: 'tk-drawer',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Button, Icon],
+  imports: [Button, Icon, TranslocoPipe],
   template: `
     @if (open()) {
       <div class="overlay" (click)="dismiss()" aria-hidden="true"></div>
@@ -35,7 +36,7 @@ import { Icon } from '../icon/icon';
       >
         <div class="card-header">
           <h2 class="card-title font-display">{{ heading() }}</h2>
-          <button tkButton variant="ghost" iconOnly aria-label="Close" (click)="dismiss()">
+          <button tkButton variant="ghost" iconOnly [attr.aria-label]="'common.close' | transloco" (click)="dismiss()">
             <tk-icon name="x" [size]="18" />
           </button>
         </div>

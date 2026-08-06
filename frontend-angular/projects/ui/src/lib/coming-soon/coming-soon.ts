@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { ActivatedRoute } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { EmptyState } from '../feedback/feedback';
 import { PageHeader } from '../page-header/page-header';
 
@@ -12,31 +13,43 @@ import { PageHeader } from '../page-header/page-header';
  * names the React file to port, so the remaining work is visible in the product
  * rather than only in a tracker.
  *
- * Delete each usage as its screen lands; when `app.routes.ts` no longer
- * references this file, the migration is done.
+ * Routes supply `titleKey` (a translation key). `from` is a source path —
+ * developer text, not UI copy, so it stays literal and travels as a parameter.
+ *
+ * Delete each usage as its screen lands; when nothing imports this file, the
+ * migration is done.
  */
 @Component({
   selector: 'tk-coming-soon',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [PageHeader, EmptyState],
+  imports: [PageHeader, EmptyState, TranslocoPipe],
   template: `
-    <tk-page-header [title]="title()" />
+    <tk-page-header [title]="titleKey() | transloco" />
     <tk-empty-state
       icon="rocket"
-      heading="Not migrated yet"
+      [heading]="'comingSoon.heading' | transloco"
       [description]="description()"
     />
   `,
 })
 export class ComingSoon {
-  private readonly data = toSignal(inject(ActivatedRoute).data, { initialValue: {} as Record<string, unknown> });
+  private readonly transloco = inject(TranslocoService);
+  private readonly data = toSignal(inject(ActivatedRoute).data, {
+    initialValue: {} as Record<string, unknown>,
+  });
+  /** Re-resolve the description when the active language changes. */
+  private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
 
-  protected readonly title = computed(() => (this.data()['title'] as string) ?? 'Trackly');
+  protected readonly titleKey = computed(
+    () => (this.data()['titleKey'] as string) ?? 'common.appName',
+  );
 
+  /** Two whole-sentence keys rather than one glued together from fragments. */
   protected readonly description = computed(() => {
+    this.lang();
     const from = this.data()['from'] as string | undefined;
     return from
-      ? `This screen is being ported to Angular. The React implementation is at ${from}.`
-      : 'This screen is being ported to Angular.';
+      ? this.transloco.translate('comingSoon.bodyFrom', { from })
+      : this.transloco.translate('comingSoon.body');
   });
 }

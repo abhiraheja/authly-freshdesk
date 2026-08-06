@@ -11,7 +11,7 @@ import type { Routes } from '@angular/router';
 const placeholder = () => import('@trackly/ui').then((m) => m.ComingSoon);
 
 export const portalRoutes: Routes = [
-  { path: '', loadComponent: placeholder, data: { title: 'My tickets', from: 'frontend/src/pages/portal/PortalTicketsPage.tsx' } },
-  { path: 'tickets/new', loadComponent: placeholder, data: { title: 'New ticket', from: 'frontend/src/pages/portal/NewTicketPage.tsx' } },
-  { path: 'tickets/:id', loadComponent: placeholder, data: { title: 'Ticket', from: 'frontend/src/pages/portal/PortalTicketDetailPage.tsx' } },
+  { path: '', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.myTickets', from: 'frontend/src/pages/portal/PortalTicketsPage.tsx' } },
+  { path: 'tickets/new', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.newTicket', from: 'frontend/src/pages/portal/NewTicketPage.tsx' } },
+  { path: 'tickets/:id', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.ticket', from: 'frontend/src/pages/portal/PortalTicketDetailPage.tsx' } },
 ];

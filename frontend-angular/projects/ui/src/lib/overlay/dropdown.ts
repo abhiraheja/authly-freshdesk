@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
 
 /**
@@ -22,6 +23,7 @@ import { ChangeDetectionStrategy, Component, computed, input, signal } from '@an
 @Component({
   selector: 'tk-dropdown',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TranslocoPipe],
   host: { class: 'relative inline-flex' },
   template: `
     <div (click)="toggle()" (keydown.escape)="close()">
@@ -32,7 +34,7 @@ import { ChangeDetectionStrategy, Component, computed, input, signal } from '@an
       <button
         type="button"
         class="fixed inset-0 z-40 cursor-default"
-        aria-label="Close menu"
+        [attr.aria-label]="'common.closeMenu' | transloco"
         (click)="close()"
       ></button>
       <div

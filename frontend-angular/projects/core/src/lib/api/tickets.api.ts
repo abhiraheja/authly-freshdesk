@@ -194,22 +194,35 @@ export class TicketsApi {
  * tickets have no active clock at all. Overdue is reported as elapsed time with
  * an explicit label — never a negative countdown, which reads as a bug.
  */
+export interface SlaState {
+  tone: 'success' | 'warning' | 'danger';
+  /** `sla.inTime` or `sla.overdue` — resolved with `{ time }` where it renders. */
+  labelKey: string;
+  time: string;
+  /** `sla.response` or `sla.resolve`. */
+  prefixKey: string;
+}
+
 export function slaState(
   ticket: Pick<TicketSummary, 'status' | 'firstResponseDueAt' | 'resolveDueAt' | 'firstResponseAt'>,
-): { tone: 'success' | 'warning' | 'danger'; label: string; prefix: string } | null {
+): SlaState | null {
   if (ticket.firstResponseDueAt && !ticket.firstResponseAt) {
-    return { ...remaining(ticket.firstResponseDueAt), prefix: 'Response' };
+    return { ...remaining(ticket.firstResponseDueAt), prefixKey: 'sla.response' };
   }
   if (ticket.resolveDueAt && ticket.status !== 'resolved' && ticket.status !== 'closed') {
-    return { ...remaining(ticket.resolveDueAt), prefix: 'Resolve' };
+    return { ...remaining(ticket.resolveDueAt), prefixKey: 'sla.resolve' };
   }
   return null;
 }
 
-function remaining(dueAt: string): { tone: 'success' | 'warning' | 'danger'; label: string } {
+function remaining(dueAt: string): Omit<SlaState, 'prefixKey'> {
   const minutes = Math.round((new Date(dueAt).getTime() - Date.now()) / 60_000);
-  if (minutes < 0) return { tone: 'danger', label: `Overdue ${short(-minutes)}` };
-  return { tone: minutes <= 60 ? 'warning' : 'success', label: `in ${short(minutes)}` };
+  if (minutes < 0) return { tone: 'danger', labelKey: 'sla.overdue', time: short(-minutes) };
+  return {
+    tone: minutes <= 60 ? 'warning' : 'success',
+    labelKey: 'sla.inTime',
+    time: short(minutes),
+  };
 }
 
 function short(minutes: number): string {

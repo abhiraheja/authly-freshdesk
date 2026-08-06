@@ -24,6 +24,7 @@ it is complete enough that a page should contain almost no bespoke styling.
 
 | Doing | Read |
 |---|---|
+| Adding a screen, a route or a library — or deciding **where code goes** | `references/architecture.md` |
 | Picking a colour, size, spacing, shadow, animation | `references/tokens.md` |
 | Building the shell, sidebar, top bar, or a new page's skeleton | `references/layout.md` |
 | Building or restyling any component | `references/components.md` |
@@ -54,20 +55,45 @@ differs, and a branded route calls `ThemeService.forceLight()` on entry.
 
 ## Where everything lives
 
+A **multi-project workspace**: a thin host app plus eight publishable
+libraries. Boundaries are enforced by the compiler, not by convention.
+
 ```
-frontend-angular/src/
-├── styles.scss              tokens (:root / .dark) + the component CSS layer
-├── tailwind.css             @theme inline — maps tokens onto utilities
-└── app/
-    ├── core/                framework, no UI
-    │   ├── api/             ApiService · ApiError · interceptors · *.api.ts
-    │   ├── auth/            SessionStore · guards · models
-    │   ├── theme/           ThemeService (dark mode, forceLight)
-    │   └── format.ts        tone maps + timeAgo/initials/avatarColor
-    ├── ui/                  the design system — import from 'app/ui'
-    ├── shell/               Shell · nav.ts · CommandPalette
-    └── features/            one folder per screen
+frontend-angular/
+├── src/                     the HOST APP — and almost nothing else
+│   ├── styles.scss          design tokens + component CSS layer
+│   ├── tailwind.css         @theme inline — tokens → Tailwind utilities
+│   ├── environments/        the only place environment values live
+│   └── app/
+│       ├── app.config.ts    providers; hands environment to the libraries
+│       ├── app.routes.ts    mounts libraries; knows none of their internals
+│       └── shell/           Shell · nav.ts · CommandPalette
+└── projects/
+    ├── core/    @trackly/core       config, api, session, guards, theme, tones
+    ├── ui/      @trackly/ui         the design system
+    ├── auth/    @trackly/auth       sign-in, verify, onboarding
+    ├── dashboard/ @trackly/dashboard
+    ├── tickets/ @trackly/tickets
+    ├── admin/   @trackly/admin      13 workspace-admin screens
+    ├── portal/  @trackly/portal     signed-in customer
+    └── guest/   @trackly/guest      anonymous branded surfaces
 ```
+
+**The dependency rule:** everything may import `core`; everything except `core`
+may import `ui`; **feature libraries must never import each other**. If two
+features need the same thing, it belongs in `core` (data) or `ui` (a component).
+
+Import through the package name, never a deep path:
+
+```ts
+import { SessionStore, STATUS_TONE } from '@trackly/core';
+import { Button, Card, Badge } from '@trackly/ui';
+```
+
+Adding a screen touches its library only — the app changes when a whole *area*
+is added, and almost never otherwise. `references/architecture.md` has the full
+graph, the packaging model, and the empty-path routing rule that will otherwise
+give you a silent blank page.
 
 ---
 
@@ -79,7 +105,7 @@ frontend-angular/src/
    class (`.badge-warning`). This is the single most common bug in this codebase.
 2. **Semantic tokens, never raw colour.** `bg-card`, `text-muted-foreground`,
    `border-border`. Literal hex only exists in `styles.scss` and the avatar
-   palette in `format.ts`.
+   palette in `@trackly/core`'s `format.ts`.
 3. **Coloured labels go through `tk-badge` + a tone map.** Look the state up in
    `STATUS_TONE` / `PRIORITY_TONE` — never pick a tone by eye at the call site.
 4. **Filter state lives in the URL.** `?view=open&q=login&page=2`, bound to

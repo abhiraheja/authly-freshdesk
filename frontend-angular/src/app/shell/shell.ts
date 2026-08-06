@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -23,7 +24,7 @@ import { NAV, PORTAL_NAV, type NavGroup, type NavItem } from './nav';
 @Component({
   selector: 'tk-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, Avatar, Button, Dropdown, Icon, Kbd, Toaster, CommandPalette],
+  imports: [RouterOutlet, RouterLink, TranslocoPipe, Avatar, Button, Dropdown, Icon, Kbd, Toaster, CommandPalette],
   host: { '(document:keydown)': 'onKeydown($event)' },
   templateUrl: './shell.html',
 })

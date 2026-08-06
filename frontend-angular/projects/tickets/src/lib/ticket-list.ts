@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, resource, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
   PRIORITY_TONE,
   STATUS_TONE,
@@ -51,6 +53,7 @@ const VIEW_STATUS: Record<string, string | undefined> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule,
+    TranslocoPipe,
     RouterLink,
     Alert,
     Avatar,
@@ -67,25 +70,26 @@ const VIEW_STATUS: Record<string, string | undefined> = {
   template: `
     <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
       <div class="min-w-0">
-        <h1 class="font-display text-page font-extrabold">{{ heading() }}</h1>
+        <h1 class="font-display text-page font-extrabold">{{ headingKey() | transloco }}</h1>
         <p class="mt-1 text-body text-muted-foreground">{{ summary() }}</p>
       </div>
       <a tkButton routerLink="/dashboard/tickets/new" class="shrink-0">
         <tk-icon name="plus" [size]="16" />
-        New ticket
+        {{ 'tickets.newTicket' | transloco }}
       </a>
     </div>
 
     <!-- Filter bar. Every control writes to the URL, never to local state. -->
     <tk-card dense class="mb-4">
+      <!-- One row: search grows, selects shrink to fit. -->
       <div class="flex flex-wrap items-center gap-2">
-        <div class="flex h-9 min-w-[200px] flex-1 items-center gap-2 rounded-xl bg-muted px-3">
+        <div class="flex h-9 min-w-[220px] flex-1 items-center gap-2 rounded-xl bg-muted px-3">
           <tk-icon name="search" [size]="16" class="text-muted-foreground" />
           <input
             class="w-full bg-transparent text-body outline-none"
             type="search"
-            placeholder="Search subject or requester…"
-            aria-label="Search tickets"
+            [placeholder]="'tickets.searchPlaceholder' | transloco"
+            [attr.aria-label]="'tickets.searchLabel' | transloco"
             [ngModel]="search()"
             (ngModelChange)="onSearch($event)"
           />
@@ -94,45 +98,45 @@ const VIEW_STATUS: Record<string, string | undefined> = {
         <select
           tkInput
           inputSize="sm"
-          class="w-auto"
-          aria-label="Status"
+          class="input-auto"
+          [attr.aria-label]="'tickets.columns.status' | transloco"
           [ngModel]="view()"
           (ngModelChange)="setParam('view', $event)"
         >
-          <option value="">All status</option>
-          <option value="open">Open</option>
-          <option value="pending">Pending</option>
-          <option value="resolved">Resolved</option>
-          <option value="closed">Closed</option>
-          <option value="mine">Assigned to me</option>
+          <option value="">{{ 'tickets.allStatus' | transloco }}</option>
+          <option value="open">{{ 'status.open' | transloco }}</option>
+          <option value="pending">{{ 'status.pending' | transloco }}</option>
+          <option value="resolved">{{ 'status.resolved' | transloco }}</option>
+          <option value="closed">{{ 'status.closed' | transloco }}</option>
+          <option value="mine">{{ 'tickets.assignedToMe' | transloco }}</option>
         </select>
 
         <select
           tkInput
           inputSize="sm"
-          class="w-auto"
-          aria-label="Priority"
+          class="input-auto"
+          [attr.aria-label]="'tickets.columns.priority' | transloco"
           [ngModel]="priority()"
           (ngModelChange)="setParam('priority', $event)"
         >
-          <option value="">All priority</option>
-          <option value="urgent">Urgent</option>
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
+          <option value="">{{ 'tickets.allPriority' | transloco }}</option>
+          <option value="urgent">{{ 'priority.urgent' | transloco }}</option>
+          <option value="high">{{ 'priority.high' | transloco }}</option>
+          <option value="medium">{{ 'priority.medium' | transloco }}</option>
+          <option value="low">{{ 'priority.low' | transloco }}</option>
         </select>
 
         @if (hasFilters()) {
-          <button tkButton variant="ghost" size="sm" (click)="clearFilters()">Clear</button>
+          <button tkButton variant="ghost" size="sm" (click)="clearFilters()">{{ 'tickets.clear' | transloco }}</button>
         }
       </div>
     </tk-card>
 
     @if (tickets.error()) {
-      <tk-alert tone="danger" heading="Couldn't load tickets">
+      <tk-alert tone="danger" [heading]="'tickets.loadFailed' | transloco">
         {{ errorText() }}
         <button type="button" class="ml-1 font-semibold underline" (click)="tickets.reload()">
-          Try again
+          {{ 'common.retry' | transloco }}
         </button>
       </tk-alert>
     } @else {
@@ -141,13 +145,13 @@ const VIEW_STATUS: Record<string, string | undefined> = {
           <table tkTable hover class="min-w-[900px]">
             <thead>
               <tr>
-                <th scope="col">Ticket</th>
-                <th scope="col">Requester</th>
-                <th scope="col">Priority</th>
-                <th scope="col">Status</th>
-                <th scope="col">Assignee</th>
-                <th scope="col">SLA</th>
-                <th scope="col" class="text-right">Updated</th>
+                <th scope="col">{{ 'tickets.columns.ticket' | transloco }}</th>
+                <th scope="col">{{ 'tickets.columns.requester' | transloco }}</th>
+                <th scope="col">{{ 'tickets.columns.priority' | transloco }}</th>
+                <th scope="col">{{ 'tickets.columns.status' | transloco }}</th>
+                <th scope="col">{{ 'tickets.columns.assignee' | transloco }}</th>
+                <th scope="col">{{ 'tickets.columns.sla' | transloco }}</th>
+                <th scope="col" class="text-right">{{ 'tickets.columns.updated' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
@@ -183,17 +187,17 @@ const VIEW_STATUS: Record<string, string | undefined> = {
                       </span>
                     </td>
                     <td>
-                      <tk-badge [tone]="priorityOf(ticket).tone">{{ priorityOf(ticket).label }}</tk-badge>
+                      <tk-badge [tone]="priorityOf(ticket).tone">{{ priorityOf(ticket).labelKey | transloco }}</tk-badge>
                     </td>
                     <td>
-                      <tk-badge [tone]="statusOf(ticket).tone" dot>{{ statusOf(ticket).label }}</tk-badge>
+                      <tk-badge [tone]="statusOf(ticket).tone" dot>{{ statusOf(ticket).labelKey | transloco }}</tk-badge>
                     </td>
                     <td class="text-muted-foreground">
-                      {{ ticket.assignee?.name ?? ticket.assignee?.email ?? 'Unassigned' }}
+                      {{ ticket.assignee?.name ?? ticket.assignee?.email ?? ('tickets.unassigned' | transloco) }}
                     </td>
                     <td>
                       @if (sla(ticket); as state) {
-                        <tk-badge [tone]="state.tone">{{ state.prefix }} {{ state.label }}</tk-badge>
+                        <tk-badge [tone]="state.tone">{{ state.prefixKey | transloco }} {{ state.labelKey | transloco: { time: state.time } }}</tk-badge>
                       } @else {
                         <span class="text-muted-foreground">—</span>
                       }
@@ -208,20 +212,20 @@ const VIEW_STATUS: Record<string, string | undefined> = {
                       @if (hasFilters()) {
                         <tk-empty-state
                           icon="filter"
-                          heading="No tickets match"
-                          description="No ticket matches these filters. Try widening them."
+                          [heading]="'tickets.empty.noMatchTitle' | transloco"
+                          [description]="'tickets.empty.noMatchBody' | transloco"
                         >
                           <button tkButton variant="secondary" (click)="clearFilters()">
-                            Clear filters
+                            {{ 'tickets.empty.clearFilters' | transloco }}
                           </button>
                         </tk-empty-state>
                       } @else {
                         <tk-empty-state
                           icon="ticket"
-                          heading="No tickets yet"
-                          description="When a customer emails, chats or submits the form, their ticket lands here."
+                          [heading]="'tickets.empty.noneTitle' | transloco"
+                          [description]="'tickets.empty.noneBody' | transloco"
                         >
-                          <a tkButton routerLink="/dashboard/tickets/new">Create the first ticket</a>
+                          <a tkButton routerLink="/dashboard/tickets/new">{{ 'tickets.empty.createFirst' | transloco }}</a>
                         </tk-empty-state>
                       }
                     </td>
@@ -249,6 +253,9 @@ export class TicketList {
   private readonly api = inject(TicketsApi);
   private readonly router = inject(Router);
   private readonly session = inject(SessionStore);
+  private readonly transloco = inject(TranslocoService);
+  /** Re-resolve TS-side copy when the language changes. */
+  private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
 
   // Bound from the query string by `withComponentInputBinding()`.
   readonly view = input('');
@@ -292,21 +299,36 @@ export class TicketList {
 
   protected readonly hasFilters = computed(() => !!(this.view() || this.priority() || this.q()));
 
-  protected readonly heading = computed(() => {
+  protected readonly headingKey = computed(() => {
     switch (this.view()) {
       case 'mine':
-        return 'Assigned to me';
+        return 'tickets.assignedToMe';
       case '':
-        return 'Tickets';
+        return 'tickets.title';
       default:
-        return toneFor(STATUS_TONE, this.view()).label;
+        return toneFor(STATUS_TONE, this.view()).labelKey;
     }
   });
 
+  /**
+   * Four whole-sentence keys, chosen here — never assembled from fragments.
+   * English pluralises with an "s"; Hindi does not, and word order differs, so a
+   * template that glues `count + ' tickets'` cannot be translated.
+   */
   protected readonly summary = computed(() => {
-    if (this.tickets.isLoading()) return 'Loading…';
-    const total = this.total();
-    return `${total} ${total === 1 ? 'ticket' : 'tickets'}${this.hasFilters() ? ' matching these filters' : ''}`;
+    this.lang();
+    if (this.tickets.isLoading()) return this.transloco.translate('tickets.loading');
+    const count = this.total();
+    const filtered = this.hasFilters();
+    const key =
+      count === 1
+        ? filtered
+          ? 'tickets.countOneFiltered'
+          : 'tickets.countOne'
+        : filtered
+          ? 'tickets.countFiltered'
+          : 'tickets.count';
+    return this.transloco.translate(key, { count });
   });
 
   constructor() {
@@ -353,7 +375,7 @@ export class TicketList {
       ticket.requester?.email ??
       ticket.guestName ??
       ticket.guestEmail ??
-      'Guest'
+      this.transloco.translate('tickets.guest')
     );
   }
 

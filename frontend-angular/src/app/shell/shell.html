@@ -13,7 +13,7 @@
         <tk-icon name="life-buoy" [size]="18" />
       </div>
       <div class="min-w-0 leading-tight">
-        <p class="font-display font-extrabold tracking-tight">Trackly</p>
+        <p class="font-display font-extrabold tracking-tight">{{ 'common.appName' | transloco }}</p>
         @if (workspaceName()) {
           <p class="truncate text-meta text-muted-foreground">{{ workspaceName() }}</p>
         }
@@ -21,8 +21,8 @@
     </div>
 
     <!-- Nav -->
-    <nav class="scroll-thin flex-1 overflow-y-auto px-3 pb-4" aria-label="Main">
-      @for (group of groups(); track group.label) {
+    <nav class="scroll-thin flex-1 overflow-y-auto px-3 pb-4" [attr.aria-label]="'nav.main' | transloco">
+      @for (group of groups(); track group.labelKey) {
         @if (group.collapsible) {
           <button
             type="button"
@@ -30,7 +30,7 @@
             [attr.aria-expanded]="adminOpen()"
             (click)="toggleAdmin()"
           >
-            {{ group.label }}
+            {{ group.labelKey | transloco }}
             <tk-icon
               name="chevron-right"
               [size]="14"
@@ -39,12 +39,12 @@
             />
           </button>
         } @else {
-          <p class="nav-group-label">{{ group.label }}</p>
+          <p class="nav-group-label">{{ group.labelKey | transloco }}</p>
         }
 
         @if (!group.collapsible || adminOpen()) {
           <div class="space-y-0.5">
-            @for (item of group.items; track item.label) {
+            @for (item of group.items; track item.labelKey) {
               <a
                 class="nav-row"
                 [class.nav-active]="isActive(item)"
@@ -61,7 +61,7 @@
                        colour reads as "this is a state", not "this is a place". -->
                   <span class="ml-0.5 size-2 shrink-0 rounded-full" [class]="dotClass(item)"></span>
                 }
-                <span class="truncate">{{ item.label }}</span>
+                <span class="truncate">{{ item.labelKey | transloco }}</span>
                 @if (count(item); as value) {
                   <span class="count-pill ml-auto">{{ value }}</span>
                 }
@@ -92,18 +92,18 @@
         <button
           type="button"
           class="fixed inset-0 z-40 cursor-default"
-          aria-label="Close menu"
+          [attr.aria-label]="'common.closeMenu' | transloco"
           (click)="profileOpen.set(false)"
         ></button>
         <div class="menu absolute bottom-full left-3 right-3 z-50 mb-2 animate-float-in">
           <button type="button" class="menu-item" (click)="theme.toggle(); profileOpen.set(false)">
             <tk-icon [name]="theme.dark() ? 'sun' : 'moon'" [size]="16" />
-            {{ theme.dark() ? 'Light mode' : 'Dark mode' }}
+            {{ (theme.dark() ? 'common.lightMode' : 'common.darkMode') | transloco }}
           </button>
           <div class="menu-sep"></div>
           <button type="button" class="menu-item text-danger" (click)="signOut()">
             <tk-icon name="log-out" [size]="16" />
-            Sign out
+            {{ 'common.signOut' | transloco }}
           </button>
         </div>
       }
@@ -115,7 +115,7 @@
     <button
       type="button"
       class="fixed inset-0 z-40 bg-foreground/40 backdrop-blur-sm lg:hidden"
-      aria-label="Close navigation"
+      [attr.aria-label]="'nav.close' | transloco"
       (click)="closeMobile()"
     ></button>
   }
@@ -129,7 +129,7 @@
       class="glass sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 md:px-6"
     >
       <span class="lg:hidden">
-        <button tkButton variant="ghost" iconOnly aria-label="Open navigation" (click)="mobileOpen.set(true)">
+        <button tkButton variant="ghost" iconOnly [attr.aria-label]="'nav.open' | transloco" (click)="mobileOpen.set(true)">
           <tk-icon name="menu" [size]="20" />
         </button>
       </span>
@@ -142,11 +142,11 @@
         (click)="paletteOpen.set(true)"
       >
         <tk-icon name="search" [size]="16" />
-        <span class="flex-1 truncate">Search tickets, people, articles…</span>
+        <span class="flex-1 truncate">{{ 'nav.searchPlaceholder' | transloco }}</span>
         <tk-kbd>⌘K</tk-kbd>
       </button>
       <span class="sm:hidden">
-        <button tkButton variant="ghost" iconOnly aria-label="Search" (click)="paletteOpen.set(true)">
+        <button tkButton variant="ghost" iconOnly [attr.aria-label]="'common.search' | transloco" (click)="paletteOpen.set(true)">
           <tk-icon name="search" [size]="20" />
         </button>
       </span>
@@ -154,19 +154,19 @@
       <div class="ml-auto flex shrink-0 items-center gap-1.5">
         <a tkButton variant="primary" size="sm" routerLink="/dashboard/tickets/new">
           <tk-icon name="plus" [size]="16" />
-          <span class="hidden sm:inline">New ticket</span>
+          <span class="hidden sm:inline">{{ 'nav.newTicket' | transloco }}</span>
         </a>
 
         <tk-dropdown align="end">
-          <button tkButton variant="ghost" iconOnly dropdown-trigger aria-label="Notifications" class="relative">
+          <button tkButton variant="ghost" iconOnly dropdown-trigger [attr.aria-label]="'nav.notifications' | transloco" class="relative">
             <tk-icon name="bell" [size]="20" />
             <span class="absolute right-1.5 top-1.5 size-2 rounded-full bg-danger ring-2 ring-background"></span>
           </button>
           <div dropdown-menu>
             <div class="w-80">
-              <p class="menu-label">Notifications</p>
+              <p class="menu-label">{{ 'nav.notifications' | transloco }}</p>
               <p class="px-2.5 py-6 text-center text-body text-muted-foreground">
-                You're all caught up.
+                {{ 'nav.allCaughtUp' | transloco }}
               </p>
             </div>
           </div>

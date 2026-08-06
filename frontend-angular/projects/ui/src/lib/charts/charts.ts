@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 
 /**
@@ -13,7 +14,8 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 
 export interface Segment {
   readonly key: string;
-  readonly label: string;
+  /** Translation key — resolved where it renders. */
+  readonly labelKey: string;
   readonly value: number;
   /** 1–5, indexing the chart series ramp. */
   readonly series: 1 | 2 | 3 | 4 | 5;
@@ -29,6 +31,7 @@ export interface Segment {
 @Component({
   selector: 'tk-donut',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [TranslocoPipe],
   host: { class: 'flex items-center gap-6' },
   template: `
     <div class="relative shrink-0" [style.width.px]="size()" [style.height.px]="size()">
@@ -72,7 +75,7 @@ export interface Segment {
               class="size-2.5 shrink-0 rounded-full"
               [style.background]="'rgb(var(--chart-' + segment.series + '))'"
             ></span>
-            <span class="truncate">{{ segment.label }}</span>
+            <span class="truncate">{{ segment.labelKey | transloco }}</span>
           </span>
           <b class="shrink-0">{{ segment.value }}</b>
         </li>
@@ -83,7 +86,7 @@ export interface Segment {
 export class Donut {
   readonly segments = input.required<readonly Segment[]>();
   readonly size = input(144);
-  readonly centerLabel = input('Total');
+  readonly centerLabel = input('');
 
   protected readonly total = computed(() =>
     this.segments().reduce((sum, s) => sum + s.value, 0),
@@ -106,6 +109,7 @@ export class Donut {
 }
 
 export interface BarGroup {
+  /** Axis label. Caller-supplied; pass an already-translated string. */
   readonly label: string;
   readonly values: readonly number[];
 }

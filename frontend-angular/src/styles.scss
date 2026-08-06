@@ -539,6 +539,15 @@ h4,
   background: rgb(var(--muted));
   border-color: transparent;
 }
+/* Shrink-to-fit, for a select sitting in a filter row.
+   A Tailwind `w-auto` CANNOT do this: styles.scss loads after Tailwind, so
+   `.input { width: 100% }` wins on specificity ties and the control stretches
+   to fill its row. Anything that needs to override a component class has to be
+   a component class. */
+.input-auto {
+  width: auto;
+  min-width: 9rem;
+}
 
 /* Textareas grow with content instead of reserving empty rows and showing an
    inner scrollbar, so a settings page keeps a single (page) scroll. */

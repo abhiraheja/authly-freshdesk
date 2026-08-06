@@ -1,12 +1,21 @@
-/* To learn more about Typescript configuration file: https://www.typescriptlang.org/docs/handbook/tsconfig-json.html. */
-/* To learn more about Angular compiler options: https://angular.dev/reference/configs/angular-compiler-options. */
+/* Packaging build only.
+ *
+ * The root tsconfig resolves @trackly/* to library SOURCE, which is what lets
+ * `ng serve` pick up a library edit with no rebuild. ng-packagr must NOT do
+ * that: compiling a dependency's source into this package would inline a second
+ * copy of it. Here the same specifiers resolve to the BUILT packages instead, so
+ * they stay external — which is why `build:libs` builds core, then ui, then the
+ * feature libraries, in that order. */
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "outDir": "../../out-tsc/lib",
     "declaration": true,
     "declarationMap": true,
-    "types": []
+    "types": [],
+    "paths": {
+      "@trackly/*": ["../../dist/trackly/*"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["**/*.spec.ts"]

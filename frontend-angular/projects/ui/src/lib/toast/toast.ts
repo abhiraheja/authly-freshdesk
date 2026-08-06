@@ -1,3 +1,4 @@
+import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, Injectable, inject, signal } from '@angular/core';
 import type { Tone } from '@trackly/core';
 import { Icon, type IconName } from '../icon/icon';
@@ -78,7 +79,7 @@ export class ToastService {
 @Component({
   selector: 'tk-toaster',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon],
+  imports: [Icon, TranslocoPipe],
   host: {
     class: 'pointer-events-none fixed bottom-6 right-6 z-[90] flex flex-col items-end gap-2',
     'aria-live': 'polite',
@@ -103,7 +104,7 @@ export class ToastService {
         <button
           type="button"
           class="shrink-0 text-muted-foreground hover:text-foreground"
-          aria-label="Dismiss"
+          [attr.aria-label]="'common.dismiss' | transloco"
           (click)="service.dismiss(toast.id)"
         >
           <tk-icon name="x" [size]="16" />

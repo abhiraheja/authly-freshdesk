@@ -17,10 +17,10 @@ import type { Routes } from '@angular/router';
 const placeholder = () => import('@trackly/ui').then((m) => m.ComingSoon);
 
 export const guestRoutes: Routes = [
-  { path: 'submit', loadComponent: placeholder, data: { title: 'Submit a ticket', from: 'frontend/src/pages/public/SubmitPage.tsx', branded: true } },
-  { path: 'kb', loadComponent: placeholder, data: { title: 'Knowledge base', from: 'frontend/src/pages/public/PublicKbPage.tsx', branded: true } },
-  { path: 'chat', loadComponent: placeholder, data: { title: 'Live chat', from: 'frontend/src/pages/public/ChatPage.tsx', branded: true } },
-  { path: 'csat/:ticketId', loadComponent: placeholder, data: { title: 'Rate your support', from: 'frontend/src/pages/public/CsatPage.tsx', branded: true } },
-  { path: 'tickets/:id', loadComponent: placeholder, data: { title: 'Your ticket', from: 'frontend/src/pages/public/GuestTicketPage.tsx', branded: true } },
-  { path: 'invite/:token', loadComponent: placeholder, data: { title: 'Accept invitation', from: 'frontend/src/pages/public/InviteAcceptPage.tsx', branded: true } },
+  { path: 'submit', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.submitTicket', from: 'frontend/src/pages/public/SubmitPage.tsx', branded: true } },
+  { path: 'kb', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.knowledgeBase', from: 'frontend/src/pages/public/PublicKbPage.tsx', branded: true } },
+  { path: 'chat', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.liveChat', from: 'frontend/src/pages/public/ChatPage.tsx', branded: true } },
+  { path: 'csat/:ticketId', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.rateSupport', from: 'frontend/src/pages/public/CsatPage.tsx', branded: true } },
+  { path: 'tickets/:id', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.yourTicket', from: 'frontend/src/pages/public/GuestTicketPage.tsx', branded: true } },
+  { path: 'invite/:token', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.acceptInvitation', from: 'frontend/src/pages/public/InviteAcceptPage.tsx', branded: true } },
 ];

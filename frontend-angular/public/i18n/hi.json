@@ -1,0 +1,242 @@
+{
+  "common": {
+    "appName": "Trackly",
+    "none": "—",
+    "close": "बंद करें",
+    "closeMenu": "मेन्यू बंद करें",
+    "cancel": "रद्द करें",
+    "dismiss": "हटाएँ",
+    "loading": "लोड हो रहा है…",
+    "retry": "फिर कोशिश करें",
+    "search": "खोजें",
+    "signOut": "साइन आउट",
+    "lightMode": "लाइट मोड",
+    "darkMode": "डार्क मोड",
+    "switchToLight": "लाइट मोड पर जाएँ",
+    "switchToDark": "डार्क मोड पर जाएँ",
+    "poweredBy": "Trackly द्वारा संचालित"
+  },
+
+  "nav": {
+    "main": "मुख्य",
+    "open": "नेविगेशन खोलें",
+    "close": "नेविगेशन बंद करें",
+    "newTicket": "नया टिकट",
+    "notifications": "सूचनाएँ",
+    "allCaughtUp": "सब कुछ देख लिया गया है।",
+    "searchPlaceholder": "टिकट, लोग, लेख खोजें…",
+    "groups": {
+      "overview": "अवलोकन",
+      "tickets": "टिकट",
+      "workspace": "वर्कस्पेस",
+      "admin": "एडमिन",
+      "support": "सहायता"
+    },
+    "items": {
+      "dashboard": "डैशबोर्ड",
+      "allTickets": "सभी टिकट",
+      "assignedToMe": "मुझे सौंपे गए",
+      "open": "खुले",
+      "pending": "लंबित",
+      "resolved": "हल किए गए",
+      "closed": "बंद",
+      "liveChat": "लाइव चैट",
+      "problems": "समस्याएँ",
+      "knowledgeBase": "नॉलेज बेस",
+      "cannedResponses": "तैयार उत्तर",
+      "analytics": "एनालिटिक्स",
+      "announcements": "घोषणाएँ",
+      "members": "सदस्य",
+      "teams": "टीमें",
+      "sla": "SLA नीतियाँ",
+      "automation": "ऑटोमेशन",
+      "aiCopilot": "AI कोपायलट",
+      "messaging": "मैसेजिंग",
+      "widget": "विजेट",
+      "email": "ईमेल",
+      "branding": "ब्रांडिंग",
+      "sso": "SSO",
+      "domains": "डोमेन",
+      "myTickets": "मेरे टिकट",
+      "newTicket": "नया टिकट"
+    }
+  },
+
+  "palette": {
+    "title": "कमांड पैलेट",
+    "placeholder": "कोई कमांड टाइप करें या खोजें…",
+    "searchLabel": "कमांड खोजें",
+    "empty": "“{{query}}” से कुछ मेल नहीं खाता।"
+  },
+
+  "login": {
+    "signIn": "Trackly में साइन इन करें",
+    "signInTo": "{{name}} में साइन इन करें",
+    "createAccount": "अपना अकाउंट बनाएँ",
+    "welcomeBack": "अपने सभी सहायता अनुरोध एक जगह देखें।",
+    "signupSubhead": "आप अपने नए वर्कस्पेस के एडमिन होंगे।",
+    "workEmail": "कार्य ईमेल",
+    "emailPlaceholder": "you@company.com",
+    "continue": "आगे बढ़ें",
+    "checkingSso": "आपका संगठन जाँचा जा रहा है…",
+    "magicLinkHint": "हम एक साइन-इन लिंक और 6 अंकों का कोड ईमेल करेंगे। लिंक पर क्लिक करें या कोड टाइप करें — कोई पासवर्ड याद रखने की ज़रूरत नहीं।",
+    "newToTrackly": "Trackly पर नए हैं?",
+    "startFree": "मुफ़्त शुरू करें",
+    "haveWorkspace": "पहले से वर्कस्पेस है?",
+    "signInLink": "साइन इन करें",
+    "sendFailed": "साइन-इन ईमेल नहीं भेजा जा सका।",
+
+    "checkEmail": "अपना ईमेल देखें",
+    "sentTo": "हमने साइन-इन लिंक और 6 अंकों का कोड भेजा है",
+    "linkExpires": "लिंक 10 मिनट में समाप्त हो जाएगा।",
+    "codeLabel": "ईमेल में मिला कोड",
+    "verify": "सत्यापित करें और आगे बढ़ें",
+    "didntGetIt": "नहीं मिला?",
+    "resend": "ईमेल दोबारा भेजें",
+    "useDifferentEmail": "दूसरा ईमेल इस्तेमाल करें",
+    "codeFailed": "यह कोड काम नहीं आया। दोबारा कोशिश करें, या ईमेल फिर भेजें।",
+
+    "chooseWorkspace": "वर्कस्पेस चुनें",
+    "belongsToMany": "{{email}} एक से अधिक वर्कस्पेस से जुड़ा है।",
+
+    "panel": {
+      "signInTitle": "हर बातचीत, एक ही जगह।",
+      "signUpTitle": "आपका सपोर्ट डेस्क, आज से चालू।",
+      "body": "ईमेल, चैट और वेब अनुरोध एक ही क़तार में आते हैं — SLA, ऑटोमेशन और AI कोपायलट के साथ।",
+      "aiDrafted": "AI ने उत्तर तैयार किया",
+      "statResponse": "औसत पहली प्रतिक्रिया",
+      "statCsat": "CSAT",
+      "statChannels": "चैनल, एक इनबॉक्स"
+    }
+  },
+
+  "dashboard": {
+    "welcome": "वापसी पर स्वागत है",
+    "welcomeNamed": "वापसी पर स्वागत है, {{name}}",
+    "subtitle": "आज आपके सपोर्ट डेस्क पर क्या हो रहा है।",
+    "openWorkspace": "टिकट वर्कस्पेस खोलें",
+    "loadFailed": "डैशबोर्ड लोड नहीं हो सका",
+    "statusBreakdown": "स्थिति के अनुसार विभाजन",
+    "statusBreakdownSub": "इस वर्कस्पेस के सभी टिकट",
+    "noTicketsYet": "अभी कोई टिकट नहीं — आते ही यहाँ दिखेंगे।",
+    "yourQueue": "आपकी क़तार",
+    "viewAll": "सभी टिकट देखें",
+    "total": "कुल",
+    "kpi": {
+      "total": "कुल टिकट",
+      "open": "खुले",
+      "pending": "लंबित",
+      "unassigned": "बिना सौंपे",
+      "openProblems": "खुली समस्याएँ"
+    },
+    "queue": {
+      "assignedToYou": "आपको सौंपे गए",
+      "unassigned": "बिना सौंपे",
+      "waiting": "उत्तर की प्रतीक्षा में"
+    }
+  },
+
+  "tickets": {
+    "title": "टिकट",
+    "assignedToMe": "मुझे सौंपे गए",
+    "newTicket": "नया टिकट",
+    "loading": "लोड हो रहा है…",
+    "count": "{{count}} टिकट",
+    "countOne": "1 टिकट",
+    "countFiltered": "इन फ़िल्टरों से मेल खाते {{count}} टिकट",
+    "countOneFiltered": "इन फ़िल्टरों से मेल खाता 1 टिकट",
+    "searchPlaceholder": "विषय या अनुरोधकर्ता खोजें…",
+    "searchLabel": "टिकट खोजें",
+    "allStatus": "सभी स्थितियाँ",
+    "allPriority": "सभी प्राथमिकताएँ",
+    "clear": "साफ़ करें",
+    "loadFailed": "टिकट लोड नहीं हो सके",
+    "unassigned": "बिना सौंपे",
+    "guest": "अतिथि",
+    "columns": {
+      "ticket": "टिकट",
+      "requester": "अनुरोधकर्ता",
+      "priority": "प्राथमिकता",
+      "status": "स्थिति",
+      "assignee": "सौंपा गया",
+      "sla": "SLA",
+      "updated": "अपडेट"
+    },
+    "empty": {
+      "noMatchTitle": "कोई टिकट मेल नहीं खाता",
+      "noMatchBody": "इन फ़िल्टरों से कोई टिकट मेल नहीं खाता। फ़िल्टर थोड़े खोलकर देखें।",
+      "clearFilters": "फ़िल्टर साफ़ करें",
+      "noneTitle": "अभी कोई टिकट नहीं",
+      "noneBody": "जब कोई ग्राहक ईमेल, चैट या फ़ॉर्म से संपर्क करेगा, उसका टिकट यहाँ आएगा।",
+      "createFirst": "पहला टिकट बनाएँ"
+    }
+  },
+
+  "status": {
+    "open": "खुला",
+    "pending": "लंबित",
+    "resolved": "हल",
+    "closed": "बंद"
+  },
+  "priority": {
+    "low": "कम",
+    "medium": "मध्यम",
+    "high": "उच्च",
+    "urgent": "अत्यावश्यक"
+  },
+  "role": {
+    "admin": "एडमिन",
+    "agent": "एजेंट",
+    "customer": "ग्राहक"
+  },
+  "sla": {
+    "response": "प्रतिक्रिया",
+    "resolve": "समाधान",
+    "inTime": "{{time}} में",
+    "overdue": "{{time}} से विलंबित"
+  },
+
+  "ui": {
+    "pagination": {
+      "label": "पेजिनेशन",
+      "showing": "{{total}} में से {{from}}–{{to}} दिखाए जा रहे हैं",
+      "previous": "पिछला पेज",
+      "next": "अगला पेज"
+    }
+  },
+
+  "comingSoon": {
+    "heading": "अभी माइग्रेट नहीं हुआ",
+    "body": "यह स्क्रीन Angular में पोर्ट की जा रही है।",
+    "bodyFrom": "यह स्क्रीन Angular में पोर्ट की जा रही है। React वाला रूप {{from}} पर है।",
+    "titles": {
+      "verifySignIn": "साइन-इन सत्यापित करें",
+      "signingIn": "साइन इन किया जा रहा है",
+      "createWorkspace": "अपना वर्कस्पेस बनाएँ",
+      "submitTicket": "टिकट भेजें",
+      "knowledgeBase": "नॉलेज बेस",
+      "liveChat": "लाइव चैट",
+      "rateSupport": "अपनी सहायता को रेट करें",
+      "yourTicket": "आपका टिकट",
+      "acceptInvitation": "निमंत्रण स्वीकार करें",
+      "myTickets": "मेरे टिकट",
+      "newTicket": "नया टिकट",
+      "ticket": "टिकट",
+      "problems": "समस्याएँ",
+      "cannedResponses": "तैयार उत्तर",
+      "analytics": "एनालिटिक्स",
+      "announcements": "घोषणाएँ",
+      "members": "सदस्य",
+      "teams": "टीमें",
+      "automation": "ऑटोमेशन",
+      "messagingChannels": "मैसेजिंग चैनल",
+      "widget": "विजेट",
+      "sla": "SLA नीतियाँ",
+      "aiCopilot": "AI कोपायलट",
+      "email": "ईमेल",
+      "branding": "ब्रांडिंग",
+      "sso": "SSO",
+      "domains": "डोमेन"
+    }
+  }
+}
