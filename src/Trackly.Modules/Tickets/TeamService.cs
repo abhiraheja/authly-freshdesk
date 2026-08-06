@@ -32,6 +32,27 @@ public class TeamService(TracklyDbContext db)
         return new TeamDto(team.Id, team.Name, []);
     }
 
+    // Rename only. A team's identity is its id — tickets reference it by that,
+    // so the name is free to change without touching anything else.
+    public async Task<TeamDto?> RenameAsync(Actor actor, Guid teamId, string name, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+            throw new ArgumentException("Team name is required.");
+
+        var team = await db.Teams
+            .SingleOrDefaultAsync(t => t.Id == teamId && t.WorkspaceId == actor.WorkspaceId, ct);
+        if (team is null) return null;
+
+        var trimmed = name.Trim();
+        if (await db.Teams.AnyAsync(
+                t => t.WorkspaceId == actor.WorkspaceId && t.Name == trimmed && t.Id != teamId, ct))
+            throw new ArgumentException("A team with that name already exists.");
+
+        team.Name = trimmed;
+        await db.SaveChangesAsync(ct);
+        return new TeamDto(team.Id, team.Name, []);
+    }
+
     public async Task<bool> DeleteAsync(Actor actor, Guid teamId, CancellationToken ct)
     {
         var deleted = await db.Teams

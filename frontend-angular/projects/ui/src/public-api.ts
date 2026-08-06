@@ -25,6 +25,7 @@ export * from './lib/overlay/dropdown';
 export * from './lib/page-header/page-header';
 export * from './lib/stat-card/stat-card';
 export * from './lib/table/table';
+export * from './lib/tabs/tabs';
 export * from './lib/charts/charts';
 
 // Migration placeholder — delete when the last React screen is ported.

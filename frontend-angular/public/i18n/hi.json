@@ -14,7 +14,8 @@
     "darkMode": "डार्क मोड",
     "switchToLight": "लाइट मोड पर जाएँ",
     "switchToDark": "डार्क मोड पर जाएँ",
-    "poweredBy": "Trackly द्वारा संचालित"
+    "poweredBy": "Trackly द्वारा संचालित",
+    "save": "सेव करें"
   },
   "nav": {
     "main": "मुख्य",
@@ -57,7 +58,8 @@
       "sso": "SSO",
       "domains": "डोमेन",
       "myTickets": "मेरे टिकट",
-      "newTicket": "नया टिकट"
+      "newTicket": "नया टिकट",
+      "configuration": "कॉन्फ़िगरेशन"
     }
   },
   "palette": {
@@ -170,11 +172,11 @@
       "createFirst": "पहला टिकट बनाएँ"
     },
     "new": {
-      "title": "नया टिकट",
-      "subtitle": "यह आपके नाम से दर्ज होगा और सबसे खाली एजेंट को अपने आप सौंपा जाएगा।",
+      "title": "टिकट बनाएँ",
+      "subtitle": "किसी ग्राहक की ओर से सहायता अनुरोध दर्ज करें, या अपना खुद का बनाएँ।",
       "subject": "विषय",
       "subjectPlaceholder": "समस्या का संक्षिप्त विवरण",
-      "category": "विभाग",
+      "category": "श्रेणी",
       "description": "विवरण",
       "descriptionPlaceholder": "क्या हुआ, आपको क्या अपेक्षित था, और कोई एरर मैसेज…",
       "attachment": "अटैचमेंट",
@@ -183,15 +185,20 @@
       "removeFile": "अटैचमेंट हटाएँ",
       "submit": "टिकट बनाएँ",
       "failed": "टिकट नहीं बन सका",
-      "categoryPlaceholder": "बिलिंग, तकनीकी…",
       "channel": "चैनल",
-      "channelPlaceholder": "web, email, phone…",
       "showSuggestions": "सुझाव दिखाएँ",
       "tags": "टैग",
       "tagsPlaceholder": "टैग लिखकर Enter दबाएँ",
       "tagsHint": "लिखते ही मौजूदा टैग सुझाए जाते हैं। नया टैग तब बनेगा जब टिकट सेव होगा।",
       "removeTag": "टैग हटाएँ",
-      "createTag": "बनाएँ"
+      "createTag": "बनाएँ",
+      "requester": "ग्राहक",
+      "requesterPlaceholder": "नाम या ईमेल से खोजें…",
+      "requesterMatched": "टिकट इसी ग्राहक के नाम दर्ज होगा।",
+      "requesterSelf": "खाली छोड़ें तो आपके अपने नाम दर्ज होगा।",
+      "department": "विभाग",
+      "noDepartment": "कोई विभाग नहीं",
+      "noCategory": "कोई श्रेणी नहीं"
     }
   },
   "status": {
@@ -257,6 +264,33 @@
       "branding": "ब्रांडिंग",
       "sso": "SSO",
       "domains": "डोमेन"
+    }
+  },
+  "admin": {
+    "config": {
+      "title": "कॉन्फ़िगरेशन",
+      "subtitle": "टिकट बनाते समय एजेंट इन्हीं सूचियों में से चुनते हैं।",
+      "loadFailed": "कॉन्फ़िगरेशन लोड नहीं हो सका",
+      "add": "जोड़ें",
+      "rename": "नाम बदलें",
+      "renameLabel": "नया नाम",
+      "delete": "हटाएँ",
+      "activate": "सक्रिय करें",
+      "deactivate": "निष्क्रिय करें",
+      "inactive": "निष्क्रिय",
+      "empty": "अभी यहाँ कुछ नहीं है।",
+      "departments": "विभाग",
+      "departmentsHelp": "यह रूटिंग भी करता है — टिकट चुने गए विभाग के भीतर ही सौंपा जाता है।",
+      "departmentsAdd": "नए विभाग का नाम",
+      "categories": "श्रेणियाँ",
+      "categoriesHelp": "टिकट किस बारे में है। सिर्फ़ लेबल — कोई रूटिंग नहीं।",
+      "categoriesAdd": "नई श्रेणी का नाम",
+      "priorities": "प्राथमिकताएँ",
+      "prioritiesHelp": "नई प्राथमिकता के लिए अपनी SLA पॉलिसी चाहिए, वरना उस पर कोई क्लॉक नहीं चलेगा।",
+      "prioritiesAdd": "नई प्राथमिकता का नाम",
+      "channels": "चैनल",
+      "channelsHelp": "टिकट कहाँ से आया। बिल्ट-इन चैनल कनेक्टर लिखते हैं, वे हटाए नहीं जा सकते।",
+      "channelsAdd": "नए चैनल का नाम"
     }
   }
 }

@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  booleanAttribute,
   computed,
   inject,
   input,
@@ -38,7 +39,7 @@ import { Icon } from '../icon/icon';
     <!-- Clicking the padding around the chips focuses the caret, which is what
          a text field is expected to do. The template ref is used directly:
          a viewChild named "field" would be shadowed by the ref itself. -->
-    <div class="tag-field" (click)="fieldEl.focus()">
+    <div class="tag-field" [class.tag-field-inset]="inset()" (click)="fieldEl.focus()">
       @for (tag of value(); track tag) {
         <span class="tag-chip">
           {{ tag }}
@@ -55,7 +56,7 @@ import { Icon } from '../icon/icon';
         role="combobox"
         aria-autocomplete="list"
         [id]="inputId()"
-        [attr.placeholder]="value().length ? '' : placeholder()"
+        [attr.placeholder]="placeholder()"
         [attr.aria-expanded]="open()"
         [attr.aria-controls]="listId"
         [attr.aria-activedescendant]="activeId()"
@@ -116,6 +117,10 @@ export class TagInput {
   readonly placeholder = input('');
   readonly inputId = input<string>();
   readonly maxLength = input(40);
+  /** Muted fill, no idle border — matches `tkInput inset`.
+   *  booleanAttribute so the bare `inset` attribute works; without it the
+   *  empty string a bare attribute passes is a type error, not `true`. */
+  readonly inset = input(false, { transform: booleanAttribute });
   readonly removeLabel = input('Remove');
   readonly createLabel = input('Create');
 

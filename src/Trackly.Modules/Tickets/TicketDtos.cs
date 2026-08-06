@@ -93,7 +93,12 @@ public record CreateTicketRequest(
     string? Priority,
     string? CategoryName = null,
     string? Channel = null,
-    List<string>? Tags = null);
+    List<string>? Tags = null,
+    Guid? TeamId = null,
+    // Files the ticket on someone else's behalf — the agent logging a phone
+    // call. Agent/admin only, and the id must belong to the same workspace, or
+    // this is a way to attach a ticket to any user in the system.
+    Guid? RequesterId = null);
 
 public record UpdateTicketRequest(
     string? Subject,

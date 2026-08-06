@@ -14,7 +14,8 @@
     "darkMode": "Dark mode",
     "switchToLight": "Switch to light mode",
     "switchToDark": "Switch to dark mode",
-    "poweredBy": "Powered by Trackly"
+    "poweredBy": "Powered by Trackly",
+    "save": "Save"
   },
   "nav": {
     "main": "Main",
@@ -57,7 +58,8 @@
       "sso": "SSO",
       "domains": "Domains",
       "myTickets": "My tickets",
-      "newTicket": "New ticket"
+      "newTicket": "New ticket",
+      "configuration": "Configuration"
     }
   },
   "palette": {
@@ -170,11 +172,11 @@
       "createFirst": "Create the first ticket"
     },
     "new": {
-      "title": "New ticket",
-      "subtitle": "Filed under your name and auto-assigned to the agent with the lightest queue.",
+      "title": "Create ticket",
+      "subtitle": "Log a support request on behalf of a customer, or raise one of your own.",
       "subject": "Subject",
       "subjectPlaceholder": "Brief summary of the problem",
-      "category": "Department",
+      "category": "Category",
       "description": "Description",
       "descriptionPlaceholder": "What happened, what you expected, and any error messages…",
       "attachment": "Attachment",
@@ -183,15 +185,20 @@
       "removeFile": "Remove attachment",
       "submit": "Create ticket",
       "failed": "Couldn't create the ticket",
-      "categoryPlaceholder": "Billing, Technical…",
       "channel": "Channel",
-      "channelPlaceholder": "web, email, phone…",
       "showSuggestions": "Show suggestions",
       "tags": "Tags",
       "tagsPlaceholder": "Add a tag and press Enter",
       "tagsHint": "Existing tags are suggested as you type. A new one is created when the ticket is saved.",
       "removeTag": "Remove tag",
-      "createTag": "Create"
+      "createTag": "Create",
+      "requester": "Customer",
+      "requesterPlaceholder": "Search by name or email…",
+      "requesterMatched": "The ticket will be filed under this customer.",
+      "requesterSelf": "Leave blank to file it under your own name.",
+      "department": "Department",
+      "noDepartment": "No department",
+      "noCategory": "No category"
     }
   },
   "status": {
@@ -257,6 +264,33 @@
       "branding": "Branding",
       "sso": "SSO",
       "domains": "Domains"
+    }
+  },
+  "admin": {
+    "config": {
+      "title": "Configuration",
+      "subtitle": "The lists agents choose from when they file a ticket.",
+      "loadFailed": "Couldn't load configuration",
+      "add": "Add",
+      "rename": "Rename",
+      "renameLabel": "New name",
+      "delete": "Delete",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "inactive": "Inactive",
+      "empty": "Nothing here yet.",
+      "departments": "Departments",
+      "departmentsHelp": "Also routes the ticket — it is assigned within the department you pick.",
+      "departmentsAdd": "New department name",
+      "categories": "Categories",
+      "categoriesHelp": "What the ticket is about. Labels only — no routing.",
+      "categoriesAdd": "New category name",
+      "priorities": "Priorities",
+      "prioritiesHelp": "A new priority needs its own SLA policy, or no clock will run on it.",
+      "prioritiesAdd": "New priority name",
+      "channels": "Channels",
+      "channelsHelp": "How the ticket arrived. Built-in ones are written by connectors and cannot be deleted.",
+      "channelsAdd": "New channel name"
     }
   }
 }

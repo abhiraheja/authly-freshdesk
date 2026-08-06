@@ -8,7 +8,7 @@ namespace Trackly.Modules.Tickets;
 
 public class TicketService(
     TracklyDbContext db, NotificationService notifications, SlaService sla, AutomationService automation,
-    CsatService csat, TagService tags)
+    CsatService csat, TagService tags, TicketOptionService options)
 {
     // ---- Queries ------------------------------------------------------------
 
@@ -87,8 +87,14 @@ public class TicketService(
     public async Task<TicketDetailDto> CreateAsync(
         Actor actor, CreateTicketRequest request, CancellationToken ct)
     {
+        // Priority and channel are workspace-configured now, so the valid set is
+        // a query rather than a constant. TicketPriority.Medium is still the
+        // fallback: it is seeded for every workspace and cannot be the one that
+        // gets deactivated away (the service refuses to leave a kind empty).
         var priority = request.Priority ?? TicketPriority.Medium;
-        if (!TicketPriority.All.Contains(priority))
+        var allowedPriorities = await options.ActiveValuesAsync(
+            actor.WorkspaceId, TicketOptionKind.Priority, ct);
+        if (!allowedPriorities.Contains(priority))
             throw new ArgumentException("Invalid priority.");
 
         Guid? categoryId = null;
@@ -108,7 +114,13 @@ public class TicketService(
 
         var channel = TicketChannel.Web;
         if (actor.IsAgentOrAdmin && !string.IsNullOrWhiteSpace(request.Channel))
+        {
             channel = NormalizeChannel(request.Channel);
+            var allowedChannels = await options.ActiveValuesAsync(
+                actor.WorkspaceId, TicketOptionKind.Channel, ct);
+            if (!allowedChannels.Contains(channel))
+                throw new ArgumentException("Invalid channel.");
+        }
 
         // Tags are resolved BEFORE the ticket is added, so the Tag rows their
         // SaveChanges writes cannot drag a half-built ticket into the database
@@ -116,6 +128,27 @@ public class TicketService(
         var resolvedTags = actor.IsAgentOrAdmin && request.Tags is { Count: > 0 }
             ? await tags.ResolveAsync(actor.WorkspaceId, request.Tags, ct)
             : [];
+
+        // Filing on a customer's behalf. Membership is re-checked here rather
+        // than trusted from the client, or any user id in the system could be
+        // attached to this workspace's ticket.
+        var requesterId = actor.UserId;
+        if (actor.IsAgentOrAdmin && request.RequesterId is { } onBehalfOf)
+        {
+            var exists = await db.Users
+                .AnyAsync(u => u.Id == onBehalfOf && u.WorkspaceId == actor.WorkspaceId, ct);
+            if (!exists) throw new ArgumentException("Unknown requester.");
+            requesterId = onBehalfOf;
+        }
+
+        Guid? teamId = null;
+        if (actor.IsAgentOrAdmin && request.TeamId is { } wantedTeam)
+        {
+            var exists = await db.Teams
+                .AnyAsync(t => t.Id == wantedTeam && t.WorkspaceId == actor.WorkspaceId, ct);
+            if (!exists) throw new ArgumentException("Unknown team.");
+            teamId = wantedTeam;
+        }
 
         var ticket = new Ticket
         {
@@ -125,7 +158,8 @@ public class TicketService(
             Priority = priority,
             CategoryId = categoryId,
             Channel = channel,
-            RequesterId = actor.UserId,
+            TeamId = teamId,
+            RequesterId = requesterId,
         };
         db.Tickets.Add(ticket);
 
@@ -133,7 +167,9 @@ public class TicketService(
         foreach (var tag in resolvedTags)
             db.TicketTags.Add(new TicketTag { Ticket = ticket, Tag = tag });
 
-        var assigneeId = await PickRoundRobinAssigneeAsync(actor.WorkspaceId, null, ct);
+        // Scoped to the chosen department, so picking one actually routes the
+        // ticket instead of only labelling it.
+        var assigneeId = await PickRoundRobinAssigneeAsync(actor.WorkspaceId, teamId, ct);
         if (assigneeId is not null)
         {
             ticket.AssigneeId = assigneeId;
@@ -186,23 +222,6 @@ public class TicketService(
         var channel = string.Join(' ', raw.Split(' ', StringSplitOptions.RemoveEmptyEntries))
             .ToLowerInvariant();
         return channel.Length > 32 ? channel[..32] : channel;
-    }
-
-    // Every channel the workspace has actually used, plus the ones Trackly knows
-    // how to render — the suggestion list behind the new-ticket channel field.
-    public async Task<IReadOnlyList<string>> ChannelsAsync(Actor actor, CancellationToken ct)
-    {
-        var used = await db.Tickets
-            .Where(t => t.WorkspaceId == actor.WorkspaceId)
-            .Select(t => t.Channel)
-            .Distinct()
-            .ToListAsync(ct);
-
-        return used.Concat(TicketChannel.All)
-            .Where(c => !string.IsNullOrWhiteSpace(c))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
-            .ToList();
     }
 
     // Active agent with the fewest open/pending tickets. Also used for guest tickets.
@@ -272,7 +291,11 @@ public class TicketService(
 
         if (request.Priority is not null)
         {
-            if (!TicketPriority.All.Contains(request.Priority))
+            // Same configured set as create — otherwise a workspace's own
+            // priority could be chosen on the form and rejected on edit.
+            var allowed = await options.ActiveValuesAsync(
+                actor.WorkspaceId, TicketOptionKind.Priority, ct);
+            if (!allowed.Contains(request.Priority))
                 throw new ArgumentException("Invalid priority.");
             ticket.Priority = request.Priority;
         }

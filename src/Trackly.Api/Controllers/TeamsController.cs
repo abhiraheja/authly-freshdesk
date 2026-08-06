@@ -23,6 +23,14 @@ public class TeamsController(TeamService teams) : ControllerBase
     public async Task<IActionResult> Create([FromBody] CreateTeamRequest req, CancellationToken ct)
         => StatusCode(StatusCodes.Status201Created, await teams.CreateAsync(User.GetActor(), req.Name, ct));
 
+    [HttpPut("{id:guid}")]
+    [Authorize(Policy = "Admin")]
+    public async Task<IActionResult> Rename(Guid id, [FromBody] CreateTeamRequest req, CancellationToken ct)
+    {
+        var renamed = await teams.RenameAsync(User.GetActor(), id, req.Name, ct);
+        return renamed is null ? NotFound() : Ok(renamed);
+    }
+
     [HttpDelete("{id:guid}")]
     [Authorize(Policy = "Admin")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)

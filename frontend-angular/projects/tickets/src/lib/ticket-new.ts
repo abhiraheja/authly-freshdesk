@@ -26,23 +26,20 @@ import {
   ToastService,
 } from '@trackly/ui';
 
-/** Mirrors `TicketPriority.All` on the server; anything else is a 400. */
-const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
-
 /**
  * New ticket — the "Form" page shape: one column, capped width, a single card,
  * actions pinned at its foot.
  *
- * **What this form can and cannot set.** `POST /api/tickets` takes exactly
- * `subject`, `description`, `categoryId` and `priority`. It files the ticket
- * under the *calling* user as requester and picks the assignee itself
- * (round-robin over active agents). So there is deliberately no requester field
- * and no assignee field here — either one would be a control that silently does
- * nothing. The hint under the header says so out loud rather than leaving an
- * agent to discover it after filing.
+ * **Where each field's choices come from.** Department, priority, category and
+ * channel are all admin-configured lists, fetched as four independent resources
+ * so one failing leaves the others usable. Only tags are free text — a new one
+ * is created when the ticket saves.
  *
- * Raising a ticket on a customer's behalf needs a server change; until then the
- * honest routes in are email, the portal, the widget and the guest form.
+ * **Two fields are the caller's to leave alone.** Subject and description are
+ * the only required ones; everything else, requester included, can be set later
+ * from the ticket. There is still no assignee field, because the server picks
+ * that itself (round-robin within the chosen department) — a control for it
+ * would be one that silently does nothing.
  */
 @Component({
   selector: 'tk-ticket-new',
@@ -71,16 +68,38 @@ const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
         {{ 'tickets.title' | transloco }}
       </a>
 
-      <h1 class="font-display text-page font-extrabold">{{ 'tickets.new.title' | transloco }}</h1>
-      <p class="mb-6 mt-1 text-body text-muted-foreground">{{ 'tickets.new.subtitle' | transloco }}</p>
-
       <form (ngSubmit)="submit()">
         <tk-card>
           <div class="space-y-5">
+            <header class="mb-1">
+              <h1 class="font-display text-page font-extrabold">{{ 'tickets.new.title' | transloco }}</h1>
+              <p class="mt-1 text-body text-muted-foreground">{{ 'tickets.new.subtitle' | transloco }}</p>
+            </header>
+
+            <!-- Requester. Free text over the workspace's people so an agent can
+                 log a call without leaving the form, but the VALUE is an id: a
+                 name that matches nobody files under the agent, which the hint
+                 below says out loud rather than letting it surprise them. -->
+            <div>
+              <label tkLabel for="requester">{{ 'tickets.new.requester' | transloco }}</label>
+              <tk-combobox
+                inset
+                inputId="requester"
+                [(value)]="requesterLabel"
+                [suggestions]="customerNames()"
+                [placeholder]="'tickets.new.requesterPlaceholder' | transloco"
+                [toggleLabel]="'tickets.new.showSuggestions' | transloco"
+              />
+              <p class="mt-1.5 text-meta text-muted-foreground">
+                {{ (requesterId() ? 'tickets.new.requesterMatched' : 'tickets.new.requesterSelf') | transloco }}
+              </p>
+            </div>
+
             <div>
               <label tkLabel for="subject">{{ 'tickets.new.subject' | transloco }}</label>
               <input
                 tkInput
+                inset
                 #subjectField
                 id="subject"
                 name="subject"
@@ -91,45 +110,57 @@ const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
               />
             </div>
 
-            <div class="grid gap-5 sm:grid-cols-3">
+            <!-- 2×2. Department and Category are different axes: the department
+                 is WHO handles it (and actually routes the assignment), the
+                 category is WHAT it is about. -->
+            <div class="grid gap-5 sm:grid-cols-2">
               <div>
-                <label tkLabel for="priority">{{ 'tickets.columns.priority' | transloco }}</label>
-                <select tkInput id="priority" name="priority" [(ngModel)]="priority">
-                  @for (value of priorities; track value) {
-                    <option [value]="value">{{ 'priority.' + value | transloco }}</option>
+                <label tkLabel for="team">{{ 'tickets.new.department' | transloco }}</label>
+                <select tkInput inset id="team" name="team" [(ngModel)]="teamId">
+                  <option value="">{{ 'tickets.new.noDepartment' | transloco }}</option>
+                  @for (team of teamList(); track team.id) {
+                    <option [value]="team.id">{{ team.name }}</option>
                   }
                 </select>
               </div>
 
-              <!-- Free text, not a picker. Every suggestion list here is a
-                   convenience: a failed fetch costs the shortcut, never the
-                   ability to file, so none of them blocks or shows an error. -->
+              <!-- Priority and channel come from the workspace's configured
+                   lists, so the label is whatever the admin called it. Bind the
+                   value, render the label: renaming an option must not rewrite
+                   the tickets already carrying it. -->
+              <div>
+                <label tkLabel for="priority">{{ 'tickets.columns.priority' | transloco }}</label>
+                <select tkInput inset id="priority" name="priority" [(ngModel)]="priority">
+                  @for (option of priorityOptions(); track option.id) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
+              </div>
+
               <div>
                 <label tkLabel for="category">{{ 'tickets.new.category' | transloco }}</label>
-                <tk-combobox
-                  inputId="category"
-                  [(value)]="categoryName"
-                  [suggestions]="categoryNames()"
-                  [placeholder]="'tickets.new.categoryPlaceholder' | transloco"
-                  [toggleLabel]="'tickets.new.showSuggestions' | transloco"
-                />
+                <select tkInput inset id="category" name="category" [(ngModel)]="categoryId">
+                  <option value="">{{ 'tickets.new.noCategory' | transloco }}</option>
+                  @for (category of categoryList(); track category.id) {
+                    <option [value]="category.id">{{ category.name }}</option>
+                  }
+                </select>
               </div>
 
               <div>
                 <label tkLabel for="channel">{{ 'tickets.new.channel' | transloco }}</label>
-                <tk-combobox
-                  inputId="channel"
-                  [(value)]="channel"
-                  [suggestions]="channelNames()"
-                  [placeholder]="'tickets.new.channelPlaceholder' | transloco"
-                  [toggleLabel]="'tickets.new.showSuggestions' | transloco"
-                />
+                <select tkInput inset id="channel" name="channel" [(ngModel)]="channel">
+                  @for (option of channelOptions(); track option.id) {
+                    <option [value]="option.value">{{ option.label }}</option>
+                  }
+                </select>
               </div>
             </div>
 
             <div>
               <label tkLabel for="tags">{{ 'tickets.new.tags' | transloco }}</label>
               <tk-tag-input
+                inset
                 inputId="tags"
                 [(value)]="tags"
                 [suggestions]="tagNames()"
@@ -144,6 +175,7 @@ const PRIORITIES = ['low', 'medium', 'high', 'urgent'] as const;
               <label tkLabel for="description">{{ 'tickets.new.description' | transloco }}</label>
               <textarea
                 tkInput
+                inset
                 id="description"
                 name="description"
                 rows="7"
@@ -227,14 +259,15 @@ export class TicketNew {
     afterNextRender(() => this.subjectField().nativeElement.focus());
   }
 
-  protected readonly priorities = PRIORITIES;
-
   protected readonly subject = signal('');
   protected readonly description = signal('');
   protected readonly priority = signal<string>('medium');
-  protected readonly categoryName = signal('');
+  protected readonly categoryId = signal('');
   protected readonly channel = signal('');
+  protected readonly teamId = signal('');
   protected readonly tags = signal<string[]>([]);
+  /** What the agent typed into the requester box — a display name, not an id. */
+  protected readonly requesterLabel = signal('');
   protected readonly file = signal<File | null>(null);
   protected readonly fileError = signal<string | null>(null);
   protected readonly dragging = signal(false);
@@ -247,13 +280,36 @@ export class TicketNew {
    * a single combined fetch would take all three down together.
    */
   private readonly categories = resource({ loader: () => this.api.categories() });
-  private readonly channels = resource({ loader: () => this.api.channels() });
+  private readonly priorities = resource({ loader: () => this.api.ticketOptions('priority') });
+  private readonly channels = resource({ loader: () => this.api.ticketOptions('channel') });
   private readonly tagCatalogue = resource({ loader: () => this.api.tags() });
+  private readonly teams = resource({ loader: () => this.api.teams() });
+  private readonly customers = resource({ loader: () => this.api.users('customer') });
 
-  protected readonly categoryNames = computed(() =>
-    (this.categories.value() ?? []).map((category) => category.name),
+  protected readonly teamList = computed(() => this.teams.value() ?? []);
+  protected readonly categoryList = computed(() => this.categories.value() ?? []);
+  protected readonly priorityOptions = computed(() => this.priorities.value() ?? []);
+  protected readonly channelOptions = computed(() => this.channels.value() ?? []);
+
+  /**
+   * "Name (email)" reads as one searchable string, and the email is what makes
+   * two people called Priya distinguishable.
+   */
+  private readonly customerOptions = computed(() =>
+    (this.customers.value() ?? []).map((user) => ({
+      id: user.id,
+      label: user.name ? `${user.name} (${user.email ?? ''})`.replace(' ()', '') : (user.email ?? user.id),
+    })),
   );
-  protected readonly channelNames = computed(() => this.channels.value() ?? []);
+  protected readonly customerNames = computed(() => this.customerOptions().map((option) => option.label));
+
+  /** Null until the typed text is exactly one of the offered people. */
+  protected readonly requesterId = computed(() => {
+    const typed = this.requesterLabel().trim().toLowerCase();
+    if (!typed) return null;
+    return this.customerOptions().find((option) => option.label.toLowerCase() === typed)?.id ?? null;
+  });
+
   /** Most-used first: the tag someone wants is far likelier to be a common one. */
   protected readonly tagNames = computed(() =>
     [...(this.tagCatalogue.value() ?? [])]
@@ -321,9 +377,11 @@ export class TicketNew {
         subject: this.subject().trim(),
         description: this.description().trim(),
         priority: this.priority(),
-        categoryName: this.categoryName().trim() || undefined,
+        categoryId: this.categoryId() || undefined,
         channel: this.channel().trim() || undefined,
         tags: this.tags().length ? this.tags() : undefined,
+        teamId: this.teamId() || undefined,
+        requesterId: this.requesterId() ?? undefined,
       });
 
       const chosen = this.file();

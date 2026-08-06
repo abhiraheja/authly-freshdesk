@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  booleanAttribute,
   computed,
   inject,
   input,
@@ -45,6 +46,7 @@ import { Icon } from '../icon/icon';
   template: `
     <input
       class="input pr-9"
+      [class.input-inset]="inset()"
       type="text"
       autocomplete="off"
       role="combobox"
@@ -106,6 +108,10 @@ export class Combobox {
   readonly placeholder = input('');
   readonly inputId = input<string>();
   readonly disabled = input(false);
+  /** Muted fill, no idle border — matches `tkInput inset`.
+   *  booleanAttribute so the bare `inset` attribute works; without it the
+   *  empty string a bare attribute passes is a type error, not `true`. */
+  readonly inset = input(false, { transform: booleanAttribute });
   /** Accessible name for the open/close chevron. */
   readonly toggleLabel = input('Show suggestions');
 

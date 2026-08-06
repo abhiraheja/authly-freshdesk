@@ -39,13 +39,6 @@ public class TicketsController(TicketService tickets, AttachmentService attachme
         return CreatedAtAction(nameof(Get), new { id = ticket.Id }, ticket);
     }
 
-    // Suggestion list for the new-ticket channel field. Agent/admin only: it
-    // reveals which channels the workspace runs on.
-    [HttpGet("channels")]
-    [Authorize(Policy = "AgentOrAdmin")]
-    public async Task<IActionResult> Channels(CancellationToken ct)
-        => Ok(await tickets.ChannelsAsync(User.GetActor(), ct));
-
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> Get(Guid id, CancellationToken ct)
     {

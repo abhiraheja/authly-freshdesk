@@ -537,10 +537,24 @@ h4,
   font-size: 0.8125rem;
   border-radius: var(--radius-chip);
 }
-/* Inset variant — search bars and composers sit on a muted fill. */
+/* ---- Inset variant ----
+   A filled control with no idle border: search bars, composers, and forms where
+   the fields should read as one calm block rather than a stack of outlined
+   boxes.
+
+   Its focus state is deliberately quieter than the default. The bordered input
+   needs a loud ring because it has to beat its own grey border; a filled one
+   starts from no border at all, so the same 3px ring reads as a shout — the
+   field appears to jump forward. A 1px tinted border plus a whisper of ring is
+   enough to be unmistakable, and it holds the field's size steady. */
 .input-inset {
   background: rgb(var(--muted));
   border-color: transparent;
+}
+.input-inset:focus {
+  background: rgb(var(--primary) / 0.04);
+  border-color: rgb(var(--primary) / 0.35);
+  box-shadow: 0 0 0 3px rgb(var(--primary) / 0.07);
 }
 /* Shrink-to-fit, for a select sitting in a filter row.
    A Tailwind `w-auto` CANNOT do this: styles.scss loads after Tailwind, so
@@ -882,6 +896,46 @@ tr:focus-within .row-actions {
   color: rgb(var(--primary));
 }
 
+/* ---- Tabs ----
+   An underline rail rather than pills: tabs sit directly above the panel they
+   control, and a moving underline is the cheapest way to show which one the
+   panel belongs to. The rail is a bottom border on the list, so the active tab's
+   own border paints over it. */
+.tablist {
+  display: flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid rgb(var(--border));
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.tablist::-webkit-scrollbar {
+  display: none;
+}
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 0.875rem;
+  margin-bottom: -1px;
+  border-bottom: 2px solid transparent;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(var(--muted-foreground));
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+.tab:hover {
+  color: rgb(var(--foreground));
+}
+.tab[aria-selected='true'] {
+  color: rgb(var(--primary));
+  border-bottom-color: rgb(var(--primary));
+}
+
 /* ---- Tag field ----
    A bordered box that CONTAINS an input rather than being one, so selected
    chips and the caret share a single control. It borrows the input's focus ring
@@ -905,6 +959,16 @@ tr:focus-within .row-actions {
 .tag-field:focus-within {
   border-color: rgb(var(--ring));
   box-shadow: 0 0 0 3px rgb(var(--ring) / 0.18);
+}
+/* Same reasoning as .input-inset — see the note there. */
+.tag-field-inset {
+  background: rgb(var(--muted));
+  border-color: transparent;
+}
+.tag-field-inset:focus-within {
+  background: rgb(var(--primary) / 0.04);
+  border-color: rgb(var(--primary) / 0.35);
+  box-shadow: 0 0 0 3px rgb(var(--primary) / 0.07);
 }
 .tag-field input {
   flex: 1 1 6rem;

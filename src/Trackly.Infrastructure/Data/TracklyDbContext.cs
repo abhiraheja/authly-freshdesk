@@ -10,6 +10,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<Session> Sessions => Set<Session>();
     public DbSet<EmailToken> EmailTokens => Set<EmailToken>();
     public DbSet<Category> Categories => Set<Category>();
+    public DbSet<TicketOption> TicketOptions => Set<TicketOption>();
     public DbSet<Ticket> Tickets => Set<Ticket>();
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<TicketAssignment> TicketAssignments => Set<TicketAssignment>();
@@ -92,6 +93,20 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.ToTable("categories");
             e.HasIndex(c => new { c.WorkspaceId, c.Name }).IsUnique();
             e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TicketOption>(e =>
+        {
+            e.ToTable("ticket_options");
+            // (workspace, kind, value) is the identity: the value is what lands
+            // on a ticket, so two rows sharing one would make a ticket ambiguous.
+            e.HasIndex(o => new { o.WorkspaceId, o.Kind, o.Value }).IsUnique();
+            e.Property(o => o.Kind).HasMaxLength(32);
+            e.Property(o => o.Value).HasMaxLength(64);
+            e.Property(o => o.Label).HasMaxLength(64);
+            e.Property(o => o.Color).HasMaxLength(32);
+            e.HasOne(o => o.Workspace).WithMany().HasForeignKey(o => o.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

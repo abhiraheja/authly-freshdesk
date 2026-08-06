@@ -18,6 +18,38 @@ export interface TagUsage extends Tag {
   ticketCount: number;
 }
 
+export type TicketOptionKind = 'priority' | 'channel';
+
+/**
+ * One admin-configured choice for a fixed-vocabulary ticket field.
+ *
+ * `value` is what sits on the ticket and what automation matches; `label` is
+ * what people read. That split is what lets an admin rename an option without
+ * rewriting stored tickets — so bind `value` and render `label`, never the
+ * other way round.
+ */
+export interface TicketOption {
+  id: string;
+  kind: TicketOptionKind;
+  value: string;
+  label: string;
+  color: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  /** Ships with Trackly: relabel and deactivate yes, delete no. */
+  isSystem: boolean;
+}
+
+/**
+ * A department. Trackly calls these teams internally because they also carry
+ * routing — a ticket filed into one is round-robin'd within its members.
+ */
+export interface Team {
+  id: string;
+  name: string;
+  members: UserSummary[];
+}
+
 export interface UserSummary {
   id: string;
   name: string | null;
@@ -153,13 +185,69 @@ export class TicketsApi {
     channel?: string;
     priority?: string;
     tags?: string[];
+    teamId?: string;
+    /** File on a customer's behalf. Agent/admin only; ignored otherwise. */
+    requesterId?: string;
   }): Promise<TicketDetail> {
     return this.api.post<TicketDetail>('/api/tickets', body);
   }
 
-  /** Suggestion list: channels the workspace has used, plus Trackly's own. */
-  channels(): Promise<string[]> {
-    return this.api.get<string[]>('/api/tickets/channels');
+  /** Departments — teams double as the routing group a ticket is filed into. */
+  teams(): Promise<Team[]> {
+    return this.api.get<Team[]>('/api/teams');
+  }
+
+  createTeam(name: string): Promise<Team> {
+    return this.api.post<Team>('/api/teams', { name });
+  }
+
+  renameTeam(id: string, name: string): Promise<Team> {
+    return this.api.put<Team>(`/api/teams/${id}`, { name });
+  }
+
+  deleteTeam(id: string): Promise<void> {
+    return this.api.delete<void>(`/api/teams/${id}`);
+  }
+
+  createCategory(body: { name: string; color?: string }): Promise<Category> {
+    return this.api.post<Category>('/api/categories', body);
+  }
+
+  updateCategory(id: string, body: { name: string; color?: string }): Promise<Category> {
+    return this.api.put<Category>(`/api/categories/${id}`, body);
+  }
+
+  deleteCategory(id: string): Promise<void> {
+    return this.api.delete<void>(`/api/categories/${id}`);
+  }
+
+  /** Workspace members, for the requester picker. */
+  users(role?: string): Promise<UserSummary[]> {
+    return this.api.get<UserSummary[]>('/api/users', role ? { role } : {});
+  }
+
+  /**
+   * An admin-configured vocabulary. Pickers ask for the default (active only);
+   * the admin screen passes `includeInactive` so a retired option can be
+   * brought back.
+   */
+  ticketOptions(kind: TicketOptionKind, includeInactive = false): Promise<TicketOption[]> {
+    return this.api.get<TicketOption[]>('/api/ticket-options', { kind, includeInactive });
+  }
+
+  createTicketOption(body: { kind: TicketOptionKind; label: string; color?: string }): Promise<TicketOption> {
+    return this.api.post<TicketOption>('/api/ticket-options', body);
+  }
+
+  updateTicketOption(
+    id: string,
+    body: { label?: string; color?: string; sortOrder?: number; isActive?: boolean },
+  ): Promise<TicketOption> {
+    return this.api.put<TicketOption>(`/api/ticket-options/${id}`, body);
+  }
+
+  deleteTicketOption(id: string): Promise<void> {
+    return this.api.delete<void>(`/api/ticket-options/${id}`);
   }
 
   /** Every tag in the workspace, with how many tickets carry it. */
