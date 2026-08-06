@@ -26,13 +26,7 @@ public class TagService(TracklyDbContext db)
             .SingleOrDefaultAsync(t => t.Id == ticketId && t.WorkspaceId == actor.WorkspaceId, ct);
         if (ticket is null) return null;
 
-        var wanted = names
-            .Select(n => n.Trim())
-            .Where(n => n.Length is > 0 and <= 40)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        var tags = await ResolveTagsAsync(actor.WorkspaceId, wanted, ct);
+        var tags = await ResolveAsync(actor.WorkspaceId, names, ct);
 
         var existing = await db.TicketTags.Where(tt => tt.TicketId == ticketId).ToListAsync(ct);
         var wantedIds = tags.Select(t => t.Id).ToHashSet();
@@ -47,9 +41,21 @@ public class TagService(TracklyDbContext db)
         return tags.Select(t => new TagDto(t.Id, t.Name, t.Color)).ToList();
     }
 
-    // Resolves names to Tag rows within the workspace, creating missing ones.
-    private async Task<List<Tag>> ResolveTagsAsync(Guid workspaceId, List<string> names, CancellationToken ct)
+    // Resolves free-text names to Tag rows within the workspace, creating any that
+    // don't exist yet. Public because ticket creation resolves tags in the same
+    // request that writes the ticket — an agent types a new tag on the new-ticket
+    // form and it must exist by the time the TicketTag row is written.
+    //
+    // Input is untrusted free text, so it is trimmed, length-capped and
+    // case-insensitively de-duplicated here rather than at each call site.
+    public async Task<List<Tag>> ResolveAsync(
+        Guid workspaceId, IReadOnlyList<string> rawNames, CancellationToken ct)
     {
+        var names = rawNames
+            .Select(n => n.Trim())
+            .Where(n => n.Length is > 0 and <= 40)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         if (names.Count == 0) return [];
 
         var lowered = names.Select(n => n.ToLowerInvariant()).ToList();

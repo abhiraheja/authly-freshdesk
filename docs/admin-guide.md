@@ -161,6 +161,29 @@ high / urgent), an optional **category**, an **assignee**, **watchers**, **tags*
 - The **✨ AI** actions (draft reply, summarize, triage, KB draft) appear here when
   the copilot is on (§13).
 
+**Raising a ticket from inside Trackly.** **Tickets → New ticket** (also the
+**+ New ticket** button in the top bar) takes a subject, description, priority,
+category, channel, tags and one attachment up to 10 MB.
+
+Category, channel and tags are **type-ahead fields, not pickers**: what already
+exists in the workspace is suggested as you type, and a value that doesn't exist
+yet is created when the ticket is saved — never before, so an abandoned form
+leaves nothing behind. Matching is case-insensitive, so "Billing" and "billing"
+stay one thing rather than splitting every report in two. Only agents and admins
+can introduce new values this way; a customer filing from the portal cannot.
+
+Two things about it are worth knowing before you use it:
+
+- The ticket is filed with **you** as the requester — there is no "on behalf of"
+  field. It is meant for work an agent raises for themselves (an internal
+  request, a phone call they are logging against their own account), not for
+  filing a customer's issue under the customer's name. For that, the customer
+  should come in through email, the portal, the widget or the guest form so the
+  requester is genuinely them.
+- The **assignee is chosen automatically** — the active agent with the fewest
+  open and pending tickets (team routing applies where configured, §5.3). You
+  cannot pick one at creation; reassign afterwards from the details pane.
+
 ### 4.2 Categories
 
 **What it is.** An organising dimension for tickets (e.g. Billing, Technical).

@@ -213,6 +213,32 @@ The header is fixed and the **body** scrolls, so a tall form can never push its
 own actions off-screen. `persistent` blocks Esc and backdrop dismissal — use it
 only where losing input would be destructive.
 
+### Never put a backtick inside an inline template
+
+Templates are template literals. A backtick in an HTML comment — writing
+`` `card-footer` `` to quote an attribute name — closes the string, and the rest
+of the template is parsed as TypeScript. The errors that come back point at
+random identifiers ("Cannot find name 'footer'", "Incorrect number of arguments
+to @Component") and never at the comment, so the cause is genuinely hard to see.
+
+Quote with "double quotes" in template comments. Save backticks for JSDoc above
+the `@Component`, which is ordinary code.
+
+### Never centre an animated panel with `transform`
+
+`.modal` and `.palette` centre with `inset: 0; margin: auto` (or
+`margin-inline: auto`), **not** `translate(-50%, -50%)`.
+
+Both carry `.animate-float-in`, whose keyframes end on `transform: translateY(0)`
+with `animation-fill-mode: both`. That final transform **replaces** a centring
+one and leaves the panel sitting half its width to the right of centre — no
+error, it just looks wrong, and only once the animation has finished so it's
+easy to miss while developing.
+
+If you add another animated overlay, centre it with auto margins and leave
+`transform` to the animation. An element has one `transform`; two features
+cannot both own it.
+
 Modal vs drawer: a **drawer** when the user needs the page behind it for context
 (editing a row while its list stays visible); a **modal** when the decision is
 self-contained.

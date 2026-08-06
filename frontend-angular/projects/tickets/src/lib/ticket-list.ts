@@ -24,11 +24,32 @@ import {
   Icon,
   InputDirective,
   Pagination,
+  ToastService,
   SkeletonDirective,
   TableDirective,
+  type IconName,
 } from '@trackly/ui';
 
 const PAGE_SIZE = 20;
+
+/** Absent query params arrive as `undefined`; every filter wants `''`. */
+function fromQuery(value: string | undefined): string {
+  return value ?? '';
+}
+
+/** Channel → icon, so the source is readable at a glance in the list. */
+const CHANNEL_ICON: Record<string, IconName> = {
+  email: 'mail',
+  chat: 'messages-square',
+  whatsapp: 'message-circle',
+  voice: 'phone',
+  phone: 'phone',
+  api: 'code',
+  widget: 'globe',
+  web: 'globe',
+  form: 'globe',
+  manual: 'pencil',
+};
 
 /** A saved view maps to the API filter it can actually express. */
 const VIEW_STATUS: Record<string, string | undefined> = {
@@ -147,11 +168,13 @@ const VIEW_STATUS: Record<string, string | undefined> = {
               <tr>
                 <th scope="col">{{ 'tickets.columns.ticket' | transloco }}</th>
                 <th scope="col">{{ 'tickets.columns.requester' | transloco }}</th>
+                <th scope="col" class="hidden lg:table-cell">{{ 'tickets.columns.category' | transloco }}</th>
                 <th scope="col">{{ 'tickets.columns.priority' | transloco }}</th>
                 <th scope="col">{{ 'tickets.columns.status' | transloco }}</th>
                 <th scope="col">{{ 'tickets.columns.assignee' | transloco }}</th>
-                <th scope="col">{{ 'tickets.columns.sla' | transloco }}</th>
-                <th scope="col" class="text-right">{{ 'tickets.columns.updated' | transloco }}</th>
+                <th scope="col" class="hidden lg:table-cell">{{ 'tickets.columns.sla' | transloco }}</th>
+                <th scope="col" class="hidden md:table-cell text-right">{{ 'tickets.columns.updated' | transloco }}</th>
+                <th scope="col" class="text-right">{{ 'tickets.columns.actions' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
@@ -159,25 +182,44 @@ const VIEW_STATUS: Record<string, string | undefined> = {
                 <!-- Skeletons match the real row height, so nothing jumps when
                      the data lands. -->
                 @for (row of skeletonRows; track row) {
-                  <tr>
-                    @for (cell of skeletonCells; track cell) {
-                      <td><span tkSkeleton class="h-4 w-full max-w-[160px]"></span></td>
-                    }
+                  <tr class="row-blank">
+                    <!-- Spelled out rather than looped: the three responsive
+                         columns have to disappear here exactly as they do in the
+                         header, or a narrow viewport gets 9 skeleton cells under
+                         6 headings and every column shifts left. -->
+                    <td><span tkSkeleton class="h-4 w-full max-w-[220px]"></span></td>
+                    <td><span tkSkeleton class="h-4 w-full max-w-[140px]"></span></td>
+                    <td class="hidden lg:table-cell"><span tkSkeleton class="h-4 w-20"></span></td>
+                    <td><span tkSkeleton class="h-5 w-16 rounded-full"></span></td>
+                    <td><span tkSkeleton class="h-5 w-20 rounded-full"></span></td>
+                    <td><span tkSkeleton class="h-4 w-24"></span></td>
+                    <td class="hidden lg:table-cell"><span tkSkeleton class="h-4 w-16"></span></td>
+                    <td class="hidden md:table-cell"><span tkSkeleton class="ml-auto block h-4 w-14"></span></td>
+                    <td><span tkSkeleton class="ml-auto block h-4 w-12"></span></td>
                   </tr>
                 }
               } @else {
                 @for (ticket of rows(); track ticket.id) {
                   <tr class="cursor-pointer" (click)="open(ticket)">
                     <td>
-                      <a
-                        class="block max-w-[280px] truncate font-semibold hover:text-primary"
-                        [routerLink]="['/dashboard/tickets', ticket.id]"
-                        (click)="$event.stopPropagation()"
-                      >
-                        {{ ticket.subject }}
-                      </a>
-                      <span class="text-meta text-muted-foreground">
-                        #{{ ticket.id.slice(0, 8) }} · {{ ticket.channel }}
+                      <span class="flex items-start gap-2.5">
+                        <tk-icon
+                          [name]="channelIcon(ticket.channel)"
+                          [size]="16"
+                          class="mt-0.5 text-muted-foreground"
+                        />
+                        <span class="min-w-0">
+                          <a
+                            class="block max-w-[260px] truncate font-semibold hover:text-primary"
+                            [routerLink]="['/dashboard/tickets', ticket.id]"
+                            (click)="$event.stopPropagation()"
+                          >
+                            {{ ticket.subject }}
+                          </a>
+                          <span class="block text-meta text-muted-foreground">
+                            #{{ ticket.id.slice(0, 8) }} · {{ ticket.channel }}
+                          </span>
+                        </span>
                       </span>
                     </td>
                     <td>
@@ -186,29 +228,65 @@ const VIEW_STATUS: Record<string, string | undefined> = {
                         <span class="truncate">{{ requesterOf(ticket) }}</span>
                       </span>
                     </td>
+                    <td class="hidden text-muted-foreground lg:table-cell">
+                      {{ ticket.category?.name ?? '—' }}
+                    </td>
                     <td>
                       <tk-badge [tone]="priorityOf(ticket).tone">{{ priorityOf(ticket).labelKey | transloco }}</tk-badge>
                     </td>
                     <td>
                       <tk-badge [tone]="statusOf(ticket).tone" dot>{{ statusOf(ticket).labelKey | transloco }}</tk-badge>
                     </td>
-                    <td class="text-muted-foreground">
-                      {{ ticket.assignee?.name ?? ticket.assignee?.email ?? ('tickets.unassigned' | transloco) }}
-                    </td>
                     <td>
+                      @if (ticket.assignee; as agent) {
+                        <span class="flex items-center gap-2">
+                          <tk-avatar [name]="agent.name ?? agent.email" [size]="24" round />
+                          <span class="truncate">{{ agent.name ?? agent.email }}</span>
+                        </span>
+                      } @else {
+                        <span class="text-muted-foreground">{{ 'tickets.unassigned' | transloco }}</span>
+                      }
+                    </td>
+                    <td class="hidden lg:table-cell">
                       @if (sla(ticket); as state) {
                         <tk-badge [tone]="state.tone">{{ state.prefixKey | transloco }} {{ state.labelKey | transloco: { time: state.time } }}</tk-badge>
                       } @else {
                         <span class="text-muted-foreground">—</span>
                       }
                     </td>
-                    <td class="text-right text-meta text-muted-foreground">
+                    <td class="hidden text-right text-meta text-muted-foreground md:table-cell">
                       {{ ago(ticket.updatedAt) }}
+                    </td>
+                    <!-- Actions live in their own cell that swallows the click, so
+                         hitting one never also opens the row. -->
+                    <td class="text-right" (click)="$event.stopPropagation()">
+                      <span class="row-actions inline-flex items-center gap-0.5">
+                        <a
+                          class="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-primary"
+                          [routerLink]="['/dashboard/tickets', ticket.id]"
+                          [attr.aria-label]="'tickets.actions.view' | transloco"
+                        >
+                          <tk-icon name="eye" [size]="16" />
+                        </a>
+                        <button
+                          type="button"
+                          class="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-success disabled:opacity-40"
+                          [attr.aria-label]="'tickets.actions.resolve' | transloco"
+                          [disabled]="ticket.status === 'resolved' || ticket.status === 'closed'"
+                          (click)="resolve(ticket)"
+                        >
+                          <tk-icon name="check-circle" [size]="16" />
+                        </button>
+                      </span>
                     </td>
                   </tr>
                 } @empty {
-                  <tr>
-                    <td colspan="7" class="p-0">
+                  <!-- colspan MUST equal the header count (9). Too low and the
+                       leftover columns render as bare white cells beside the
+                       empty state — which is exactly what a stale 7 looked
+                       like. Responsively-hidden columns still count. -->
+                  <tr class="row-blank">
+                    <td colspan="9" class="p-0">
                       @if (hasFilters()) {
                         <tk-empty-state
                           icon="filter"
@@ -254,18 +332,26 @@ export class TicketList {
   private readonly router = inject(Router);
   private readonly session = inject(SessionStore);
   private readonly transloco = inject(TranslocoService);
+  private readonly toast = inject(ToastService);
   /** Re-resolve TS-side copy when the language changes. */
   private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
 
-  // Bound from the query string by `withComponentInputBinding()`.
-  readonly view = input('');
-  readonly priority = input('');
-  readonly q = input('');
-  readonly page = input('');
+  /**
+   * Bound from the query string by `withComponentInputBinding()`.
+   *
+   * The transform is load-bearing: when a param is **absent** the router sets
+   * the input to `undefined` — it does not leave the declared default in place.
+   * Without normalising, `view()` is `undefined` rather than `''`, which breaks
+   * the `switch` below (falls to `default`) and leaves every `<select>` blank,
+   * because no `<option value="">` matches `undefined`.
+   */
+  readonly view = input('', { transform: fromQuery });
+  readonly priority = input('', { transform: fromQuery });
+  readonly q = input('', { transform: fromQuery });
+  readonly page = input('', { transform: fromQuery });
 
   protected readonly pageSize = PAGE_SIZE;
   protected readonly skeletonRows = Array.from({ length: 8 }, (_, i) => i);
-  protected readonly skeletonCells = Array.from({ length: 7 }, (_, i) => i);
 
   /** Local mirror of `q`, so typing doesn't push a history entry per keystroke. */
   protected readonly search = signal('');
@@ -367,6 +453,21 @@ export class TicketList {
 
   protected open(ticket: TicketSummary): void {
     void this.router.navigate(['/dashboard/tickets', ticket.id]);
+  }
+
+  protected channelIcon(channel: string): IconName {
+    return CHANNEL_ICON[channel?.toLowerCase()] ?? 'mail';
+  }
+
+  /** Optimistic-free: reload the list so the row reflects what the server did. */
+  protected async resolve(ticket: TicketSummary): Promise<void> {
+    try {
+      await this.api.update(ticket.id, { status: 'resolved' });
+      this.tickets.reload();
+      this.toast.success(this.transloco.translate('tickets.resolved'));
+    } catch (err) {
+      this.toast.error(errorMessage(err));
+    }
   }
 
   protected requesterOf(ticket: TicketSummary): string {

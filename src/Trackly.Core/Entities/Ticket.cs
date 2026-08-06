@@ -70,4 +70,9 @@ public static class TicketChannel
     public const string WhatsApp = "whatsapp";
     public const string Teams = "teams";
     public const string Chat = "chat";
+
+    // The channels Trackly itself produces. A workspace may store others — an
+    // agent can type a channel of their own on the new-ticket form — so treat
+    // this as the known set, never as validation.
+    public static readonly string[] All = [Web, Widget, Email, Slack, WhatsApp, Teams, Chat];
 }

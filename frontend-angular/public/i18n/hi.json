@@ -16,7 +16,6 @@
     "switchToDark": "डार्क मोड पर जाएँ",
     "poweredBy": "Trackly द्वारा संचालित"
   },
-
   "nav": {
     "main": "मुख्य",
     "open": "नेविगेशन खोलें",
@@ -61,14 +60,12 @@
       "newTicket": "नया टिकट"
     }
   },
-
   "palette": {
     "title": "कमांड पैलेट",
     "placeholder": "कोई कमांड टाइप करें या खोजें…",
     "searchLabel": "कमांड खोजें",
     "empty": "“{{query}}” से कुछ मेल नहीं खाता।"
   },
-
   "login": {
     "signIn": "Trackly में साइन इन करें",
     "signInTo": "{{name}} में साइन इन करें",
@@ -85,7 +82,6 @@
     "haveWorkspace": "पहले से वर्कस्पेस है?",
     "signInLink": "साइन इन करें",
     "sendFailed": "साइन-इन ईमेल नहीं भेजा जा सका।",
-
     "checkEmail": "अपना ईमेल देखें",
     "sentTo": "हमने साइन-इन लिंक और 6 अंकों का कोड भेजा है",
     "linkExpires": "लिंक 10 मिनट में समाप्त हो जाएगा।",
@@ -95,10 +91,8 @@
     "resend": "ईमेल दोबारा भेजें",
     "useDifferentEmail": "दूसरा ईमेल इस्तेमाल करें",
     "codeFailed": "यह कोड काम नहीं आया। दोबारा कोशिश करें, या ईमेल फिर भेजें।",
-
     "chooseWorkspace": "वर्कस्पेस चुनें",
     "belongsToMany": "{{email}} एक से अधिक वर्कस्पेस से जुड़ा है।",
-
     "panel": {
       "signInTitle": "हर बातचीत, एक ही जगह।",
       "signUpTitle": "आपका सपोर्ट डेस्क, आज से चालू।",
@@ -109,7 +103,6 @@
       "statChannels": "चैनल, एक इनबॉक्स"
     }
   },
-
   "dashboard": {
     "welcome": "वापसी पर स्वागत है",
     "welcomeNamed": "वापसी पर स्वागत है, {{name}}",
@@ -135,7 +128,6 @@
       "waiting": "उत्तर की प्रतीक्षा में"
     }
   },
-
   "tickets": {
     "title": "टिकट",
     "assignedToMe": "मुझे सौंपे गए",
@@ -153,6 +145,11 @@
     "loadFailed": "टिकट लोड नहीं हो सके",
     "unassigned": "बिना सौंपे",
     "guest": "अतिथि",
+    "resolved": "टिकट हल किया गया",
+    "actions": {
+      "view": "टिकट देखें",
+      "resolve": "हल किया चिह्नित करें"
+    },
     "columns": {
       "ticket": "टिकट",
       "requester": "अनुरोधकर्ता",
@@ -160,7 +157,9 @@
       "status": "स्थिति",
       "assignee": "सौंपा गया",
       "sla": "SLA",
-      "updated": "अपडेट"
+      "updated": "अपडेट",
+      "category": "विभाग",
+      "actions": "कार्रवाई"
     },
     "empty": {
       "noMatchTitle": "कोई टिकट मेल नहीं खाता",
@@ -169,9 +168,32 @@
       "noneTitle": "अभी कोई टिकट नहीं",
       "noneBody": "जब कोई ग्राहक ईमेल, चैट या फ़ॉर्म से संपर्क करेगा, उसका टिकट यहाँ आएगा।",
       "createFirst": "पहला टिकट बनाएँ"
+    },
+    "new": {
+      "title": "नया टिकट",
+      "subtitle": "यह आपके नाम से दर्ज होगा और सबसे खाली एजेंट को अपने आप सौंपा जाएगा।",
+      "subject": "विषय",
+      "subjectPlaceholder": "समस्या का संक्षिप्त विवरण",
+      "category": "विभाग",
+      "description": "विवरण",
+      "descriptionPlaceholder": "क्या हुआ, आपको क्या अपेक्षित था, और कोई एरर मैसेज…",
+      "attachment": "अटैचमेंट",
+      "dropHint": "फ़ाइल यहाँ छोड़ें या चुनने के लिए क्लिक करें",
+      "dropLimit": "एक फ़ाइल, अधिकतम 10 MB",
+      "removeFile": "अटैचमेंट हटाएँ",
+      "submit": "टिकट बनाएँ",
+      "failed": "टिकट नहीं बन सका",
+      "categoryPlaceholder": "बिलिंग, तकनीकी…",
+      "channel": "चैनल",
+      "channelPlaceholder": "web, email, phone…",
+      "showSuggestions": "सुझाव दिखाएँ",
+      "tags": "टैग",
+      "tagsPlaceholder": "टैग लिखकर Enter दबाएँ",
+      "tagsHint": "लिखते ही मौजूदा टैग सुझाए जाते हैं। नया टैग तब बनेगा जब टिकट सेव होगा।",
+      "removeTag": "टैग हटाएँ",
+      "createTag": "बनाएँ"
     }
   },
-
   "status": {
     "open": "खुला",
     "pending": "लंबित",
@@ -195,7 +217,6 @@
     "inTime": "{{time}} में",
     "overdue": "{{time}} से विलंबित"
   },
-
   "ui": {
     "pagination": {
       "label": "पेजिनेशन",
@@ -204,7 +225,6 @@
       "next": "अगला पेज"
     }
   },
-
   "comingSoon": {
     "heading": "अभी माइग्रेट नहीं हुआ",
     "body": "यह स्क्रीन Angular में पोर्ट की जा रही है।",

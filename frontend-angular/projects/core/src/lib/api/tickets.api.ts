@@ -13,6 +13,11 @@ export interface Tag {
   color: string | null;
 }
 
+/** A workspace tag plus its usage — drives suggestion ordering. */
+export interface TagUsage extends Tag {
+  ticketCount: number;
+}
+
 export interface UserSummary {
   id: string;
   name: string | null;
@@ -131,13 +136,35 @@ export class TicketsApi {
     return this.api.get<TicketDetail>(`/api/tickets/${id}`);
   }
 
+  /**
+   * `categoryName`, `channel` and `tags` are free text the server resolves —
+   * an existing row is reused, a new value is created, all inside this one
+   * request. Nothing is written until the ticket itself is written, so a form
+   * the user abandons leaves no stray taxonomy behind.
+   *
+   * The server honours these three for agents and admins only; a customer
+   * posting from the portal has them ignored, not rejected.
+   */
   create(body: {
     subject: string;
     description: string;
     categoryId?: string;
+    categoryName?: string;
+    channel?: string;
     priority?: string;
+    tags?: string[];
   }): Promise<TicketDetail> {
     return this.api.post<TicketDetail>('/api/tickets', body);
+  }
+
+  /** Suggestion list: channels the workspace has used, plus Trackly's own. */
+  channels(): Promise<string[]> {
+    return this.api.get<string[]>('/api/tickets/channels');
+  }
+
+  /** Every tag in the workspace, with how many tickets carry it. */
+  tags(): Promise<TagUsage[]> {
+    return this.api.get<TagUsage[]>('/api/tags');
   }
 
   update(id: string, body: UpdateTicketBody): Promise<TicketDetail> {

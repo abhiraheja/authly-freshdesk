@@ -78,7 +78,22 @@ public record AttachmentDto(
     long SizeBytes,
     DateTime CreatedAt);
 
-public record CreateTicketRequest(string Subject, string Description, Guid? CategoryId, string? Priority);
+// CategoryName, Channel and Tags are free text that the server resolves — an
+// existing row is reused, a genuinely new value is created. They are honoured
+// for agents and admins ONLY: POST /api/tickets is open to customers via the
+// portal, and letting a customer's payload mint workspace categories and tags
+// would hand tenant taxonomy to whoever can open a ticket.
+//
+// CategoryId stays for callers that already hold one (the portal picker). When
+// both are sent the id wins, since it is the unambiguous one.
+public record CreateTicketRequest(
+    string Subject,
+    string Description,
+    Guid? CategoryId,
+    string? Priority,
+    string? CategoryName = null,
+    string? Channel = null,
+    List<string>? Tags = null);
 
 public record UpdateTicketRequest(
     string? Subject,

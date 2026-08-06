@@ -55,7 +55,7 @@ export class Kbd {}
 @Component({
   selector: 'tk-alert',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, TranslocoPipe],
+  imports: [Icon],
   host: { role: 'alert', '[class]': 'classes()' },
   template: `
     <tk-icon [name]="icon()" [size]="18" class="mt-0.5 shrink-0" />
@@ -104,7 +104,7 @@ export class Alert {
 @Component({
   selector: 'tk-empty-state',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon, TranslocoPipe],
+  imports: [Icon],
   host: { class: 'empty-state' },
   template: `
     <div class="empty-icon">

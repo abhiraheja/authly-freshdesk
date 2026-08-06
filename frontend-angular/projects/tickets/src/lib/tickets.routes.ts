@@ -13,8 +13,7 @@ export const ticketsRoutes: Routes = [
   },
   {
     path: 'new',
-    loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
-    data: { titleKey: 'comingSoon.titles.newTicket' },
+    loadComponent: () => import('./ticket-new').then((m) => m.TicketNew),
   },
   {
     path: ':id',

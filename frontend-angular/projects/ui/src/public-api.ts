@@ -15,6 +15,8 @@ export * from './lib/card/card';
 export * from './lib/badge/badge';
 export * from './lib/avatar/avatar';
 export * from './lib/forms/input';
+export * from './lib/forms/combobox';
+export * from './lib/forms/tag-input';
 export * from './lib/feedback/feedback';
 export * from './lib/toast/toast';
 export * from './lib/overlay/modal';

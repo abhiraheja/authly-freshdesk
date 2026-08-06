@@ -16,7 +16,6 @@
     "switchToDark": "Switch to dark mode",
     "poweredBy": "Powered by Trackly"
   },
-
   "nav": {
     "main": "Main",
     "open": "Open navigation",
@@ -61,14 +60,12 @@
       "newTicket": "New ticket"
     }
   },
-
   "palette": {
     "title": "Command palette",
     "placeholder": "Type a command or search…",
     "searchLabel": "Search commands",
     "empty": "Nothing matches “{{query}}”."
   },
-
   "login": {
     "signIn": "Sign in to Trackly",
     "signInTo": "Sign in to {{name}}",
@@ -85,7 +82,6 @@
     "haveWorkspace": "Already have a workspace?",
     "signInLink": "Sign in",
     "sendFailed": "Could not send the sign-in email.",
-
     "checkEmail": "Check your email",
     "sentTo": "We sent a sign-in link and a 6-digit code to",
     "linkExpires": "The link expires in 10 minutes.",
@@ -95,10 +91,8 @@
     "resend": "Resend the email",
     "useDifferentEmail": "Use a different email",
     "codeFailed": "That code did not work. Try again, or resend the email.",
-
     "chooseWorkspace": "Choose a workspace",
     "belongsToMany": "{{email}} belongs to more than one workspace.",
-
     "panel": {
       "signInTitle": "Every conversation, in one place.",
       "signUpTitle": "Your support desk, running today.",
@@ -109,7 +103,6 @@
       "statChannels": "channels, one inbox"
     }
   },
-
   "dashboard": {
     "welcome": "Welcome back",
     "welcomeNamed": "Welcome back, {{name}}",
@@ -135,7 +128,6 @@
       "waiting": "Waiting on a reply"
     }
   },
-
   "tickets": {
     "title": "Tickets",
     "assignedToMe": "Assigned to me",
@@ -153,6 +145,11 @@
     "loadFailed": "Couldn't load tickets",
     "unassigned": "Unassigned",
     "guest": "Guest",
+    "resolved": "Ticket resolved",
+    "actions": {
+      "view": "View ticket",
+      "resolve": "Mark resolved"
+    },
     "columns": {
       "ticket": "Ticket",
       "requester": "Requester",
@@ -160,7 +157,9 @@
       "status": "Status",
       "assignee": "Assignee",
       "sla": "SLA",
-      "updated": "Updated"
+      "updated": "Updated",
+      "category": "Dept",
+      "actions": "Actions"
     },
     "empty": {
       "noMatchTitle": "No tickets match",
@@ -169,9 +168,32 @@
       "noneTitle": "No tickets yet",
       "noneBody": "When a customer emails, chats or submits the form, their ticket lands here.",
       "createFirst": "Create the first ticket"
+    },
+    "new": {
+      "title": "New ticket",
+      "subtitle": "Filed under your name and auto-assigned to the agent with the lightest queue.",
+      "subject": "Subject",
+      "subjectPlaceholder": "Brief summary of the problem",
+      "category": "Department",
+      "description": "Description",
+      "descriptionPlaceholder": "What happened, what you expected, and any error messages…",
+      "attachment": "Attachment",
+      "dropHint": "Drop a file here or click to browse",
+      "dropLimit": "One file, up to 10 MB",
+      "removeFile": "Remove attachment",
+      "submit": "Create ticket",
+      "failed": "Couldn't create the ticket",
+      "categoryPlaceholder": "Billing, Technical…",
+      "channel": "Channel",
+      "channelPlaceholder": "web, email, phone…",
+      "showSuggestions": "Show suggestions",
+      "tags": "Tags",
+      "tagsPlaceholder": "Add a tag and press Enter",
+      "tagsHint": "Existing tags are suggested as you type. A new one is created when the ticket is saved.",
+      "removeTag": "Remove tag",
+      "createTag": "Create"
     }
   },
-
   "status": {
     "open": "Open",
     "pending": "Pending",
@@ -195,7 +217,6 @@
     "inTime": "in {{time}}",
     "overdue": "Overdue {{time}}"
   },
-
   "ui": {
     "pagination": {
       "label": "Pagination",
@@ -204,7 +225,6 @@
       "next": "Next page"
     }
   },
-
   "comingSoon": {
     "heading": "Not migrated yet",
     "body": "This screen is being ported to Angular.",

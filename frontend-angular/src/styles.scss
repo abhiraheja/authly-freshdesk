@@ -69,8 +69,11 @@
   --radius: 14px;
   --radius-panel: 18px;
 
-  /* ---- Elevation ---- */
-  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px rgb(15 23 42 / 0.06);
+  /* ---- Elevation ----
+     The tight 1px layer is what defines a card's edge; the wide layer only
+     lifts it off the page. Keep the wide one faint — at higher alpha it bleeds
+     past the border and the edge stops reading as a line. */
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.05), 0 10px 28px -12px rgb(15 23 42 / 0.08);
   --shadow-lift: 0 10px 40px -8px rgb(79 70 229 / 0.25);
   --shadow-menu: 0 12px 32px -8px rgb(15 23 42 / 0.16);
 
@@ -681,19 +684,22 @@ input[type='password']::-ms-clear {
 }
 .table thead th {
   text-align: left;
-  padding: 0.625rem 1rem;
-  font-size: 0.6875rem;
-  font-weight: 700;
+  padding: 0.8125rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   color: rgb(var(--muted-foreground));
-  background: rgb(var(--muted));
+  background: rgb(var(--muted) / 0.55);
   border-bottom: 1px solid rgb(var(--border));
   white-space: nowrap;
 }
+/* Rows are 56px, and their divider is LIGHTER than the card's outer border.
+   That contrast is what makes a table read as crisp: one firm edge around the
+   whole thing, quiet lines inside it. Matching the two makes the grid muddy. */
 .table tbody td {
-  padding: 0.875rem 1rem;
-  border-bottom: 1px solid rgb(var(--border));
+  padding: 1rem;
+  border-bottom: 1px solid rgb(var(--border) / 0.6);
   vertical-align: middle;
 }
 .table tbody tr:last-child td {
@@ -704,6 +710,13 @@ input[type='password']::-ms-clear {
 }
 .table-hover tbody tr:hover {
   background: rgb(var(--primary) / 0.04);
+}
+/* Skeleton and empty-state rows aren't rows — nothing happens when you click
+   them, so a hover tint promises an interaction the table can't keep.
+   (Their divider needs no rule: an empty state is the only row, and
+   `tr:last-child td` has already dropped it.) */
+.table-hover tbody tr.row-blank:hover {
+  background: transparent;
 }
 /* Row actions stay hidden until the row is hovered or focused within — but are
    always visible on touch, where there is no hover. */
@@ -861,6 +874,76 @@ tr:focus-within .row-actions {
   color: rgb(var(--primary));
   font-weight: 600;
 }
+/* Keyboard cursor inside a suggestion list. Separate from `:hover` on purpose:
+   both can be showing at once (mouse resting over one row while the arrow keys
+   walk another) and the keyboard one has to be the readable signal. */
+.menu-item.is-highlighted {
+  background: rgb(var(--primary) / 0.1);
+  color: rgb(var(--primary));
+}
+
+/* ---- Tag field ----
+   A bordered box that CONTAINS an input rather than being one, so selected
+   chips and the caret share a single control. It borrows the input's focus ring
+   via :focus-within, which is why the inner input has its own border stripped. */
+.tag-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  width: 100%;
+  min-height: 2.5rem;
+  padding: 0.3125rem 0.5rem;
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--input));
+  border-radius: var(--radius-control);
+  cursor: text;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+.tag-field:focus-within {
+  border-color: rgb(var(--ring));
+  box-shadow: 0 0 0 3px rgb(var(--ring) / 0.18);
+}
+.tag-field input {
+  flex: 1 1 6rem;
+  min-width: 6rem;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-size: 0.875rem;
+  color: rgb(var(--foreground));
+  padding: 0.1875rem 0.125rem;
+}
+.tag-field input::placeholder {
+  color: rgb(var(--muted-foreground));
+}
+.tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1875rem 0.25rem 0.1875rem 0.5rem;
+  border-radius: var(--radius-chip);
+  background: rgb(var(--primary) / 0.1);
+  color: rgb(var(--primary-ink));
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.tag-chip button {
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  padding: 0.0625rem;
+  color: inherit;
+  opacity: 0.65;
+  cursor: pointer;
+}
+.tag-chip button:hover {
+  opacity: 1;
+  background: rgb(var(--primary) / 0.16);
+}
 .menu-sep {
   height: 1px;
   background: rgb(var(--border));
@@ -883,11 +966,17 @@ tr:focus-within .row-actions {
   z-index: 60;
 }
 
+/* Centred with `inset: 0` + `margin: auto`, NOT `translate(-50%, -50%)`.
+   These panels also carry `.animate-float-in`, whose keyframes end on
+   `transform: translateY(0)` with `fill-mode: both` — that final transform
+   replaces a centring one and drops the panel half its width to the right.
+   Auto margins centre without touching `transform`, so the animation is free
+   to use it. */
 .modal {
   position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  margin: auto;
+  height: fit-content;
   width: min(560px, calc(100% - 2rem));
   background: rgb(var(--card));
   border: 1px solid rgb(var(--border));
@@ -929,12 +1018,17 @@ tr:focus-within .row-actions {
   flex-direction: column;
 }
 
-/* Command palette sits above modals — it can be opened from one. */
+/* Command palette sits above modals — it can be opened from one.
+   Same auto-margin centring as `.modal`, and for the same reason: the
+   `.animate-float-in` transform would otherwise wipe out a translate-based one.
+   Only the horizontal axis is centred here — the palette is pinned near the top
+   so it doesn't jump as results change height. */
 .palette {
   position: fixed;
-  left: 50%;
+  left: 0;
+  right: 0;
   top: 7rem;
-  transform: translateX(-50%);
+  margin-inline: auto;
   width: min(560px, calc(100% - 2rem));
   border-radius: var(--radius-panel);
   border: 1px solid rgb(var(--border));

@@ -8,7 +8,7 @@ namespace Trackly.Modules.Tickets;
 
 public class TicketService(
     TracklyDbContext db, NotificationService notifications, SlaService sla, AutomationService automation,
-    CsatService csat)
+    CsatService csat, TagService tags)
 {
     // ---- Queries ------------------------------------------------------------
 
@@ -101,6 +101,21 @@ public class TicketService(
             if (categoryId is null)
                 throw new ArgumentException("Unknown category.");
         }
+        else if (actor.IsAgentOrAdmin && !string.IsNullOrWhiteSpace(request.CategoryName))
+        {
+            categoryId = (await ResolveCategoryAsync(actor.WorkspaceId, request.CategoryName, ct)).Id;
+        }
+
+        var channel = TicketChannel.Web;
+        if (actor.IsAgentOrAdmin && !string.IsNullOrWhiteSpace(request.Channel))
+            channel = NormalizeChannel(request.Channel);
+
+        // Tags are resolved BEFORE the ticket is added, so the Tag rows their
+        // SaveChanges writes cannot drag a half-built ticket into the database
+        // ahead of automation and SLA.
+        var resolvedTags = actor.IsAgentOrAdmin && request.Tags is { Count: > 0 }
+            ? await tags.ResolveAsync(actor.WorkspaceId, request.Tags, ct)
+            : [];
 
         var ticket = new Ticket
         {
@@ -109,9 +124,14 @@ public class TicketService(
             Description = request.Description.Trim(),
             Priority = priority,
             CategoryId = categoryId,
+            Channel = channel,
             RequesterId = actor.UserId,
         };
         db.Tickets.Add(ticket);
+
+        // Navigation property, not ticket.Id — the id isn't known until save.
+        foreach (var tag in resolvedTags)
+            db.TicketTags.Add(new TicketTag { Ticket = ticket, Tag = tag });
 
         var assigneeId = await PickRoundRobinAssigneeAsync(actor.WorkspaceId, null, ct);
         if (assigneeId is not null)
@@ -131,6 +151,58 @@ public class TicketService(
         await db.SaveChangesAsync(ct);
         await notifications.OnTicketCreatedAsync(ticket.Id, ct);
         return (await GetAsync(actor, ticket.Id, ct))!;
+    }
+
+    // Get-or-create by name, so an agent can type a department that doesn't exist
+    // yet on the new-ticket form instead of filing uncategorised and waiting for
+    // an admin. Matching is case-insensitive: "Billing" and "billing" must not
+    // become two departments that then split every report in two.
+    //
+    // Deliberately NOT the same as POST /api/categories, which stays admin-only
+    // and 409s on a duplicate. That endpoint manages the taxonomy; this one just
+    // needs a row to point at.
+    private async Task<Category> ResolveCategoryAsync(
+        Guid workspaceId, string rawName, CancellationToken ct)
+    {
+        var name = rawName.Trim();
+        if (name.Length > 80) name = name[..80];
+
+        var existing = await db.Categories
+            .FirstOrDefaultAsync(c => c.WorkspaceId == workspaceId && c.Name.ToLower() == name.ToLower(), ct);
+        if (existing is not null) return existing;
+
+        var category = new Category { WorkspaceId = workspaceId, Name = name };
+        db.Categories.Add(category);
+        await db.SaveChangesAsync(ct);
+        return category;
+    }
+
+    // Channel is matched verbatim by automation rules and mapped to an icon in the
+    // list, so it is lower-cased and whitespace-collapsed before it is stored.
+    // Without that, "Phone", "phone" and "phone " are three channels that no rule
+    // written for any one of them will ever match.
+    private static string NormalizeChannel(string raw)
+    {
+        var channel = string.Join(' ', raw.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+            .ToLowerInvariant();
+        return channel.Length > 32 ? channel[..32] : channel;
+    }
+
+    // Every channel the workspace has actually used, plus the ones Trackly knows
+    // how to render — the suggestion list behind the new-ticket channel field.
+    public async Task<IReadOnlyList<string>> ChannelsAsync(Actor actor, CancellationToken ct)
+    {
+        var used = await db.Tickets
+            .Where(t => t.WorkspaceId == actor.WorkspaceId)
+            .Select(t => t.Channel)
+            .Distinct()
+            .ToListAsync(ct);
+
+        return used.Concat(TicketChannel.All)
+            .Where(c => !string.IsNullOrWhiteSpace(c))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(c => c, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     // Active agent with the fewest open/pending tickets. Also used for guest tickets.

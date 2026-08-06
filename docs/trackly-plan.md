@@ -415,6 +415,23 @@ POST /api/tickets/{id}/comments { body, is_internal }
   → agent or admin: can set is_internal = true
 ```
 
+### Free-text taxonomy on create
+
+`POST /api/tickets` also accepts `category_name`, `channel` and `tags[]` — names
+rather than ids. The server reuses a matching row (case-insensitive) or creates
+one, inside the same request that writes the ticket. Nothing is written for a
+form the user abandons, and a rejected ticket cannot leave an orphan category
+behind.
+
+**These three are honoured for agents and admins only.** The endpoint is open to
+customers via the portal, and a customer payload that could mint workspace
+categories and tags would hand tenant taxonomy to anyone who can open a ticket.
+A customer's values are ignored, not rejected — the ticket still files.
+
+`category_id` remains for callers that already hold one, and wins if both are
+sent. Channel is lower-cased and whitespace-collapsed before storage, because
+automation rules match it verbatim.
+
 ---
 
 ## Problems — Grouping Related Tickets
@@ -1119,6 +1136,7 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | GET    | `/api/users/me` | Session | Get current user profile |
 | GET    | `/api/tickets` | Session | agent/admin: all; customer: own |
 | POST   | `/api/tickets` | Session | customer, agent, admin |
+| GET    | `/api/tickets/channels` | Session | agent/admin — channel suggestions (used + built-in) |
 | GET    | `/api/tickets/{id}` | Session | owner or agent/admin |
 | PATCH  | `/api/tickets/{id}` | Session | agent/admin |
 | POST   | `/api/tickets/{id}/comments` | Session | owner or agent/admin |
