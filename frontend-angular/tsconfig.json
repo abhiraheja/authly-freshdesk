@@ -3,6 +3,21 @@
 {
   "compileOnSave": false,
   "compilerOptions": {
+    /* Libraries resolve to SOURCE, not to dist/. The app compiles them as part
+       of its own build, so `ng serve` picks up a library edit instantly — no
+       `ng build @trackly/ui` in the inner loop. `npm run build:libs` still
+       produces real ng-packagr packages when they need publishing or consuming
+       from another repo. */
+    "paths": {
+      "@trackly/admin": ["./projects/admin/src/public-api.ts"],
+      "@trackly/auth": ["./projects/auth/src/public-api.ts"],
+      "@trackly/core": ["./projects/core/src/public-api.ts"],
+      "@trackly/dashboard": ["./projects/dashboard/src/public-api.ts"],
+      "@trackly/guest": ["./projects/guest/src/public-api.ts"],
+      "@trackly/portal": ["./projects/portal/src/public-api.ts"],
+      "@trackly/tickets": ["./projects/tickets/src/public-api.ts"],
+      "@trackly/ui": ["./projects/ui/src/public-api.ts"]
+    },
     "noImplicitOverride": true,
     "noPropertyAccessFromIndexSignature": true,
     "noImplicitReturns": true,
@@ -26,6 +41,54 @@
     },
     {
       "path": "./tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/ui/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/ui/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/core/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/core/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/auth/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/auth/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/dashboard/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/dashboard/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/tickets/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/tickets/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/admin/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/admin/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/portal/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/portal/tsconfig.spec.json"
+    },
+    {
+      "path": "./projects/guest/tsconfig.lib.json"
+    },
+    {
+      "path": "./projects/guest/tsconfig.spec.json"
     }
   ]
 }
