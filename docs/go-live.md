@@ -121,9 +121,19 @@ worker on all but one) if any workspace uses mailbox polling.
 
 ## 5. Frontend (SPA)
 
-- Build: `cd frontend && npm ci && npm run build` → static assets in `frontend/dist`.
-- **Dev** uses a Vite proxy (`/api` → `http://localhost:5210`), so the SPA and API
-  are same-origin from the browser's view.
+- Build: `cd frontend-angular && npm ci && npm run build` → static assets in
+  `frontend-angular/dist/frontend-angular/browser`.
+  - The production configuration swaps `src/environments/environment.ts` for
+    `environment.prod.ts`. Both ship `apiBaseUrl: ''` (same origin) — see below
+    for why that must stay empty.
+  - Budgets fail the build at 1 MB initial. Current initial bundle is ~324 kB
+    raw / ~84 kB transferred; a sudden jump means an accidental eager import of
+    a lazy route.
+  - *(Legacy React app, until it is deleted: `cd frontend && npm ci && npm run
+    build` → `frontend/dist`.)*
+- **Dev** uses the Angular dev-server proxy (`/api` and `/hubs` →
+  `http://localhost:5210`, see `frontend-angular/proxy.conf.js`), so the SPA and
+  API are same-origin from the browser's view.
 - **Prod** must preserve same-origin for `/api`, because the session cookie is
   `SameSite=Strict`, `HttpOnly`, `Secure`, `Path=/`. Serve the SPA and reverse-proxy
   `/api/*` to the API under **one HTTPS origin** (e.g. nginx / a CDN + origin rule).

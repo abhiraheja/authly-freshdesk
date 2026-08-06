@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, booleanAttribute, computed, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  booleanAttribute,
+  computed,
+  inject,
+  input,
+} from '@angular/core';
 import type { Tone } from '../../core/format';
 import { Badge } from '../badge/badge';
 import { Icon, type IconName } from '../icon/icon';
@@ -37,6 +45,11 @@ const TINT: Record<Tone, string> = {
     '[class]': 'hostClasses()',
     '[attr.role]': 'clickable() ? "button" : null',
     '[attr.tabindex]': 'clickable() ? 0 : null',
+    // A clickable non-button must answer Enter and Space itself. RouterLink and
+    // (click) only fire on pointer events here, so without this the tile is
+    // focusable but dead to a keyboard.
+    '(keydown.enter)': 'activate($event)',
+    '(keydown.space)': 'activate($event)',
   },
   template: `
     <div class="flex items-center justify-between">
@@ -82,4 +95,13 @@ export class StatCard {
   protected readonly hostClasses = computed(() =>
     ['card block p-4', this.clickable() ? 'card-interactive' : ''].filter(Boolean).join(' '),
   );
+
+  private readonly host = inject(ElementRef<HTMLElement>);
+
+  /** Turns Enter/Space into the click that `(click)` or `routerLink` listens for. */
+  protected activate(event: Event): void {
+    if (!this.clickable()) return;
+    event.preventDefault();
+    this.host.nativeElement.click();
+  }
 }

@@ -55,9 +55,13 @@ doesn't have it. Create it with the minimum:
   "ConnectionStrings": {
     "Trackly": "Host=localhost;Port=5432;Database=trackly;Username=trackly;Password=trackly"
   },
-  "App": { "FrontendBaseUrl": "http://localhost:5173" }
+  "App": { "FrontendBaseUrl": "http://localhost:4200" }
 }
 ```
+
+`FrontendBaseUrl` is what magic links, invitations and CSAT emails point at — set
+it to whichever SPA you're running (`:4200` Angular, `:5173` the legacy React
+app). A link generated against the wrong port lands on a dead page.
 
 That's all you need for local dev. Everything else has a safe development fallback:
 
@@ -82,37 +86,51 @@ dotnet run --project src/Trackly.Api --urls http://localhost:5210
 ```
 
 ```bash
-# Terminal 2 — SPA on http://localhost:5173
-cd frontend
-npm install          # first time only (installs @microsoft/signalr etc.)
-npm run dev
+# Terminal 2 — SPA on http://localhost:4200
+cd frontend-angular
+npm install          # first time only
+npm start            # = ng serve, picks up proxy.conf.js
 ```
 
-Open **http://localhost:5173**. Vite proxies `/api` **and** `/hubs` (the SignalR
-live-chat WebSocket) to the API at `:5210`, so the browser sees one origin.
+Open **http://localhost:4200**. The Angular dev server proxies `/api` **and**
+`/hubs` (the SignalR live-chat WebSocket) to the API at `:5210`, so the browser
+sees one origin — which the same-site session cookie requires. Point it at a
+different API with `TRACKLY_API=http://host:port npm start`.
+
+> **Migrating from React.** `frontend/` is the retiring React + MUI SPA on
+> `:5173` (`cd frontend && npm run dev`). Both still run; routes not yet ported
+> render a "Not migrated yet" placeholder naming the React file to port. When
+> the port finishes, `frontend/` and its launch configs get deleted.
 
 ### Run both together in VS Code (one F5)
 
-The repo already ships VS Code configs, so you don't have to create anything:
+The repo ships VS Code configs, so you don't have to create anything:
 
-- **`.vscode/launch.json`** — an `API (Trackly.Api)` config (coreclr, on `:5210`), a
-  `Frontend (Vite)` config, and a **compound** `Full stack (API + Frontend)` that
-  starts both with `stopAll` (stopping tears both down).
-- **`.vscode/tasks.json`** — `postgres: up` (`docker compose up -d`), `build: api`
-  (depends on `postgres: up`, so the DB comes up first), and `frontend: dev`.
+- **`.vscode/launch.json`** — `API (Trackly.Api)` (coreclr on `:5210`),
+  `Frontend (Angular)`, `Frontend (Angular) + browser`, and the legacy
+  `Frontend (Vite — legacy React)`. Compounds: **`Full stack (API + Angular)`**,
+  **`Full stack + browser debug`**, and `Full stack (API + legacy React)`.
+  All use `stopAll`, so stopping tears everything down.
+- **`.vscode/tasks.json`** — `postgres: up` (`docker compose up -d`),
+  `build: api` (depends on `postgres: up`, so the DB comes up first),
+  `frontend-angular: dev`, `frontend-angular: build`, and the legacy
+  `frontend: dev`.
 
-**To use it:** open the **Run and Debug** panel (Ctrl+Shift+D), pick
-**“Full stack (API + Frontend)”** from the dropdown, and press **F5**. That brings
-up Postgres, builds and debugs the API on `:5210`, and runs the SPA on `:5173`.
-Breakpoints work in both C# and the SPA's TypeScript.
+**To use it:** open **Run and Debug** (Ctrl+Shift+D), pick **“Full stack (API +
+Angular)”**, and press **F5**. That brings up Postgres, builds and debugs the API
+on `:5210`, and serves the SPA on `:4200`. Breakpoints work in C# immediately.
 
-Requires the **C#** (or C# Dev Kit) extension for the .NET debugger; the JavaScript
-debugger is built in. Run `npm install` in `frontend/` once before the first launch.
+For breakpoints in Angular components pick **“Full stack + browser debug”**
+instead — it waits for the dev server to print its URL before launching a
+debuggable browser, which a plain compound would race.
 
-> If you customise these, they’re just JSON under `.vscode/` — edit the config
-> names/ports there. The `API (Trackly.Api)` config sets
-> `ASPNETCORE_URLS=http://localhost:5210` so it matches the Vite proxy in
-> `frontend/vite.config.ts`.
+Requires the **C#** (or C# Dev Kit) extension for the .NET debugger; the
+JavaScript debugger is built in. Run `npm install` in `frontend-angular/` once
+before the first launch.
+
+> If you customise these, they're just JSON under `.vscode/`. The
+> `API (Trackly.Api)` config sets `ASPNETCORE_URLS=http://localhost:5210` so it
+> matches the proxy target in `frontend-angular/proxy.conf.js`.
 
 ---
 
@@ -159,7 +177,14 @@ src/
                              #   OIDC/DNS, Anthropic AI client
   Trackly.Api/               # controllers, SignalR chat hub, background workers,
                              #   session auth scheme, middleware
-frontend/                    # React 18 + TS + Vite SPA (MUI, TanStack Query, Zustand)
+frontend-angular/            # Angular 22 SPA — the frontend
+  src/styles.scss            #   design tokens + component CSS layer
+  src/tailwind.css           #   @theme inline — tokens → Tailwind utilities
+  src/app/core/              #   api client, session, guards, theme, tone maps
+  src/app/ui/                #   the design system (import from 'app/ui')
+  src/app/shell/             #   sidebar + top bar + ⌘K palette + nav.ts
+  src/app/features/          #   one folder per screen
+frontend/                    # LEGACY React 19 + MUI SPA — retiring, port in progress
 scripts/                     # PowerShell verify suites + demo seeder
 docs/                        # plan (design), admin-guide, go-live, dev-setup, mockups
 ```
@@ -176,7 +201,7 @@ tokens, encrypted secrets, private-note handling) before writing backend code.
 
 ```bash
 dotnet build                                   # whole solution (Trackly.slnx)
-cd frontend && npx tsc -b --noEmit             # frontend type check
+cd frontend-angular && npx ng build            # frontend build + type check
 ```
 
 ### EF Core migrations
@@ -233,8 +258,11 @@ Both the key **and** the workspace toggle are required, or all AI actions stay o
 | Build error `MSB3021` / `MSB3027` "cannot copy … .dll … being used" | The API is running (often under the debugger) and holds a lock. Stop it, or build a single non-Api project (`dotnet build src/Trackly.Core`). The compile itself already succeeded. |
 | EF `PendingModelChangesWarning` | A model change has no migration. Add one (§7). (A known EF 10 false-positive is suppressed in `Program.cs`.) |
 | `Port 5432 already in use` | Another Postgres is running. Stop it, or change the host port in `docker-compose.yml` and the connection string. |
-| Port `5210`/`5173` in use | Another instance is running; stop it or pass a different `--urls` / Vite port. |
-| Live chat doesn't connect (`/hubs/chat`) | Make sure you're on the Vite dev URL (`:5173`) so the WebSocket is proxied; the `/hubs` proxy has `ws: true` in `vite.config.ts`. |
+| Port `5210`/`4200` in use | Another instance is running; stop it, or pass a different `--urls` / `npm start -- --port 4300`. |
+| Live chat doesn't connect (`/hubs/chat`) | Make sure you're on the dev-server URL (`:4200`), so the WebSocket is proxied — `/hubs` has `ws: true` in `proxy.conf.js`. Hitting `:5210` directly bypasses the proxy. |
+| Signed out on every request / 401 loop | You're on a different origin from the API. The session is a same-site HttpOnly cookie, so the SPA must be reached through the dev-server proxy, not the API host. |
+| A Tailwind class silently does nothing | It was built by interpolation (`'bg-' + tone`). Tailwind v4 only emits classes it can find as literal strings — use a static lookup or a class from `styles.scss`. No error is reported for this. |
+| Angular page doesn't repaint after an update | The app is **zoneless**. State that a template reads must be a signal; mutating a plain field or array in place won't trigger anything. |
 | Git warns `LF will be replaced by CRLF` | Harmless line-ending normalization on Windows. |
 | `dotnet ef` not found | `dotnet tool install --global dotnet-ef`. |
 | Restore fails `NU1301 … 401 (Unauthorized)` on a private feed | A machine- or user-level `NuGet.Config` (`%AppData%\NuGet\NuGet.Config`) adds a private feed with expired credentials; NuGet queries **every** configured source on restore, even though Trackly uses only nuget.org. The repo-root `nuget.config` `<clear />`s inherited sources — make sure you're restoring from the repo root and that file is present. |

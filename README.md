@@ -28,12 +28,13 @@ A standalone, multi-tenant ticket management SaaS — submit, track, and resolve
 | `src/Trackly.Modules` | Business logic — auth, tickets, guest flow, email, SSO, problems, KB, SLA, automation, AI, channels (connectors), chat, CSAT, analytics |
 | `src/Trackly.Infrastructure` | EF Core DbContext + migrations, email (SMTP/IMAP), storage, crypto, OIDC/DNS, Anthropic AI client |
 | `src/Trackly.Api` | Controllers, session auth scheme, SignalR chat hub, background workers, middleware |
-| `frontend/` | React 18 + TypeScript + Vite SPA (Material UI, TanStack Query, Zustand) |
+| `frontend-angular/` | Angular 22 SPA — Tailwind v4 on a CSS-variable token layer, standalone components, signals, zoneless |
+| `frontend/` | **Legacy** React 19 + MUI SPA, retiring — screens are being ported to `frontend-angular/` |
 | `scripts/` | Per-phase PowerShell verification suites + demo-data seeder |
 
 ## Tech stack
 
-ASP.NET Core (.NET 10) · EF Core · PostgreSQL · SignalR (live chat) · React 18 + TypeScript + Vite · Material UI · MailKit · Anthropic SDK (AI copilot)
+ASP.NET Core (.NET 10) · EF Core · PostgreSQL · SignalR (live chat) · Angular 22 + TypeScript · Tailwind v4 · MailKit · Anthropic SDK (AI copilot)
 
 ## Running locally
 
@@ -50,11 +51,14 @@ docker compose up -d          # PostgreSQL 16 on localhost:5432 (trackly/trackly
 # 2. API — http://localhost:5210 (applies EF migrations on startup in Development)
 dotnet run --project src/Trackly.Api --urls http://localhost:5210
 
-# 3. Frontend — http://localhost:5173 (proxies /api to :5210)
-cd frontend
+# 3. Frontend — http://localhost:4200 (proxies /api and /hubs to :5210)
+cd frontend-angular
 npm install
-npm run dev
+npm start
 ```
+
+Or press **F5** in VS Code and pick **“Full stack (API + Angular)”** — that
+brings up Postgres, the API and the SPA together.
 
 `src/Trackly.Api/appsettings.Development.json` is gitignored. On a fresh clone, create it with:
 
@@ -63,7 +67,7 @@ npm run dev
   "ConnectionStrings": {
     "Trackly": "Host=localhost;Port=5432;Database=trackly;Username=trackly;Password=trackly"
   },
-  "App": { "FrontendBaseUrl": "http://localhost:5173" }
+  "App": { "FrontendBaseUrl": "http://localhost:4200" }
 }
 ```
 

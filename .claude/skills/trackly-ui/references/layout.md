@@ -21,33 +21,44 @@ The shell every Trackly screen lives in, and the templates that fill it.
 └──────────────┴────────────────────────────────────────────────┘
 ```
 
-`AppShell` owns the sidebar + topbar and renders `children` into the content
-column. It replaces the old top-nav-with-Admin-dropdown entirely.
+`Shell` (`src/app/shell/`) is a **routed** component, not a wrapper around the
+root. Full-screen surfaces — login, the guest ticket view, the customer submit
+form — are siblings of it in the route tree, so they render without any chrome.
 
-```tsx
-<Box sx={{ display: 'flex', minHeight: '100vh', bgcolor: 'background.default' }}>
-  <SidebarNav open={mobileOpen} onClose={() => setMobileOpen(false)} />
-  <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-    <TopBar onMenu={() => setMobileOpen(true)} />
-    <Box
-      component="main"
-      sx={{
-        flex: 1,
-        width: '100%',
-        maxWidth: layout.contentMaxWidth,
-        mx: 'auto',
-        px: { xs: 2, sm: 3, lg: 4 },
-        py: { xs: 2, sm: 3 },
-      }}
-    >
-      {children}
-    </Box>
-  </Box>
-</Box>
+```html
+<div class="flex h-screen overflow-hidden bg-background text-foreground">
+  <aside class="glass fixed inset-y-0 left-0 z-50 flex w-[280px] shrink-0 flex-col
+                border-r border-sidebar-border transition-transform duration-200
+                lg:static lg:translate-x-0"
+         [class.-translate-x-full]="!mobileOpen()"> … </aside>
+
+  <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+    <header class="glass sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3
+                   border-b border-border px-4 md:px-6"> … </header>
+
+    <!-- The ONLY scrolling pane. -->
+    <main class="scroll-thin min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+      <div class="mx-auto w-full max-w-[1600px]">
+        <router-outlet />
+      </div>
+    </main>
+  </div>
+</div>
 ```
 
-`minWidth: 0` on the content column is load-bearing — without it a wide table
-pushes the flex container past the viewport and the whole page scrolls sideways.
+Three classes here are load-bearing:
+
+- **`min-w-0`** on the content column — without it a wide table pushes the flex
+  container past the viewport and the whole page scrolls sideways.
+- **`min-h-0`** on the column and `<main>` — a flex child defaults to
+  `min-height: auto`, which refuses to shrink, so the page scrolls instead of
+  the pane and the header scrolls away with it.
+- **`overflow-hidden`** on the outer wrapper — it pins the shell to the viewport
+  so only `<main>` ever moves.
+
+Active state is computed from the URL (a `toSignal` over `NavigationEnd`), never
+set imperatively on click. Otherwise Back, a deep link and a command-palette jump
+each need their own highlight handling and one of them always drifts.
 
 ---
 
@@ -58,48 +69,59 @@ pushes the flex container past the viewport and the whole page scrolls sideways.
 
 ### 2.1 Brand block — 64px, matches the topbar
 
-```tsx
-<Stack direction="row" spacing={1.5} sx={{
-  height: layout.topbarHeight, alignItems: 'center', px: 2.5,
-  borderBottom: '1px solid', borderColor: 'divider',
-}}>
-  <Box sx={{
-    width: 36, height: 36, borderRadius: '12px',
-    background: 'linear-gradient(135deg, #4F46E5, #A78BFA)',
-    display: 'grid', placeItems: 'center', color: '#fff',
-    boxShadow: shadows.lift,
-  }}>
-    <LifeBuoy size={18} />
-  </Box>
-  <Box sx={{ minWidth: 0 }}>
-    <Typography sx={{ fontWeight: 800, letterSpacing: '-.02em', lineHeight: 1 }}>
-      Trackly
-    </Typography>
-    <Typography variant="body2" color="text.secondary" noWrap sx={{ mt: .25 }}>
-      {workspace.name}
-    </Typography>
-  </Box>
-</Stack>
+```html
+<div class="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border px-5">
+  <div class="brand-gradient grid size-9 shrink-0 place-items-center rounded-xl
+              text-white shadow-[var(--shadow-lift)]">
+    <tk-icon name="life-buoy" [size]="18" />
+  </div>
+  <div class="min-w-0 leading-tight">
+    <p class="font-display font-extrabold tracking-tight">Trackly</p>
+    <p class="truncate text-meta text-muted-foreground">{{ workspaceName() }}</p>
+  </div>
+</div>
 ```
+
+`h-16` here must equal the top bar's `h-16`, or the two borders don't line up
+across the seam and the whole header reads as broken.
 
 ### 2.2 Nav — scrollable, grouped
 
-Groups are separated by `24px`, each headed by a `variant="overline"` label at
-`px: 1.5`. The groups are fixed:
+The nav is **data**, in `src/app/shell/nav.ts` — the sidebar and the command
+palette both render from it, so a new destination is searchable the moment it is
+added, with nothing else to register.
 
 | Group | Items |
 |---|---|
 | **Overview** | Dashboard |
-| **Tickets** | All tickets · Inbox · Assigned to me · Open · Pending · Resolved · Closed |
+| **Tickets** | All tickets · Assigned to me · Open · Pending · Resolved · Closed |
 | **Workspace** | Live chat · Problems · Knowledge base · Canned responses |
 | **Admin** *(admins only)* | Analytics · Announcements · Members · Teams · SLA policies · Automation · AI copilot · Messaging · Widget · Email · Branding · SSO · Domains |
 
-The **Tickets** group is the important change: status filters become
-first-class navigation with live counts instead of a dropdown buried in the list
-pane. Each maps to `/dashboard/tickets?view=<key>`.
+The **Tickets** group is the important shape: status filters are first-class
+navigation with live counts, not options buried in a dropdown inside the list.
+Each is the same `/dashboard/tickets` route with a different `?view=`, so the
+sidebar and the list's own filter bar are the *same state*, not two copies.
 
-Admin has thirteen items — render it inside a `<Collapse>` that is open when the
-route starts with `/admin`, so it does not dominate the rail when collapsed.
+> An **Unassigned** view belongs in that group too, but `GET /api/tickets` has
+> no way to express it — `assigneeId` only matches a specific agent. The row is
+> deliberately absent rather than silently showing the wrong tickets; it lands
+> with the API change.
+
+Admin has thirteen destinations, so its group is collapsible. It opens
+automatically while an `/admin` route is active and stays out of the way
+otherwise:
+
+```ts
+private readonly adminToggled = signal<boolean | null>(null);
+protected readonly adminOpen = computed(
+  () => this.adminToggled() ?? this.url().startsWith('/admin'),
+);
+```
+
+The `null` sentinel is the point: "the user hasn't expressed a preference, so
+follow the route". A plain boolean would either ignore the route or fight the
+user's click.
 
 ### 2.3 NavItem anatomy
 
@@ -110,82 +132,93 @@ route starts with `/admin`, so it does not dominate the rail when collapsed.
    40px tall · radius 12 · px 1.5 · gap 1.5
 ```
 
-| State | Style |
+| State | Class |
 |---|---|
-| rest | `color: text.secondary` |
-| hover | `bgcolor: action.hover` |
-| active | `color: primary.main`, left gradient, bar visible |
+| rest | `.nav-row .nav-idle` |
+| hover | `.nav-idle:hover` → `bg-sidebar-accent` |
+| active | `.nav-row .nav-active` |
 
-The active background is a horizontal fade, not a flat fill:
+All three live in `styles.scss`. The active background is a horizontal **fade**,
+not a flat fill — that gradient is what makes the rail read as a rail:
 
-```ts
-active: {
-  background: (t) => t.palette.mode === 'dark'
-    ? 'linear-gradient(90deg, rgba(129,140,248,.20), rgba(129,140,248,.02))'
-    : 'linear-gradient(90deg, rgba(79,70,229,.14), rgba(79,70,229,.02))',
+```css
+.nav-active {
+  color: rgb(var(--primary));
+  background: linear-gradient(90deg, rgb(var(--primary) / 0.14), rgb(var(--primary) / 0.02));
+}
+.nav-active::before {          /* the 4px bar */
+  content: '';
+  position: absolute;
+  left: 0; top: 6px; bottom: 6px;
+  width: 4px; border-radius: 999px;
+  background: rgb(var(--primary));
 }
 ```
 
-With `cssVariables` enabled, prefer defining both in the `tone` palette and
-reading `palette.tone.indigo.bg` rather than branching on `mode`.
+Because `--primary` flips with the scheme, one rule covers both — no `mode`
+branch, no dark-mode override.
 
-The 4px bar is an absolutely-positioned `<Box>` at `left: 0`, `top/bottom: 6px`,
-`borderRadius: 999`, `bgcolor: primary.main`, `opacity: 0 → 1`.
+Markup:
 
-Trailing count: `variant="caption"`, `bgcolor: tone.indigo.bg`,
-`color: primary.main`, `px: 1`, `borderRadius: 999`. Leading status dot: 8px
-circle in `tone[x].solid`.
-
-### 2.4 Footer — AI copilot card
-
-Gradient panel pinned to the bottom, `p: 2`:
-
-```tsx
-<Box sx={{
-  m: 2, p: 2, borderRadius: '18px', position: 'relative', overflow: 'hidden',
-  background: 'linear-gradient(135deg, #4F46E5, #6366F1)',
-  color: '#fff', boxShadow: shadows.lift,
-}}>
-  <Box sx={{
-    position: 'absolute', right: -24, top: -24, width: 96, height: 96,
-    borderRadius: '50%', bgcolor: 'rgba(255,255,255,.10)',
-  }} />
-  …
-</Box>
+```html
+<a class="nav-row"
+   [class.nav-active]="isActive(item)"
+   [class.nav-idle]="!isActive(item)"
+   [routerLink]="item.route"
+   [queryParams]="item.params ?? null"
+   [attr.aria-current]="isActive(item) ? 'page' : null">
 ```
 
-Render it only when the AI copilot is actually configured
-(`getAiAvailability().available`). An advert for a disabled feature is worse
-than empty space.
+`aria-current="page"` is not optional — the gradient is invisible to a screen
+reader.
+
+Saved views render a **status dot** instead of an icon, so the colour reads as
+"this is a state" rather than "this is a place". Pick the dot class from a
+static map (`dotClass(item)`), never by interpolating `bg-${tone}`.
+
+Trailing count uses `.count-pill`; the leading status dot is an 8px circle. Both
+are in `styles.scss`.
+
+### 2.4 Footer — profile
+
+Avatar + name + role, opening a menu upward (theme toggle, sign out). Pinned
+below the scrolling nav with `border-t`.
+
+An **AI copilot promo panel** can sit above it — a `.brand-gradient` card. Render
+it only when the copilot is actually configured (`getAiAvailability().available`).
+An advert for a disabled feature is worse than empty space.
 
 ### 2.5 Responsive
 
 | Breakpoint | Behaviour |
 |---|---|
-| `≥ lg` (1200) | `<Drawer variant="permanent">`, always visible |
-| `< lg` | `<Drawer variant="temporary">` + backdrop, opened by the topbar menu button, closes on navigate |
+| `≥ lg` | `lg:static lg:translate-x-0` — part of the flex row, always visible |
+| `< lg` | `fixed` + `-translate-x-full`, slid in by the top bar's menu button, with a backdrop; closes on navigate |
 
-Use one `<Drawer>` with the variant swapped by `useMediaQuery(theme.breakpoints.up('lg'))`
-so the nav markup exists once.
+One `<aside>` with classes toggled, **not** two components. Duplicating the nav
+markup for mobile is how the two copies drift apart.
 
 ---
 
-## 3. TopBar
+## 3. Top bar
 
-`64px`, glass, `position: sticky`, `borderBottom: 1px solid divider`,
-`zIndex: appBar`. Left to right:
+`h-16`, `.glass`, `sticky top-0 z-30`, `border-b border-border`. Left to right:
 
 | Slot | Notes |
 |---|---|
-| Menu button | `< lg` only |
-| **Search / ⌘K trigger** | `max-width: 420`, `bgcolor: surfaceMuted`, radius 12, search icon + placeholder + `<kbd>⌘K</kbd>`. It is a **button**, not an input — clicking opens the command palette. |
-| *spacer* | |
-| Primary action | contained "New ticket"; collapses to an icon button `< sm` |
+| Menu button | `< lg` only, wrapped in `<span class="lg:hidden">` |
+| **Search / ⌘K trigger** | `max-w-md`, `bg-muted`, `rounded-xl`, icon + placeholder + `<tk-kbd>⌘K</tk-kbd>`. A **button**, not an input — it opens the command palette, which searches more than this page. |
+| *spacer* (`ml-auto`) | |
+| Primary action | "New ticket"; label collapses `< sm`, icon stays |
 | Notifications | icon button + unread dot + dropdown |
-| Colour mode | existing `<ColorModeToggle>` |
-| Profile | avatar + name + role + chevron → menu (Profile, Settings, Sign out) |
+| Colour mode | `≥ lg` only — also in the profile menu |
 
-The topbar is Trackly chrome. On a customer's `/portal` it is replaced by the
+**Overflow must stay visible here.** The dropdowns open downward with
+`position: absolute`; any overflow container on this row (including
+`overflow-x-auto`, which promotes `overflow-y` to `auto`) clips them *inside*
+the bar instead of letting them overlay the page.
+
+The top bar is Trackly chrome. Customer surfaces replace it with the
 workspace-branded header — see § 6.
 
 ---
@@ -194,31 +227,23 @@ workspace-branded header — see § 6.
 
 ### 4.1 PageHeader — every page starts with one
 
-```tsx
-<Stack
-  direction={{ xs: 'column', sm: 'row' }}
-  spacing={2}
-  sx={{ justifyContent: 'space-between', alignItems: { sm: 'flex-end' }, mb: 3 }}
->
-  <Box>
-    <Typography variant="h4" component="h1">{title}</Typography>
-    {subtitle && (
-      <Typography variant="body1" color="text.secondary" sx={{ mt: .5 }}>
-        {subtitle}
-      </Typography>
-    )}
-  </Box>
-  {action}
-</Stack>
+```html
+<tk-page-header title="Tickets" [subtitle]="summary()">
+  <a tkButton page-actions routerLink="/dashboard/tickets/new">
+    <tk-icon name="plus" [size]="16" />
+    New ticket
+  </a>
+</tk-page-header>
 ```
 
-The subtitle carries live numbers where they exist — *"248 total · 72 open · 18
-SLA at risk"* — not a restatement of the title.
+Exactly one `<h1>` per page. The subtitle carries live numbers where they exist
+— *"248 tickets · 18 SLA at risk"* — never a restatement of the title. If there
+is nothing true and specific to say, leave it out.
 
 ### 4.2 Section rhythm
 
-A page body is one `<Stack spacing={3}>`. Every child is a section: a panel, a
-grid of panels, or a table card. No bare margins between them.
+A page body is one `<div class="space-y-6">`. Every child is a section: a card, a
+grid of cards, or a table card. No bare margins between them.
 
 ### 4.3 The four page shapes
 
@@ -226,8 +251,19 @@ grid of panels, or a table card. No bare margins between them.
 |---|---|---|
 | **Overview** | Dashboard, Analytics | KPI grid → chart row → panel row → recent list |
 | **Index** | Tickets, Members, Teams, KB, Canned, Problems | filter bar → bulk bar → table card → pagination |
-| **Record** | Ticket detail, Customer profile | `xl` 2-column: main `2fr` + rail `1fr`; stacks below `xl` |
-| **Settings** | the 13 admin pages | single `maxWidth: 720` column of form panels |
+| **Record** | Ticket detail, Customer profile | 2-column at `xl`: main `2fr` + rail `1fr`; stacks below |
+| **Settings** | the 13 admin pages | one `max-w-[720px]` column of form cards |
+
+```html
+<!-- Overview: KPI grid -->
+<div class="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">…</div>
+
+<!-- Record: main + rail -->
+<div class="grid grid-cols-1 items-start gap-6 xl:grid-cols-3">
+  <div class="space-y-5 xl:col-span-2">…</div>
+  <div class="space-y-5">…</div>
+</div>
+```
 
 Grid columns for the KPI row:
 
@@ -239,48 +275,29 @@ gridTemplateColumns: {
 }
 ```
 
-Record layout:
+---
 
-```ts
-display: 'grid',
-gridTemplateColumns: { xs: '1fr', xl: '2fr 1fr' },
-gap: 3,
-alignItems: 'start',
-```
+## 5. The ticket detail decision
+
+The React app used a three-pane agent workspace (rail | list | conversation |
+details) at `/dashboard/tickets/:id`, escaping the shell entirely.
+
+**The Angular port takes the Index + Record shape instead** — a table at
+`/dashboard/tickets`, a 2-column page at `/dashboard/tickets/:id` — because the
+sidebar's saved views already do the filtering the list pane existed for, and a
+280px sidebar plus a 300px list plus a 300px rail leaves too little for the
+conversation itself.
+
+If high-volume triage later proves this wrong, the three-pane can come back as a
+"Focus" toggle on the list rather than as the default. Don't reintroduce it
+silently on one screen — that is how a product ends up with two navigation
+models.
 
 ---
 
-## 5. The agent workspace
+## 6. Customer-facing shells — outside this system
 
-`/dashboard/tickets/:id` is the one screen that escapes the shell. It is a
-full-viewport grid with no page padding:
-
-```ts
-gridTemplateColumns: { xs: '64px 1fr', lg: '64px 300px 1fr 300px' },
-height: '100vh',
-overflow: 'hidden',
-```
-
-**Open question — decide before building, don't drift into it.** The reference
-design has no three-pane mode: it uses an Index page (table) plus a Record page
-(2-column). Two coherent options:
-
-- **A — Replace.** Tickets become a table; opening one goes to a Record page.
-  Sidebar saved-views do the filtering. Matches the reference exactly, one fewer
-  layout to maintain, better for scanning and bulk actions.
-- **B — Keep as focus mode.** Table is the default list; the three-pane stays
-  behind a "Focus" toggle for high-volume triage. More to maintain, but faster
-  for an agent working a queue.
-
-Whichever is chosen, the icon rail keeps `#18181B` in both schemes and the
-sidebar collapses to that rail on this route — never show both.
-
----
-
-## 6. Customer-facing shells — unchanged
-
-`BrandedFrame` is **not** part of this redesign. Customer surfaces keep their own
-shell:
+Customer surfaces keep their own frame:
 
 - workspace `primaryColor` header bar, workspace logo, `pageTitle`
 - page background `#F6F4FA`, cards white with `#E9E4F5` border
@@ -300,17 +317,21 @@ radius and motion tokens still apply — they are brand-neutral.
 
 ## 7. Z-index
 
-| Layer | Value |
-|---|---|
-| Sticky table header | 1 |
-| Sidebar (permanent) | `theme.zIndex.appBar - 1` |
-| TopBar | `theme.zIndex.appBar` |
-| Drawer (temporary) + backdrop | `theme.zIndex.drawer` |
-| Menus, popovers | `theme.zIndex.modal - 1` |
-| Command palette, dialogs | `theme.zIndex.modal` |
-| Toasts | `theme.zIndex.snackbar` |
+One ladder, used everywhere. Nothing in the app may invent a new level.
 
-Use the theme values, never a literal `9999`.
+| Layer | Class |
+|---|---|
+| Sticky table header | `z-[1]` |
+| Top bar | `z-30` |
+| Menu/dropdown backdrop | `z-40` |
+| Sidebar, open dropdown | `z-50` |
+| Modal/drawer backdrop | `z-[60]` (`.overlay`) |
+| Modal, drawer | `z-[61]` |
+| Command palette | `z-[81]` — it can be opened *from* a modal |
+| Toasts | `z-[90]` — must survive everything |
+
+A literal `z-[9999]` in a diff means someone lost this argument with the stacking
+context rather than winning it; find the real parent.
 
 ---
 
@@ -319,8 +340,9 @@ Use the theme values, never a literal `9999`.
 | Rule | Why |
 |---|---|
 | No page scrolls horizontally at 380px | phones exist; tables scroll **inside** their card |
-| Tables get `overflow-x: auto` on a wrapper with `minWidth` on the `<table>` | keeps the page still |
+| Tables get `overflow-x-auto` on a wrapper **and** `min-w-[…]` on the `<table>` | both are needed; either alone still scrolls the page |
 | The Record rail stacks **below** the main column under `xl` | reading order stays sensible |
-| KPI grid is 2-up on `xs` | six 1-up tiles is a scroll marathon |
-| Topbar search collapses to an icon `< sm` | the ⌘K hint is meaningless on touch |
-| Sidebar is a temporary Drawer `< lg` | 280px of 1024px is too much |
+| KPI grid is 2-up on `xs` | five 1-up tiles is a scroll marathon |
+| Top-bar search collapses to an icon `< sm` | the ⌘K hint is meaningless on touch |
+| Sidebar slides in `< lg` | 280px of a 1024px screen is too much |
+| Row actions are always visible under `@media (hover: none)` | there is no hover on a phone, so a hover-reveal action is unreachable |

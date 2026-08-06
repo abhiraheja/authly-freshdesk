@@ -13,7 +13,9 @@ Trackly is a standalone, multi-tenant ticket management SaaS (FreshDesk/Zendesk-
 ## Tech stack (decided — do not re-litigate)
 
 - **Backend:** ASP.NET Core Web API (.NET 10), EF Core, PostgreSQL (`trackly` DB), SignalR (live-chat hub), Anthropic SDK (AI copilot)
-- **Frontend:** React 18 + TypeScript + Vite, Material UI, TanStack Query, React Router v6, React Hook Form + Zod, Zustand
+- **Frontend:** Angular 22 + TypeScript + Vite (`@angular/build`), Tailwind v4 on a CSS-variable token layer, standalone components, signals + `resource()`, zoneless change detection. Lives in **`frontend-angular/`**.
+  - **Migration in progress.** `frontend/` is the retiring React 19 + MUI app. Routes not yet ported render `ComingSoon`, which names the React file to port. Read `frontend/` for *behaviour*; never port its MUI markup. Delete each React screen in the same change that lands its Angular replacement. When `app.routes.ts` stops importing `ComingSoon`, delete `frontend/` and its `.vscode` entries.
+  - No Angular Material, PrimeNG, or a second styling system — the design system is `src/styles.scss` (tokens + component CSS) plus thin wrappers in `src/app/ui/`.
 - **Auth:** Trackly's own HttpOnly session cookie (hash stored in `sessions` table). SSO via one generic OIDC scheme (per-workspace config resolved at request time — see plan caveat) + `ITfoxtec.Identity.Saml2` for SAML. Passwordless magic link + 6-digit code as native fallback. **No passwords, ever.**
 - **Email:** MailKit (SMTP out, IMAP polling in) + inbound parse webhooks; both connectors feed one shared pipeline
 - **Solution layout:** `src/Trackly.Core` (entities/interfaces), `src/Trackly.Modules` (business logic), `src/Trackly.Infrastructure` (EF, email, SSO handlers), `src/Trackly.Api` (controllers/middleware)
@@ -34,4 +36,9 @@ Follow the **Implementation Phases** section at the end of `docs/trackly-plan.md
 
 ## UI work
 
-Read the **Design Direction (decided)** section of the plan before touching the frontend, and use the `trackly-ui` skill for component patterns. Two rules matter most: Material UI stays (the refreshed design was adopted, the framework was not), and Trackly surfaces get the Trackly palette plus dark mode while customer-facing surfaces get the workspace's brand and are always light.
+Use the **`trackly-ui`** skill — it carries the whole design system (tokens, layout shell, component catalogue, page recipes) and is the authority for anything visual. Read the **Design Direction (decided)** section of the plan for the *why*.
+
+Three rules matter most:
+1. **Never interpolate a Tailwind class.** `'bg-' + tone` emits no CSS at all — v4 only sees literal strings. Use a static lookup or a design-system class. This is the most common bug in the codebase and it fails silently.
+2. **Trackly surfaces** get the Trackly palette plus dark mode; **customer-facing surfaces** get the workspace's brand and are always light (invariant 6).
+3. **Four states or it isn't done** — loading, empty (which kind?), error with retry, data.
