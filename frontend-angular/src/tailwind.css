@@ -1,0 +1,85 @@
+@import 'tailwindcss';
+
+/* Trackly toggles dark mode via a `.dark` class on <html> (bootstrapped inline in
+   index.html, flipped by ThemeService), never the OS preference — so a user's
+   choice survives a reload and the shell can offer a toggle. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Map the design tokens defined in styles.scss (:root / .dark) onto Tailwind
+   utilities, so `bg-primary`, `text-muted-foreground`, `border-border` and the
+   opacity variants (`bg-primary/10`) all resolve.
+
+   `inline` makes the utilities reference the token vars directly rather than
+   snapshotting their values, which is what lets light/dark switch purely from
+   the `.dark` class with no rebuild and no duplicate utilities. */
+@theme inline {
+  --color-background: rgb(var(--background));
+  --color-foreground: rgb(var(--foreground));
+  --color-card: rgb(var(--card));
+  --color-card-foreground: rgb(var(--card-foreground));
+  --color-popover: rgb(var(--popover));
+  --color-popover-foreground: rgb(var(--popover-foreground));
+  --color-primary: rgb(var(--primary));
+  --color-primary-foreground: rgb(var(--primary-foreground));
+  --color-primary-hover: rgb(var(--primary-hover));
+  --color-primary-ink: rgb(var(--primary-ink));
+  --color-secondary: rgb(var(--secondary));
+  --color-secondary-foreground: rgb(var(--secondary-foreground));
+  --color-muted: rgb(var(--muted));
+  --color-muted-foreground: rgb(var(--muted-foreground));
+  --color-accent: rgb(var(--accent));
+  --color-accent-foreground: rgb(var(--accent-foreground));
+
+  --color-success: rgb(var(--success));
+  --color-success-ink: rgb(var(--success-ink));
+  --color-warning: rgb(var(--warning));
+  --color-warning-ink: rgb(var(--warning-ink));
+  --color-danger: rgb(var(--danger));
+  --color-danger-ink: rgb(var(--danger-ink));
+  --color-info: rgb(var(--info));
+  --color-info-ink: rgb(var(--info-ink));
+  --color-neutral: rgb(var(--neutral));
+  --color-neutral-ink: rgb(var(--neutral-ink));
+
+  --color-border: rgb(var(--border));
+  --color-input: rgb(var(--input));
+  --color-ring: rgb(var(--ring));
+
+  --color-sidebar: rgb(var(--sidebar));
+  --color-sidebar-foreground: rgb(var(--sidebar-foreground));
+  --color-sidebar-accent: rgb(var(--sidebar-accent));
+  --color-sidebar-border: rgb(var(--sidebar-border));
+
+  --color-chart-1: rgb(var(--chart-1));
+  --color-chart-2: rgb(var(--chart-2));
+  --color-chart-3: rgb(var(--chart-3));
+  --color-chart-4: rgb(var(--chart-4));
+  --color-chart-5: rgb(var(--chart-5));
+
+  --font-sans: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  /* Soft-cornered scale. `rounded-lg` is the default card corner (14px);
+     `rounded-xl` is a panel (18px). Nothing in the product exceeds 18px
+     except pills, which use `rounded-full`. */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 14px;
+  --radius-2xl: 18px;
+
+  --shadow-soft: var(--shadow-soft);
+  --shadow-lift: var(--shadow-lift);
+  --shadow-menu: var(--shadow-menu);
+
+  /* Nine-step type scale. Do not introduce a tenth — the React app drifted to
+     fifteen ad-hoc sizes and every screen looked slightly different. */
+  --text-micro: 0.625rem;      /* 10 — kbd hints, count pills            */
+  --text-label: 0.6875rem;     /* 11 — uppercase section + table headers */
+  --text-meta: 0.75rem;        /* 12 — timestamps, helper text           */
+  --text-body: 0.875rem;       /* 14 — default                           */
+  --text-card-title: 1rem;     /* 16 — panel headings                    */
+  --text-section: 1.25rem;     /* 20 — ticket subject, dialog title      */
+  --text-page: 1.5rem;         /* 24 — one per page                      */
+  --text-display: 1.875rem;    /* 30 — report figures, big KPI numbers   */
+}

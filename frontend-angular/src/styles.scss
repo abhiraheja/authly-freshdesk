@@ -1,0 +1,1034 @@
+/* =============================================================
+   TRACKLY — Design tokens + component layer
+   -------------------------------------------------------------
+   Colours are stored as SPACE-SEPARATED RGB CHANNELS so Tailwind
+   opacity utilities resolve: `bg-primary/10`, `text-danger/60`.
+   Dark mode flips the channel values, so every component below is
+   automatically correct in both schemes — never hard-code a hex.
+
+   `*-ink` tokens are the READABLE foreground for a soft tint of the
+   same colour (e.g. amber text on an amber/14 chip). They are a
+   different step from the base colour on purpose: `--warning`
+   (#F59E0B) fails contrast on its own tint, `--warning-ink`
+   (#B45309) passes.
+   ============================================================= */
+
+:root {
+  /* ---- Brand ---- */
+  --primary: 79 70 229;              /* #4F46E5 indigo */
+  --primary-foreground: 255 255 255;
+  --primary-hover: 67 56 202;        /* #4338CA */
+  --primary-ink: 67 56 202;
+  --secondary: 124 58 237;           /* #7C3AED violet */
+  --secondary-foreground: 255 255 255;
+
+  /* ---- Surfaces ---- */
+  --background: 248 250 252;         /* #F8FAFC */
+  --foreground: 15 23 42;            /* #0F172A */
+  --card: 255 255 255;
+  --card-foreground: 15 23 42;
+  --popover: 255 255 255;
+  --popover-foreground: 15 23 42;
+  --muted: 241 245 249;              /* #F1F5F9 inset fills */
+  --muted-foreground: 100 116 139;   /* #64748B */
+  --accent: 238 242 255;             /* #EEF2FF hover / selected */
+  --accent-foreground: 67 56 202;
+
+  --border: 226 232 240;             /* #E2E8F0 */
+  --input: 226 232 240;
+  --ring: 79 70 229;
+
+  /* ---- Status tones ---- */
+  --success: 16 185 129;             /* #10B981 */
+  --success-ink: 5 150 105;          /* #059669 — readable on success/14 */
+  --warning: 245 158 11;             /* #F59E0B */
+  --warning-ink: 180 83 9;           /* #B45309 */
+  --danger: 239 68 68;               /* #EF4444 */
+  --danger-ink: 220 38 38;           /* #DC2626 */
+  --info: 59 130 246;                /* #3B82F6 */
+  --info-ink: 37 99 235;             /* #2563EB */
+  --neutral: 100 116 139;            /* #64748B */
+  --neutral-ink: 71 85 105;          /* #475569 */
+
+  /* ---- Sidebar ---- */
+  --sidebar: 255 255 255;
+  --sidebar-foreground: 15 23 42;
+  --sidebar-accent: 241 245 249;
+  --sidebar-border: 226 232 240;
+
+  /* ---- Chart series (ordered — a series keeps its slot everywhere) ---- */
+  --chart-1: 79 70 229;              /* created / primary  */
+  --chart-2: 16 185 129;             /* resolved / success */
+  --chart-3: 245 158 11;             /* pending / at risk  */
+  --chart-4: 59 130 246;             /* open / info        */
+  --chart-5: 148 163 184;            /* closed / inactive  */
+
+  /* ---- Radius (Trackly is soft-cornered, unlike the tight Saarvix scale) ---- */
+  --radius-chip: 8px;
+  --radius-control: 12px;
+  --radius: 14px;
+  --radius-panel: 18px;
+
+  /* ---- Elevation ---- */
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px rgb(15 23 42 / 0.06);
+  --shadow-lift: 0 10px 40px -8px rgb(79 70 229 / 0.25);
+  --shadow-menu: 0 12px 32px -8px rgb(15 23 42 / 0.16);
+
+  /* ---- Glass chrome ---- */
+  --glass-bg: 255 255 255;
+  --glass-alpha: 0.72;
+
+  /* ---- Motion ---- */
+  --motion-fast: 150ms;
+  --motion-base: 200ms;
+  --motion-slow: 400ms;
+  --motion-ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.dark {
+  /* Neutral ZINC greys — deliberately not slate, so the chrome never reads as
+     blue. The indigo accent is the only brand hue. */
+  --primary: 165 180 252;            /* #A5B4FC */
+  --primary-foreground: 30 27 75;
+  --primary-hover: 129 140 248;
+  --primary-ink: 165 180 252;
+  --secondary: 196 181 253;          /* #C4B5FD */
+  --secondary-foreground: 30 27 75;
+
+  --background: 16 16 19;            /* #101013 */
+  --foreground: 244 244 245;         /* #F4F4F5 */
+  --card: 27 27 31;                  /* #1B1B1F */
+  --card-foreground: 244 244 245;
+  --popover: 32 32 36;
+  --popover-foreground: 244 244 245;
+  --muted: 37 37 41;
+  --muted-foreground: 161 161 170;   /* #A1A1AA */
+  --accent: 44 44 52;
+  --accent-foreground: 199 210 254;
+
+  --border: 48 48 53;
+  --input: 56 56 62;
+  --ring: 129 140 248;
+
+  --success: 52 211 153;             /* #34D399 */
+  --success-ink: 110 231 183;        /* #6EE7B7 */
+  --warning: 251 191 36;             /* #FBBF24 */
+  --warning-ink: 252 211 77;         /* #FCD34D */
+  --danger: 248 113 113;             /* #F87171 */
+  --danger-ink: 252 165 165;         /* #FCA5A5 */
+  --info: 96 165 250;                /* #60A5FA */
+  --info-ink: 147 197 253;           /* #93C5FD */
+  --neutral: 148 163 184;
+  --neutral-ink: 203 213 225;        /* #CBD5E1 */
+
+  --sidebar: 24 24 27;               /* #18181B */
+  --sidebar-foreground: 244 244 245;
+  --sidebar-accent: 39 39 42;
+  --sidebar-border: 39 39 42;
+
+  --chart-1: 129 140 248;
+  --chart-2: 52 211 153;
+  --chart-3: 251 191 36;
+  --chart-4: 96 165 250;
+  --chart-5: 113 113 122;
+
+  --shadow-soft: 0 1px 2px rgb(0 0 0 / 0.3), 0 8px 24px rgb(0 0 0 / 0.25);
+  --shadow-lift: 0 10px 40px -8px rgb(0 0 0 / 0.55);
+  --shadow-menu: 0 12px 32px -8px rgb(0 0 0 / 0.6);
+
+  --glass-bg: 24 24 27;
+  --glass-alpha: 0.66;
+}
+
+/* ============================ Base ============================ */
+
+* {
+  border-color: rgb(var(--border));
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+/* The Angular root host is a custom element (inline by default); make it a
+   block so a 100vh shell child can't add a baseline gap that leaves the
+   document faintly scrollable. */
+tk-root {
+  display: block;
+}
+
+body {
+  background-color: rgb(var(--background));
+  color: rgb(var(--foreground));
+  font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+h4,
+.font-display {
+  letter-spacing: -0.02em;
+}
+
+/* Scrollbars — thin, token-coloured, no track. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(var(--muted-foreground) / 0.35);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgb(var(--muted-foreground) / 0.55);
+  background-clip: padding-box;
+}
+.scroll-thin::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+/* ---------------------------- Motion ---------------------------- */
+
+@keyframes tk-float-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes tk-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.animate-float-in {
+  animation: tk-float-in var(--motion-slow) var(--motion-ease) both;
+}
+
+/* Not optional. Anything that animates must collapse here. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ====================== Component layer ======================
+   These classes live AFTER Tailwind in the styles array, so an
+   unlayered property here beats a Tailwind utility on the same
+   element. When you need a utility to win (e.g. `lg:hidden` on a
+   `.btn`), put the utility on a wrapper element instead.
+   ============================================================= */
+
+/* ---------------------------- Buttons ---------------------------- */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-control);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  border: 1px solid transparent;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+}
+.btn:focus-visible {
+  outline: 2px solid rgb(var(--ring) / 0.55);
+  outline-offset: 2px;
+}
+.btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.btn:disabled,
+.btn[aria-disabled='true'] {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.btn-primary {
+  background: rgb(var(--primary));
+  color: rgb(var(--primary-foreground));
+  box-shadow: var(--shadow-lift);
+}
+.btn-primary:hover {
+  background: rgb(var(--primary-hover));
+}
+.btn-secondary {
+  background: rgb(var(--muted));
+  color: rgb(var(--foreground));
+}
+.btn-secondary:hover {
+  background: rgb(var(--accent));
+}
+.btn-outline {
+  background: rgb(var(--card));
+  color: rgb(var(--foreground));
+  border-color: rgb(var(--input));
+}
+.btn-outline:hover {
+  background: rgb(var(--accent));
+  border-color: rgb(var(--primary) / 0.4);
+}
+.btn-ghost {
+  background: transparent;
+  color: rgb(var(--muted-foreground));
+}
+.btn-ghost:hover {
+  background: rgb(var(--accent));
+  color: rgb(var(--foreground));
+}
+.btn-danger {
+  background: rgb(var(--danger));
+  color: #fff;
+}
+.btn-danger:hover {
+  background: rgb(var(--danger) / 0.88);
+}
+.btn-success {
+  background: rgb(var(--success));
+  color: #fff;
+}
+.btn-success:hover {
+  background: rgb(var(--success) / 0.88);
+}
+
+.btn-sm {
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-chip);
+}
+.btn-lg {
+  padding: 0.8125rem 1.125rem;
+  font-size: 0.9375rem;
+}
+.btn-icon {
+  padding: 0.5rem;
+  width: 2.25rem;
+  height: 2.25rem;
+}
+.btn-icon.btn-sm {
+  padding: 0.375rem;
+  width: 2rem;
+  height: 2rem;
+}
+
+/* ---------------------------- Panels ---------------------------- */
+
+.card {
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-soft);
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 1.25rem 1.25rem 1rem;
+  border-bottom: 1px solid rgb(var(--border));
+}
+.card-title {
+  font-size: 1rem;
+  font-weight: 700;
+}
+.card-body {
+  padding: 1.25rem;
+}
+.card-footer {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid rgb(var(--border));
+}
+.card-dense .card-header {
+  padding: 1rem 1rem 0.75rem;
+}
+.card-dense .card-body {
+  padding: 1rem;
+}
+
+/* Clickable card — the one hover treatment in the system. */
+.card-interactive {
+  cursor: pointer;
+  transition:
+    box-shadow var(--motion-base) var(--motion-ease),
+    transform var(--motion-base) var(--motion-ease);
+}
+.card-interactive:hover {
+  box-shadow: var(--shadow-lift);
+  transform: translateY(-2px);
+}
+
+/* ---------------------------- Badges ---------------------------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border-radius: 999px;
+  padding: 0.1875rem 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1.1rem;
+  white-space: nowrap;
+}
+.badge .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  flex-shrink: 0;
+}
+.badge-neutral {
+  background: rgb(var(--neutral) / 0.14);
+  color: rgb(var(--neutral-ink));
+}
+.badge-primary {
+  background: rgb(var(--primary) / 0.12);
+  color: rgb(var(--primary-ink));
+}
+.badge-info {
+  background: rgb(var(--info) / 0.12);
+  color: rgb(var(--info-ink));
+}
+.badge-success {
+  background: rgb(var(--success) / 0.14);
+  color: rgb(var(--success-ink));
+}
+.badge-warning {
+  background: rgb(var(--warning) / 0.14);
+  color: rgb(var(--warning-ink));
+}
+.badge-danger {
+  background: rgb(var(--danger) / 0.12);
+  color: rgb(var(--danger-ink));
+}
+
+/* ---------------------------- Alerts ----------------------------
+   Real CSS classes rather than composed Tailwind utilities: Tailwind v4
+   only emits classes it can find as literal strings in the source, so a
+   template-built `bg-${tone}/10` would silently produce nothing. Any
+   tone-varying style therefore lives here, not in a computed() string.
+   ---------------------------------------------------------------- */
+
+.alert {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.875rem;
+  border-radius: var(--radius);
+  border: 1px solid;
+  font-size: 0.875rem;
+}
+.alert-info {
+  border-color: rgb(var(--info) / 0.3);
+  background: rgb(var(--info) / 0.1);
+  color: rgb(var(--info-ink));
+}
+.alert-success {
+  border-color: rgb(var(--success) / 0.3);
+  background: rgb(var(--success) / 0.1);
+  color: rgb(var(--success-ink));
+}
+.alert-warning {
+  border-color: rgb(var(--warning) / 0.32);
+  background: rgb(var(--warning) / 0.12);
+  color: rgb(var(--warning-ink));
+}
+.alert-danger {
+  border-color: rgb(var(--danger) / 0.3);
+  background: rgb(var(--danger) / 0.1);
+  color: rgb(var(--danger-ink));
+}
+.alert-primary {
+  border-color: rgb(var(--primary) / 0.3);
+  background: rgb(var(--primary) / 0.08);
+  color: rgb(var(--primary-ink));
+}
+.alert-neutral {
+  border-color: rgb(var(--border));
+  background: rgb(var(--muted));
+  color: rgb(var(--foreground));
+}
+
+/* Count pill — sidebar rows, list headers. */
+.count-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  background: rgb(var(--primary) / 0.12);
+  color: rgb(var(--primary-ink));
+}
+
+/* ---------------------------- Forms ---------------------------- */
+
+.label {
+  display: block;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-bottom: 0.375rem;
+  color: rgb(var(--foreground));
+}
+.input,
+.select,
+.textarea {
+  width: 100%;
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--input));
+  border-radius: var(--radius-control);
+  padding: 0.5625rem 0.75rem;
+  font-size: 0.875rem;
+  color: rgb(var(--foreground));
+  outline: none;
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+.input::placeholder,
+.textarea::placeholder {
+  color: rgb(var(--muted-foreground));
+}
+.input:focus,
+.select:focus,
+.textarea:focus {
+  border-color: rgb(var(--ring));
+  box-shadow: 0 0 0 3px rgb(var(--ring) / 0.18);
+}
+.input:disabled,
+.select:disabled,
+.textarea:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.input-sm {
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  border-radius: var(--radius-chip);
+}
+/* Inset variant — search bars and composers sit on a muted fill. */
+.input-inset {
+  background: rgb(var(--muted));
+  border-color: transparent;
+}
+
+/* Textareas grow with content instead of reserving empty rows and showing an
+   inner scrollbar, so a settings page keeps a single (page) scroll. */
+textarea.input,
+.textarea {
+  field-sizing: content;
+  min-height: 5rem;
+  max-height: 60vh;
+}
+
+/* Drop the native select arrow for a token-coloured chevron. */
+select:not([multiple]):not([size]) {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  padding-right: 2.25rem;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.625rem center;
+  background-size: 1rem;
+}
+.dark select:not([multiple]):not([size]) {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23a1a1aa' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+}
+select.input-sm {
+  padding-right: 2rem;
+  background-position: right 0.5rem center;
+}
+
+/* Suppress Edge's built-in reveal/clear glyphs so a custom eye toggle isn't doubled. */
+input[type='password']::-ms-reveal,
+input[type='password']::-ms-clear {
+  display: none;
+}
+/* Masks a `type="text"` input like a password field (for secrets with a custom
+   reveal toggle) without triggering Chrome's own in-field reveal icon. */
+.mask-value {
+  -webkit-text-security: disc;
+}
+
+.switch {
+  position: relative;
+  display: inline-flex;
+  width: 38px;
+  height: 22px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.switch .track {
+  position: absolute;
+  inset: 0;
+  background: rgb(var(--border));
+  border-radius: 999px;
+  transition: background-color var(--motion-base) var(--motion-ease);
+}
+.switch .track::before {
+  content: '';
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 3px;
+  top: 3px;
+  background: #fff;
+  border-radius: 999px;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.2);
+  transition: transform var(--motion-base) var(--motion-ease);
+}
+.switch input:checked + .track {
+  background: rgb(var(--primary));
+}
+.switch input:checked + .track::before {
+  transform: translateX(16px);
+}
+.switch input:focus-visible + .track {
+  outline: 2px solid rgb(var(--ring) / 0.55);
+  outline-offset: 2px;
+}
+
+/* Drag-and-drop file zone. */
+.dropzone {
+  display: grid;
+  place-items: center;
+  gap: 0.25rem;
+  padding: 2rem 1rem;
+  text-align: center;
+  border: 2px dashed rgb(var(--border));
+  border-radius: var(--radius-control);
+  background: rgb(var(--muted));
+  color: rgb(var(--muted-foreground));
+  cursor: pointer;
+  transition: all var(--motion-base) var(--motion-ease);
+}
+.dropzone:hover,
+.dropzone.is-dragging {
+  border-color: rgb(var(--primary));
+  background: rgb(var(--primary) / 0.06);
+}
+
+/* ---------------------------- Avatar ---------------------------- */
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  border-radius: 10px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  flex-shrink: 0;
+  line-height: 1;
+}
+.avatar-round {
+  border-radius: 999px;
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---------------------------- Table ---------------------------- */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.table thead th {
+  text-align: left;
+  padding: 0.625rem 1rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgb(var(--muted-foreground));
+  background: rgb(var(--muted));
+  border-bottom: 1px solid rgb(var(--border));
+  white-space: nowrap;
+}
+.table tbody td {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid rgb(var(--border));
+  vertical-align: middle;
+}
+.table tbody tr:last-child td {
+  border-bottom: none;
+}
+.table tbody tr {
+  transition: background-color var(--motion-fast) var(--motion-ease);
+}
+.table-hover tbody tr:hover {
+  background: rgb(var(--primary) / 0.04);
+}
+/* Row actions stay hidden until the row is hovered or focused within — but are
+   always visible on touch, where there is no hover. */
+.row-actions {
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--motion-ease);
+}
+tr:hover .row-actions,
+tr:focus-within .row-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .row-actions {
+    opacity: 1;
+  }
+}
+
+/* ---------------------------- Navigation ---------------------------- */
+
+.tabs {
+  display: inline-flex;
+  gap: 0.25rem;
+  border-bottom: 1px solid rgb(var(--border));
+}
+.tab {
+  padding: 0.625rem 0.25rem;
+  margin-right: 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: rgb(var(--muted-foreground));
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color var(--motion-fast) var(--motion-ease);
+}
+.tab:hover {
+  color: rgb(var(--foreground));
+}
+.tab.active {
+  color: rgb(var(--primary));
+  border-bottom-color: rgb(var(--primary));
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  background: rgb(var(--muted));
+  border-radius: var(--radius-control);
+}
+.segmented button {
+  padding: 0.3125rem 0.75rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border-radius: var(--radius-chip);
+  color: rgb(var(--muted-foreground));
+  transition: all var(--motion-fast) var(--motion-ease);
+}
+.segmented button.active {
+  background: rgb(var(--card));
+  color: rgb(var(--foreground));
+  box-shadow: var(--shadow-soft);
+}
+
+/* Sidebar rows. `nav-active` uses a horizontal fade + a left bar rather than a
+   flat fill — the fade is what makes the rail read as a rail. */
+.nav-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  border-radius: var(--radius-control);
+  font-size: 0.875rem;
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+.nav-idle {
+  color: rgb(var(--muted-foreground));
+}
+.nav-idle:hover {
+  background: rgb(var(--sidebar-accent));
+  color: rgb(var(--foreground));
+}
+.nav-active {
+  color: rgb(var(--primary));
+  font-weight: 600;
+  background: linear-gradient(90deg, rgb(var(--primary) / 0.14), rgb(var(--primary) / 0.02));
+}
+.nav-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 4px;
+  border-radius: 999px;
+  background: rgb(var(--primary));
+}
+.nav-sub {
+  display: block;
+  padding: 0.4375rem 0.75rem 0.4375rem 2.5rem;
+  border-radius: var(--radius-control);
+  font-size: 0.8125rem;
+  color: rgb(var(--muted-foreground));
+  cursor: pointer;
+}
+.nav-sub:hover {
+  background: rgb(var(--sidebar-accent));
+  color: rgb(var(--foreground));
+}
+.nav-sub.active {
+  color: rgb(var(--primary));
+  font-weight: 600;
+  background: rgb(var(--primary) / 0.08);
+}
+.nav-group-label {
+  padding: 1.25rem 0.75rem 0.375rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgb(var(--muted-foreground));
+}
+
+/* ---------------------------- Overlays ---------------------------- */
+
+.menu {
+  background: rgb(var(--popover));
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-menu);
+  padding: 0.375rem;
+  min-width: 200px;
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-chip);
+  font-size: 0.875rem;
+  color: rgb(var(--popover-foreground));
+  text-align: left;
+  cursor: pointer;
+}
+.menu-item:hover {
+  background: rgb(var(--accent));
+}
+.menu-item.active {
+  color: rgb(var(--primary));
+  font-weight: 600;
+}
+.menu-sep {
+  height: 1px;
+  background: rgb(var(--border));
+  margin: 0.375rem 0;
+}
+.menu-label {
+  padding: 0.375rem 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgb(var(--muted-foreground));
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgb(15 23 42 / 0.45);
+  backdrop-filter: blur(2px);
+  z-index: 60;
+}
+
+.modal {
+  position: fixed;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(560px, calc(100% - 2rem));
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-menu);
+  z-index: 61;
+  /* Cap to the viewport and scroll the BODY so tall forms never overflow. */
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 2rem);
+  overflow: hidden;
+}
+.modal > .card-header {
+  flex: 0 0 auto;
+}
+.modal > .card-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+.modal-wide {
+  width: min(900px, calc(100% - 2rem));
+}
+.modal-xl {
+  width: min(1120px, calc(100% - 2rem));
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(480px, 100%);
+  background: rgb(var(--card));
+  border-left: 1px solid rgb(var(--border));
+  box-shadow: var(--shadow-menu);
+  z-index: 61;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Command palette sits above modals — it can be opened from one. */
+.palette {
+  position: fixed;
+  left: 50%;
+  top: 7rem;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 2rem));
+  border-radius: var(--radius-panel);
+  border: 1px solid rgb(var(--border));
+  box-shadow: var(--shadow-menu);
+  overflow: hidden;
+  z-index: 81;
+}
+
+/* ---------------------------- Feedback ---------------------------- */
+
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: rgb(var(--muted-foreground) / 0.18);
+  border-radius: var(--radius-chip);
+}
+.skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.25), transparent);
+  animation: tk-shimmer 1.4s infinite;
+}
+
+.progress {
+  height: 8px;
+  background: rgb(var(--muted));
+  border-radius: 999px;
+  overflow: hidden;
+}
+.progress > span {
+  display: block;
+  height: 100%;
+  background: rgb(var(--primary));
+  border-radius: 999px;
+  transition: width var(--motion-slow) var(--motion-ease);
+}
+
+.timeline {
+  position: relative;
+  padding-left: 1.5rem;
+  margin-left: 0.25rem;
+  border-left: 1px solid rgb(var(--border));
+  list-style: none;
+}
+.timeline-item {
+  position: relative;
+  padding-bottom: 1.25rem;
+}
+.timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -1.9rem;
+  top: 4px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: rgb(var(--primary));
+  /* Ring must be the CARD colour, not white, or it halos in dark mode. */
+  box-shadow: 0 0 0 4px rgb(var(--card));
+}
+
+.kbd {
+  font-family: inherit;
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.125rem 0.375rem;
+  border-radius: 5px;
+  border: 1px solid rgb(var(--border));
+  background: rgb(var(--muted));
+  color: rgb(var(--muted-foreground));
+}
+
+.empty-state {
+  display: grid;
+  place-items: center;
+  gap: 0.5rem;
+  padding: 5rem 1.25rem;
+  text-align: center;
+}
+.empty-state .empty-icon {
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  margin-bottom: 0.5rem;
+  border-radius: 16px;
+  background: rgb(var(--primary) / 0.1);
+  color: rgb(var(--primary));
+}
+
+/* ---------------------------- Utilities ---------------------------- */
+
+.glass {
+  background: rgb(var(--glass-bg) / var(--glass-alpha));
+  backdrop-filter: blur(16px) saturate(160%);
+}
+
+.divide-rows > * + * {
+  border-top: 1px solid rgb(var(--border));
+}
+
+/* The brand mark / AI copilot panel — fixed gradient in both schemes. */
+.brand-gradient {
+  background: linear-gradient(135deg, rgb(79 70 229), rgb(167 139 250));
+}

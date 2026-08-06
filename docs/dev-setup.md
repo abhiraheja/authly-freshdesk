@@ -237,6 +237,7 @@ Both the key **and** the workspace toggle are required, or all AI actions stay o
 | Live chat doesn't connect (`/hubs/chat`) | Make sure you're on the Vite dev URL (`:5173`) so the WebSocket is proxied; the `/hubs` proxy has `ws: true` in `vite.config.ts`. |
 | Git warns `LF will be replaced by CRLF` | Harmless line-ending normalization on Windows. |
 | `dotnet ef` not found | `dotnet tool install --global dotnet-ef`. |
+| Restore fails `NU1301 … 401 (Unauthorized)` on a private feed | A machine- or user-level `NuGet.Config` (`%AppData%\NuGet\NuGet.Config`) adds a private feed with expired credentials; NuGet queries **every** configured source on restore, even though Trackly uses only nuget.org. The repo-root `nuget.config` `<clear />`s inherited sources — make sure you're restoring from the repo root and that file is present. |
 
 ---
 

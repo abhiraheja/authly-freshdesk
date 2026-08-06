@@ -1,0 +1,198 @@
+<div class="flex h-screen overflow-hidden bg-background text-foreground">
+  <!-- ============================ SIDEBAR ============================
+       Permanent from lg up; a slide-in drawer below it. One set of nav
+       markup either way — duplicating it is how the two copies drift.
+  -->
+  <aside
+    class="glass fixed inset-y-0 left-0 z-50 flex w-[280px] shrink-0 flex-col border-r border-sidebar-border transition-transform duration-200 lg:static lg:translate-x-0"
+    [class.-translate-x-full]="!mobileOpen()"
+  >
+    <!-- Brand -->
+    <div class="flex h-16 shrink-0 items-center gap-3 border-b border-sidebar-border px-5">
+      <div class="brand-gradient grid size-9 shrink-0 place-items-center rounded-xl text-white shadow-[var(--shadow-lift)]">
+        <tk-icon name="life-buoy" [size]="18" />
+      </div>
+      <div class="min-w-0 leading-tight">
+        <p class="font-display font-extrabold tracking-tight">Trackly</p>
+        @if (workspaceName()) {
+          <p class="truncate text-meta text-muted-foreground">{{ workspaceName() }}</p>
+        }
+      </div>
+    </div>
+
+    <!-- Nav -->
+    <nav class="scroll-thin flex-1 overflow-y-auto px-3 pb-4" aria-label="Main">
+      @for (group of groups(); track group.label) {
+        @if (group.collapsible) {
+          <button
+            type="button"
+            class="nav-group-label flex w-full items-center justify-between hover:text-foreground"
+            [attr.aria-expanded]="adminOpen()"
+            (click)="toggleAdmin()"
+          >
+            {{ group.label }}
+            <tk-icon
+              name="chevron-right"
+              [size]="14"
+              class="transition-transform"
+              [class.rotate-90]="adminOpen()"
+            />
+          </button>
+        } @else {
+          <p class="nav-group-label">{{ group.label }}</p>
+        }
+
+        @if (!group.collapsible || adminOpen()) {
+          <div class="space-y-0.5">
+            @for (item of group.items; track item.label) {
+              <a
+                class="nav-row"
+                [class.nav-active]="isActive(item)"
+                [class.nav-idle]="!isActive(item)"
+                [routerLink]="item.route"
+                [queryParams]="item.params ?? null"
+                [attr.aria-current]="isActive(item) ? 'page' : null"
+                (click)="closeMobile()"
+              >
+                @if (item.icon) {
+                  <tk-icon [name]="item.icon" [size]="18" />
+                } @else {
+                  <!-- Saved views get a status dot instead of an icon, so the
+                       colour reads as "this is a state", not "this is a place". -->
+                  <span class="ml-0.5 size-2 shrink-0 rounded-full" [class]="dotClass(item)"></span>
+                }
+                <span class="truncate">{{ item.label }}</span>
+                @if (count(item); as value) {
+                  <span class="count-pill ml-auto">{{ value }}</span>
+                }
+              </a>
+            }
+          </div>
+        }
+      }
+    </nav>
+
+    <!-- Profile -->
+    <div class="relative shrink-0 border-t border-sidebar-border p-3">
+      <button
+        type="button"
+        class="flex w-full items-center gap-3 rounded-xl p-2 text-left transition-colors hover:bg-sidebar-accent"
+        [attr.aria-expanded]="profileOpen()"
+        (click)="profileOpen.set(!profileOpen())"
+      >
+        <tk-avatar [name]="session.displayName()" [size]="36" />
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-body font-semibold">{{ session.displayName() }}</span>
+          <span class="block truncate text-meta capitalize text-muted-foreground">{{ session.role() }}</span>
+        </span>
+        <tk-icon name="chevron-down" [size]="16" class="text-muted-foreground" />
+      </button>
+
+      @if (profileOpen()) {
+        <button
+          type="button"
+          class="fixed inset-0 z-40 cursor-default"
+          aria-label="Close menu"
+          (click)="profileOpen.set(false)"
+        ></button>
+        <div class="menu absolute bottom-full left-3 right-3 z-50 mb-2 animate-float-in">
+          <button type="button" class="menu-item" (click)="theme.toggle(); profileOpen.set(false)">
+            <tk-icon [name]="theme.dark() ? 'sun' : 'moon'" [size]="16" />
+            {{ theme.dark() ? 'Light mode' : 'Dark mode' }}
+          </button>
+          <div class="menu-sep"></div>
+          <button type="button" class="menu-item text-danger" (click)="signOut()">
+            <tk-icon name="log-out" [size]="16" />
+            Sign out
+          </button>
+        </div>
+      }
+    </div>
+  </aside>
+
+  <!-- Mobile backdrop -->
+  @if (mobileOpen()) {
+    <button
+      type="button"
+      class="fixed inset-0 z-40 bg-foreground/40 backdrop-blur-sm lg:hidden"
+      aria-label="Close navigation"
+      (click)="closeMobile()"
+    ></button>
+  }
+
+  <!-- ============================= MAIN ============================= -->
+  <div class="flex min-h-0 min-w-0 flex-1 flex-col">
+    <!-- Top bar. Overflow must stay visible: the dropdowns here open downward
+         with position:absolute, and any overflow container would clip them
+         inside the bar instead of over the page. -->
+    <header
+      class="glass sticky top-0 z-30 flex h-16 shrink-0 items-center gap-3 border-b border-border px-4 md:px-6"
+    >
+      <span class="lg:hidden">
+        <button tkButton variant="ghost" iconOnly aria-label="Open navigation" (click)="mobileOpen.set(true)">
+          <tk-icon name="menu" [size]="20" />
+        </button>
+      </span>
+
+      <!-- Search is a BUTTON, not an input: it opens the command palette, which
+           searches routes, tickets and articles — not just this page. -->
+      <button
+        type="button"
+        class="hidden h-9 w-full max-w-md items-center gap-2 rounded-xl border border-transparent bg-muted px-3 text-left text-body text-muted-foreground transition-colors hover:border-primary/40 sm:flex"
+        (click)="paletteOpen.set(true)"
+      >
+        <tk-icon name="search" [size]="16" />
+        <span class="flex-1 truncate">Search tickets, people, articles…</span>
+        <tk-kbd>⌘K</tk-kbd>
+      </button>
+      <span class="sm:hidden">
+        <button tkButton variant="ghost" iconOnly aria-label="Search" (click)="paletteOpen.set(true)">
+          <tk-icon name="search" [size]="20" />
+        </button>
+      </span>
+
+      <div class="ml-auto flex shrink-0 items-center gap-1.5">
+        <a tkButton variant="primary" size="sm" routerLink="/dashboard/tickets/new">
+          <tk-icon name="plus" [size]="16" />
+          <span class="hidden sm:inline">New ticket</span>
+        </a>
+
+        <tk-dropdown align="end">
+          <button tkButton variant="ghost" iconOnly dropdown-trigger aria-label="Notifications" class="relative">
+            <tk-icon name="bell" [size]="20" />
+            <span class="absolute right-1.5 top-1.5 size-2 rounded-full bg-danger ring-2 ring-background"></span>
+          </button>
+          <div dropdown-menu>
+            <div class="w-80">
+              <p class="menu-label">Notifications</p>
+              <p class="px-2.5 py-6 text-center text-body text-muted-foreground">
+                You're all caught up.
+              </p>
+            </div>
+          </div>
+        </tk-dropdown>
+
+        <button
+          tkButton
+          variant="ghost"
+          iconOnly
+          class="hidden lg:inline-flex"
+          [attr.aria-label]="theme.dark() ? 'Switch to light mode' : 'Switch to dark mode'"
+          (click)="theme.toggle()"
+        >
+          <tk-icon [name]="theme.dark() ? 'sun' : 'moon'" [size]="20" />
+        </button>
+      </div>
+    </header>
+
+    <!-- The ONLY scrolling pane. -->
+    <main class="scroll-thin min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+      <div class="mx-auto w-full max-w-[1600px]">
+        <router-outlet />
+      </div>
+    </main>
+  </div>
+</div>
+
+<tk-command-palette [(open)]="paletteOpen" />
+<tk-toaster />

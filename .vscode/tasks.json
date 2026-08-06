@@ -22,6 +22,30 @@
       "problemMatcher": "$msCompile"
     },
     {
+      "label": "frontend-angular: dev",
+      "type": "shell",
+      "command": "npm start",
+      "options": { "cwd": "${workspaceFolder}/frontend-angular" },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "angular",
+        "pattern": { "regexp": "." },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "Building|Watch mode",
+          "endsPattern": "Local:|Watch mode enabled"
+        }
+      }
+    },
+    {
+      "label": "frontend-angular: build",
+      "type": "shell",
+      "command": "npm run build",
+      "options": { "cwd": "${workspaceFolder}/frontend-angular" },
+      "problemMatcher": "$tsc"
+    },
+    {
+      // Legacy React app — retiring as screens are ported.
       "label": "frontend: dev",
       "type": "shell",
       "command": "npm run dev",

@@ -1,157 +1,163 @@
 ---
 name: trackly-ui
-description: Build or restyle any Trackly React screen or component — pages, panes, cards, forms, dialogs, admin settings, customer-facing branded surfaces. Use whenever adding UI, choosing colours/spacing, wiring dark mode, or deciding whether a surface is Trackly-branded or workspace-branded. Covers the MUI theme tokens, the two-palette rule, and copy-paste recipes from the real codebase.
+description: Build or restyle any Trackly screen or component in the Angular frontend — pages, cards, tables, forms, dialogs, charts, the app shell, admin settings, customer-facing branded surfaces. Use whenever adding UI, choosing colours/type/spacing, wiring dark mode, adding a route or guard, fetching data for a screen, or deciding whether a surface is Trackly-branded or workspace-branded. Carries the full design system: tokens, layout shell, component catalogue and page recipes.
 ---
 
 # Trackly UI
 
-**React 18 + TypeScript + Vite + Material UI v9**, with TanStack Query for data,
-React Router v6, React Hook Form + Zod for forms, Zustand for auth state. Do
-**not** introduce Tailwind, shadcn, styled-components, or a second UI kit — that
-was decided explicitly after a design review (see `docs/trackly-plan.md`).
+**Angular 22 + TypeScript + Tailwind v4**, standalone components, signals
+throughout, zoneless change detection. Lives in `frontend-angular/`.
+
+> **Migration in progress.** `frontend/` is the retiring React + MUI app.
+> Screens are being ported one at a time; routes not yet ported render
+> `ComingSoon`, which names the React file to port. Read from `frontend/` for
+> behaviour, never copy its MUI markup. When a screen lands, delete the React
+> one in the same change.
+
+Do **not** introduce Angular Material, PrimeNG, shadcn, or a second styling
+system. The design system is a CSS token layer plus thin Angular wrappers, and
+it is complete enough that a page should contain almost no bespoke styling.
+
+---
+
+## Read this first, then the reference you need
+
+| Doing | Read |
+|---|---|
+| Picking a colour, size, spacing, shadow, animation | `references/tokens.md` |
+| Building the shell, sidebar, top bar, or a new page's skeleton | `references/layout.md` |
+| Building or restyling any component | `references/components.md` |
+| Composing a whole page, choosing icons, handling states | `references/patterns.md` |
+
+Don't guess a value. If it isn't in `tokens.md`, it doesn't exist yet — add it
+there (i.e. to `src/styles.scss`) first.
+
+---
 
 ## The rule that matters most: which brand is this surface?
 
 Trackly is multi-tenant. Every screen belongs to one of two palettes, and mixing
-them is the easiest way to break the product.
+them is the fastest way to break the product.
 
 | | **Trackly-owned** | **Workspace-branded** |
 |---|---|---|
-| Screens | agent workspace, dashboard, admin settings, login/signup/verify, onboarding | `/submit`, guest ticket view, customer portal, widget, notification emails |
-| Colour source | the MUI theme (indigo `#4F46E5`) | `branding.primaryColor` fetched per workspace |
-| Dark mode | **yes** — must work in both schemes | **no** — always light; the palette is the customer's brand |
-| Wrapper | `<AppShell>` | `<BrandedFrame>` (arrives in Phase 3) |
+| Screens | dashboard, tickets, admin, login/verify, onboarding | `/submit`, `/kb`, `/chat`, `/csat`, guest ticket view, `/portal/*`, `/invite`, widget, notification emails |
+| Colour source | the token layer (indigo `#4F46E5`) | `branding.primaryColor`, fetched per workspace |
+| Dark mode | **yes** — must work in both schemes | **no** — always light; the palette is the customer's |
+| Wrapper | routed under `Shell` | a branded frame, outside the shell |
 
-This is **invariant 6** in `CLAUDE.md`. If you're about to hardcode indigo on a
-page a customer sees, stop.
+This is **invariant 6** in `CLAUDE.md`. Customer surfaces still use Trackly's
+typography, spacing, radius and motion — those are brand-neutral. Only colour
+differs, and a branded route calls `ThemeService.forceLight()` on entry.
 
-## Design tokens
+---
 
-All tokens live in `frontend/src/theme.ts`. Import them; never re-declare hex.
+## Where everything lives
+
+```
+frontend-angular/src/
+├── styles.scss              tokens (:root / .dark) + the component CSS layer
+├── tailwind.css             @theme inline — maps tokens onto utilities
+└── app/
+    ├── core/                framework, no UI
+    │   ├── api/             ApiService · ApiError · interceptors · *.api.ts
+    │   ├── auth/            SessionStore · guards · models
+    │   ├── theme/           ThemeService (dark mode, forceLight)
+    │   └── format.ts        tone maps + timeAgo/initials/avatarColor
+    ├── ui/                  the design system — import from 'app/ui'
+    ├── shell/               Shell · nav.ts · CommandPalette
+    └── features/            one folder per screen
+```
+
+---
+
+## Six rules that catch most mistakes
+
+1. **Never interpolate a Tailwind class.** Tailwind v4 only emits classes it can
+   find as literal strings. `'bg-' + tone` compiles to *nothing* — a silent
+   failure with no error. Use a static lookup (`TINT[tone]`) or a design-system
+   class (`.badge-warning`). This is the single most common bug in this codebase.
+2. **Semantic tokens, never raw colour.** `bg-card`, `text-muted-foreground`,
+   `border-border`. Literal hex only exists in `styles.scss` and the avatar
+   palette in `format.ts`.
+3. **Coloured labels go through `tk-badge` + a tone map.** Look the state up in
+   `STATUS_TONE` / `PRIORITY_TONE` — never pick a tone by eye at the call site.
+4. **Filter state lives in the URL.** `?view=open&q=login&page=2`, bound to
+   `input()`s by `withComponentInputBinding()`. Shareable, Back works, and the
+   resource params double as the cache key.
+5. **Four states or it isn't done** — loading (skeleton, same height as the real
+   content), empty (which kind?), error (with retry), data.
+6. **Private notes are enforced by the API, never by styling.** Invariant 5.
+
+---
+
+## Angular conventions
+
+Every component: **standalone**, `ChangeDetectionStrategy.OnPush`, signal-based.
+There is no zone.js — `provideZonelessChangeDetection()` is on, so anything that
+mutates outside a signal will not repaint.
 
 ```ts
-import { brand, shadows, glass } from '../theme'
-```
+@Component({
+  selector: 'tk-ticket-list',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [Card, Badge, Button],
+  template: `…`,          // inline under ~150 lines, else templateUrl
+})
+export class TicketList {
+  readonly view = input('');                      // ← query param, auto-bound
+  private readonly api = inject(TicketsApi);
 
-| Token | Value | Use for |
-|---|---|---|
-| `primary` | `#4F46E5` indigo | Trackly actions, active nav, focus |
-| `success` / `warning` / `error` / `info` | `#10B981` / `#F59E0B` / `#EF4444` / `#3B82F6` | status chips, SLA states |
-| `shadows.soft` | subtle two-layer | resting cards |
-| `shadows.lift` | indigo-tinted glow | hover, primary buttons |
-| `glass.light` / `glass.dark` | blur(16px) saturate(160%) | app bar, rail |
-| radius | `14px` base, `18px` cards | `borderRadius: '18px'` on panels |
-| font | Inter (loaded in `index.html`) | everything |
+  protected readonly tickets = resource({
+    params: () => ({ view: this.view() }),
+    loader: ({ params }) => this.api.list({ status: params.view || undefined }),
+  });
 
-## Dark-mode-safe styling
-
-The theme uses MUI `colorSchemes` with `cssVariables.colorSchemeSelector: 'class'`,
-so **semantic palette keys switch automatically**. Hardcoded hex does not.
-
-```tsx
-// ✅ inverts correctly
-sx={{ bgcolor: 'background.paper', color: 'text.primary', borderColor: 'divider' }}
-
-// ❌ white card that stays white in dark mode
-sx={{ bgcolor: '#fff', color: '#334155', border: '1px solid #E2E8F0' }}
-```
-
-| Hardcoded | Token |
-|---|---|
-| `#fff` | `background.paper` |
-| `#F8FAFC`, `#F1F5F9` | `surfaceMuted` (custom token) or `background.default` |
-| `#E2E8F0` | `divider` |
-| `#0F172A`, `#334155` | `text.primary` |
-| `#64748B`, `#94A3B8` | `text.secondary` |
-| `#EFF6FF` (active nav) | `action.selected` |
-
-**Gotcha:** `border: '1px solid'` with no colour falls back to `currentColor` and
-inherits the text colour — always pair it with `borderColor: 'divider'`.
-
-Two deliberate exceptions to the token rule, both in Phase 2 code:
-- the agent workspace **icon rail** is hardcoded `#0F172A` — it is chrome, dark in
-  both schemes by design;
-- **status/priority chips** use fixed pastel pairs from `lib/format.ts` so a
-  ticket state reads identically everywhere.
-
-## Component recipes
-
-### Trackly-owned page
-
-```tsx
-import { Typography } from '@mui/material'
-import { AppShell } from '../components/AppShell'
-
-export function ThingPage() {
-  return (
-    <AppShell>
-      <Typography variant="h5" sx={{ mb: 0.5 }}>Thing</Typography>
-      <Typography color="text.secondary" sx={{ mb: 3 }}>What this page is for.</Typography>
-      {/* content */}
-    </AppShell>
-  )
+  protected readonly rows = computed(() => this.tickets.value()?.items ?? []);
 }
 ```
 
-`AppShell` supplies the glass app bar, role-aware nav, colour-mode toggle, avatar
-and sign-out.
+- `input()` / `model()` / `output()` — never `@Input()`/`@Output()`
+- `resource()` for reads; it gives `value()`, `isLoading()`, `error()`, `reload()`
+- `computed()` for derived state; `effect()` only for syncing to the outside world
+- `@if` / `@for` / `@switch` — never `*ngIf` / `*ngFor`
+- `protected` for template members, `private` for everything else
+- Prefer `host: {}` in the decorator over `@HostBinding`
 
-### Card / panel
+---
 
-```tsx
-<Paper variant="outlined" sx={{ borderRadius: '18px', p: 3, boxShadow: shadows.soft }}>
+## Data, always
+
+Never inject `HttpClient` in a component. A typed `*.api.ts` in `core/api/`
+wraps `ApiService`, which returns promises and throws `ApiError`.
+
+```ts
+try {
+  await this.api.update(id, body);
+  this.toast.success('Ticket updated');
+} catch (err) {
+  if (err instanceof ApiError && err.status === 403) { … }
+  this.error.set(errorMessage(err));
+}
 ```
 
-### KPI tile
+Branch on `err.status`, never on the message text — the copy will change, the
+code will not.
 
-```tsx
-<StatCard label="Open" value={count} icon="📂" tone="info" onClick={() => navigate('/dashboard/tickets')} />
-```
+**Toast vs alert:** a toast is for something that already succeeded and whose
+surface is gone ("Invitation sent"). Anything the user must act on — a
+validation failure, a save error — goes in a `tk-alert` next to the thing that
+failed. A toast disappears in four seconds; it can never hold the only copy of
+an error.
 
-### Status / priority chip
-
-```tsx
-const chip = STATUS_CHIP[ticket.status] ?? STATUS_CHIP.open
-<Chip label={chip.label} size="small" sx={{ bgcolor: chip.bg, color: chip.fg }} />
-```
-
-### Data fetching
-
-Always TanStack Query against a typed function in `src/api/`. Never call `fetch`
-directly from a component.
-
-```tsx
-const { data, isPending } = useQuery({ queryKey: ['tickets', filters], queryFn: () => listTickets(filters) })
-const save = useMutation({
-  mutationFn: () => updateTicket(id, body),
-  onSuccess: () => queryClient.invalidateQueries({ queryKey: ['ticket', id] }),
-  onError: (e: Error) => setError(e.message),
-})
-```
-
-`src/api/client.ts` throws `ApiError` with `.status` — branch on it for 409/403
-rather than matching message text.
-
-### Private notes
-
-In the agent conversation pane, internal notes render amber with a dashed border
-(`rgba(245,158,11,.12)` tint, `borderColor: 'warning.main'`) and a 🔒 prefix. The
-API already filters them for customers — the styling is a second signal for
-agents, never the enforcement.
-
-## MUI v9 gotchas that will bite you
-
-1. **System props are gone from `Stack`/`Box`.** `alignItems="center"` is a type
-   error — move it into `sx`: `sx={{ alignItems: 'center' }}`.
-2. **No `containedPrimary` style-override key.** Use the `variants` array
-   (`props: { variant: 'contained', color: 'primary' }`) — see `theme.ts`.
-3. **`slotProps`, not `componentsProps`**, for `Dialog`/`TextField` internals.
-4. Adding a custom palette key needs a module augmentation — see the
-   `declare module '@mui/material/styles'` block at the bottom of `theme.ts`.
+---
 
 ## Before you finish
 
-- `npx tsc -b` from `frontend/` must exit 0.
-- View the screen in **both** colour modes if it's Trackly-owned.
-- Check the page doesn't scroll horizontally at ~380px wide.
-- Nav items and dialogs need keyboard focus and an accessible name.
+- `npx ng build` from `frontend-angular/` exits 0
+- viewed in **both** colour modes if the surface is Trackly-owned
+- no horizontal page scroll at 380px; wide tables scroll inside their card
+- keyboard reaches and operates everything, with a visible focus ring
+- icon-only buttons have `aria-label`
+- no interpolated Tailwind classes anywhere in the diff
+- docs updated in the same change when the rule applies (`patterns.md` § 11)

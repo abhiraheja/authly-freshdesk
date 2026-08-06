@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Trackly</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+
+  <!-- Apply the saved colour scheme BEFORE first paint. Doing this in Angular
+       would flash a light frame on every load for dark-mode users. Customer-facing
+       branded surfaces force this back off — they are always light. -->
+  <script>
+    try {
+      var t = localStorage.getItem('trackly-theme');
+      if (t === 'dark' || (!t && matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.documentElement.classList.add('dark');
+      }
+    } catch (e) { /* private mode — default to light */ }
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <tk-root></tk-root>
+</body>
+</html>

@@ -16,7 +16,35 @@
       }
     },
     {
-      "name": "Frontend (Vite)",
+      // ng serve on :4200. Its dev-server proxy forwards /api and /hubs to the
+      // API on :5210 (frontend-angular/proxy.conf.js), so the SPA and the API
+      // share an origin — which the same-site session cookie requires.
+      "name": "Frontend (Angular)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm start",
+      "cwd": "${workspaceFolder}/frontend-angular"
+    },
+    {
+      // Same server, but opens a debuggable browser once the dev server is
+      // actually listening. serverReadyAction handles that sequencing — a
+      // plain compound would race and open the tab before :4200 is up.
+      "name": "Frontend (Angular) + browser",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm start",
+      "cwd": "${workspaceFolder}/frontend-angular",
+      "serverReadyAction": {
+        "action": "debugWithChrome",
+        "pattern": "Local:\\s+(https?://\\S+)",
+        "uriFormat": "%s",
+        "webRoot": "${workspaceFolder}/frontend-angular"
+      }
+    },
+    {
+      // Legacy React app — retiring as screens are ported to frontend-angular.
+      // Delete this config together with frontend/.
+      "name": "Frontend (Vite — legacy React)",
       "type": "node-terminal",
       "request": "launch",
       "command": "npm run dev",
@@ -25,9 +53,22 @@
   ],
   "compounds": [
     {
-      "name": "Full stack (API + Frontend)",
-      "configurations": ["API (Trackly.Api)", "Frontend (Vite)"],
-      "stopAll": true
+      "name": "Full stack (API + Angular)",
+      "configurations": ["API (Trackly.Api)", "Frontend (Angular)"],
+      "stopAll": true,
+      "presentation": { "group": "1-fullstack", "order": 1 }
+    },
+    {
+      "name": "Full stack + browser debug",
+      "configurations": ["API (Trackly.Api)", "Frontend (Angular) + browser"],
+      "stopAll": true,
+      "presentation": { "group": "1-fullstack", "order": 2 }
+    },
+    {
+      "name": "Full stack (API + legacy React)",
+      "configurations": ["API (Trackly.Api)", "Frontend (Vite — legacy React)"],
+      "stopAll": true,
+      "presentation": { "group": "2-legacy", "order": 1 }
     }
   ]
 }
