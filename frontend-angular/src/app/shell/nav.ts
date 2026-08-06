@@ -1,5 +1,5 @@
-import type { Tone } from '../core/format';
-import type { IconName } from '../ui';
+import type { Tone } from '@trackly/core';
+import type { IconName } from '@trackly/ui';
 
 export interface NavItem {
   readonly label: string;

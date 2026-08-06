@@ -3,9 +3,9 @@ import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, type Event as RouterEvent } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
-import { SessionStore } from '../core/auth/session.store';
-import { ThemeService } from '../core/theme/theme.service';
-import { Avatar, Button, Dropdown, Icon, Kbd, Toaster } from '../ui';
+import { SessionStore } from '@trackly/core';
+import { ThemeService } from '@trackly/core';
+import { Avatar, Button, Dropdown, Icon, Kbd, Toaster } from '@trackly/ui';
 import { CommandPalette } from './command-palette';
 import { NAV, PORTAL_NAV, type NavGroup, type NavItem } from './nav';
 

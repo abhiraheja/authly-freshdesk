@@ -10,8 +10,8 @@ import {
   viewChild,
 } from '@angular/core';
 import { Router } from '@angular/router';
-import { SessionStore } from '../core/auth/session.store';
-import { Icon, Kbd, type IconName } from '../ui';
+import { SessionStore } from '@trackly/core';
+import { Icon, Kbd, type IconName } from '@trackly/ui';
 import { NAV } from './nav';
 
 interface Command {
