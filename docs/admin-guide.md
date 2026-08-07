@@ -34,6 +34,7 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 17. [Analytics](#17-analytics)
 18. [Where everything lives (nav map)](#18-where-everything-lives)
 19. [Security & privacy you should know](#19-security--privacy-you-should-know)
+20. [Attachment storage](#20-attachment-storage)
 
 ---
 
@@ -502,6 +503,62 @@ Canned.
   group→role mapping applies only at login.
 - **AI needs both switches** — the deployment key and the workspace toggle; with
   either off, no data is sent to the model.
+
+---
+
+## 20. Attachment storage
+
+**What it is.** Where files uploaded to tickets — and your logo — are kept. By
+default that is Trackly's own server; you can point it at **your own** Azure Blob
+Storage or Google Cloud Storage bucket instead.
+**Where:** **Admin ▾ → Workspace → Storage**.
+
+**Set up.**
+
+1. Pick a provider. **Local disk** needs nothing and is fine for a single
+   server; it does not survive the server being replaced.
+2. **Azure** — paste a connection string and name a container. Trackly creates
+   the container if the credential is allowed to.
+   **Google Cloud** — upload (or paste) the service-account JSON key and name a
+   bucket that already exists. The service account needs object **read, write
+   and delete** on it.
+3. Optionally set a **folder prefix** (e.g. `trackly`) — do this whenever the
+   bucket is shared with another application, so Trackly's files stay in one
+   place.
+4. Save, then press **Test connection**. It writes a small file, reads it back
+   and deletes it, which is the only way to catch a credential that can upload
+   but not download.
+
+**Switching provider does not move existing files.** Attachments written before
+the switch keep being served from where they are — but only while the old
+provider's credentials are still saved. The screen warns you before a switch;
+clearing the old credentials is what makes those attachments unreadable. There
+is no tool that copies objects between providers.
+
+**CDN (optional).** If a CDN sits in front of the bucket, put its origin here
+(e.g. `https://cdn-beta.saarvix.in`). It maps onto the bucket root, so the bucket
+name is *not* part of a CDN path. The preview on the page shows the finished URL
+as you type.
+
+Only your **logo** is ever served from the CDN. Ticket attachments never are — a
+CDN link carries no sign-in, so it would sidestep the checks that keep one
+customer from reading another's ticket, and keep an internal note's attachment
+away from the customer.
+
+> ⚠️ A CDN needs the bucket to be publicly readable, and attachments live in the
+> same bucket. Trackly never hands out an attachment's path, but it cannot make a
+> public bucket private — someone who already knows an object's path could fetch
+> it. If that matters, use a separate private bucket for Trackly and skip the
+> CDN, or accept the trade knowingly.
+
+**Good to know.**
+
+- Credentials are AES-256-GCM encrypted and never shown again. The field says
+  "Configured"; leave it blank to keep what is stored, or paste a new value to
+  replace it.
+- The 10 MB per-file limit is the same whichever provider you use.
+- Logos are covered by [Branding](#10-branding); this section only decides where
+  the file physically lives.
 
 ---
 

@@ -1346,13 +1346,40 @@ CREATE TABLE attachments (
     file_name    TEXT NOT NULL,
     content_type TEXT NOT NULL,
     size_bytes   BIGINT NOT NULL,             -- enforce max size (e.g. 10 MB) at API level
-    storage_key  TEXT NOT NULL,               -- path/key in blob storage
+    storage_key  TEXT NOT NULL,               -- provider-prefixed key, see below
     created_at   TIMESTAMPTZ DEFAULT now()
 );
--- Storage: local disk volume for self-hosted deployments, S3-compatible
--- object storage (S3 / MinIO / Azure Blob) for cloud — behind an
--- IFileStorage abstraction. Downloads served via short-lived signed URLs;
--- access checked against ticket visibility rules first.
+
+-- Storage is PER WORKSPACE, not per deployment: an admin picks local disk,
+-- Azure Blob or GCS under Admin → Storage, and brings their own bucket.
+CREATE TABLE storage_configs (
+    id                                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id                      UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    provider                          TEXT NOT NULL DEFAULT 'local',  -- local | azure | gcs
+    azure_connection_string_encrypted TEXT,       -- AES-256-GCM
+    azure_container                   TEXT,
+    gcs_credentials_json_encrypted    TEXT,       -- AES-256-GCM
+    gcs_bucket                        TEXT,
+    path_prefix                       TEXT,       -- folder inside the bucket, e.g. 'trackly'
+    public_base_url                   TEXT,       -- optional CDN origin, maps to the bucket root
+    last_verified_at                  TIMESTAMPTZ,
+    updated_at                        TIMESTAMPTZ DEFAULT now(),
+    UNIQUE (workspace_id)
+);
+
+-- storage_key carries the provider that WROTE it: 'gcs:trackly/…',
+-- 'azure:…', 'local:…', plus a '-public' variant ('gcs-public:…'). Reads route
+-- on that prefix, never on the workspace's current setting — otherwise
+-- switching provider would orphan every file written beforehand, with no way
+-- to recover it from the key alone. An unprefixed key predates this and means
+-- local disk. Azure and GCS credentials therefore live in separate columns, so
+-- a switch leaves the old provider's still readable.
+--
+-- Only '-public' keys (workspace logos) are ever given a CDN URL. Attachments
+-- are always served by GET /api/attachments/{id} after the visibility checks,
+-- because a CDN link carries no sign-in and would bypass invariant 5. Signed
+-- URLs issued after the permission check (Azure SAS / GCS V4) are the intended
+-- answer if attachment throughput ever needs one — not a public CDN.
 
 -- Categories
 CREATE TABLE categories (
