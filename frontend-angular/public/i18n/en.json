@@ -5,6 +5,9 @@
     "close": "Close",
     "closeMenu": "Close menu",
     "cancel": "Cancel",
+    "confirm": "Confirm",
+    "edit": "Edit",
+    "delete": "Delete",
     "dismiss": "Dismiss",
     "loading": "Loading…",
     "retry": "Try again",
@@ -149,6 +152,39 @@
     "unassigned": "Unassigned",
     "guest": "Guest",
     "resolved": "Ticket resolved",
+    "resolveDialog": {
+      "headingResolve": "Resolve this ticket",
+      "headingClose": "Close this ticket",
+      "about": "“{{subject}}”",
+      "required": "required",
+      "note": "What was fixed?",
+      "noteHint": "Agents only — the customer never sees this. Root cause, what you changed, anything the next person would need.",
+      "notePlaceholder": "Session cookie was missing SameSite=None, so the redirect looped on Safari. Set it in the auth config and verified on staging.",
+      "link": "Related work",
+      "linkHint": "User story, pull request or issue. Optional.",
+      "linkInvalid": "Enter a full http(s) URL, or leave it blank.",
+      "time": "Time spent",
+      "hours": "h",
+      "minutes": "m",
+      "timeHint": "Optional. Added to this ticket's log under your name.",
+      "confirmResolve": "Resolve",
+      "confirmClose": "Close ticket"
+    },
+    "resolution": {
+      "heading": "Resolution"
+    },
+    "time": {
+      "heading": "Time spent",
+      "empty": "No time logged yet.",
+      "log": "Log time",
+      "spent": "Time spent",
+      "note": "What did you do?",
+      "notePlaceholder": "Reproduced the issue and shipped the fix",
+      "confirmDelete": {
+        "heading": "Delete this time entry?",
+        "message": "{{duration}} will be removed from this ticket's total."
+      }
+    },
     "actions": {
       "view": "View ticket",
       "resolve": "Mark resolved"
@@ -332,7 +368,6 @@
       "automation": "Automation",
       "messagingChannels": "Messaging channels",
       "widget": "Widget",
-      "sla": "SLA policies",
       "aiCopilot": "AI copilot",
       "email": "Email",
       "branding": "Branding",
@@ -368,6 +403,16 @@
       "customerFields": "Customer fields",
       "customerFieldsHelp": "Suggested field names for customer details. Agents can still add their own.",
       "customerFieldsAdd": "New field name"
+    },
+    "sla": {
+      "title": "SLA policies",
+      "subtitle": "First-response and resolution targets per priority, in hours. Leave a field blank for no target.",
+      "loadFailed": "Couldn't load SLA policies",
+      "firstResponse": "First response (h)",
+      "resolution": "Resolution (h)",
+      "hint": "Applies to new tickets and to any ticket whose priority changes — tickets already open keep the deadlines they were given. The resolve clock pauses while a ticket is Pending.",
+      "save": "Save SLA targets",
+      "saved": "SLA targets saved"
     },
     "storage": {
       "title": "Attachment storage",

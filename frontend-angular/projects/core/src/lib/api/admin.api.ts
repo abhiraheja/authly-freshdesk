@@ -49,9 +49,35 @@ export interface StorageTestResult {
   readonly verifiedAt?: string;
 }
 
+/**
+ * A first-response and resolution target for one priority.
+ *
+ * Minutes on the wire, hours in the UI: the API stores what the clock actually
+ * counts, and nobody sets an SLA in minutes. Null means "no target" — the clock
+ * simply does not run for that leg.
+ */
+export interface SlaPolicy {
+  readonly priority: string;
+  readonly firstResponseMinutes: number | null;
+  readonly resolveMinutes: number | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AdminApi {
   private readonly api = inject(ApiService);
+
+  slaPolicies(): Promise<SlaPolicy[]> {
+    return this.api.get<SlaPolicy[]>('/api/admin/sla');
+  }
+
+  /** Upsert by priority — there is exactly one policy per priority. */
+  saveSlaPolicy(policy: SlaPolicy): Promise<SlaPolicy> {
+    return this.api.put<SlaPolicy>('/api/admin/sla', policy);
+  }
+
+  deleteSlaPolicy(priority: string): Promise<void> {
+    return this.api.delete<void>(`/api/admin/sla/${priority}`);
+  }
 
   storage(): Promise<StorageConfig> {
     return this.api.get<StorageConfig>('/api/admin/settings/storage');

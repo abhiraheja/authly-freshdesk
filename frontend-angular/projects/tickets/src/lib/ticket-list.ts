@@ -40,6 +40,7 @@ import {
   TableDirective,
   type IconName,
 } from '@trackly/ui';
+import { ResolveDialog, type ResolvePayload } from './resolve-dialog';
 
 const PAGE_SIZE = 20;
 
@@ -95,6 +96,7 @@ const VIEW_STATUS: Record<string, string | undefined> = {
     EmptyState,
     Icon,
     Pagination,
+    ResolveDialog,
     Select,
     SelectOption,
     SkeletonDirective,
@@ -342,6 +344,19 @@ const VIEW_STATUS: Record<string, string | undefined> = {
         }
       </tk-card>
     }
+
+    <!-- The row action opens the same dialog the detail screen uses: the API
+         requires a resolution note either way, so a one-click resolve from here
+         would just be a 400 with extra steps. The subject is passed because in
+         a list the row that was clicked stops being obvious the moment a modal
+         covers it. -->
+    <tk-resolve-dialog
+      [(open)]="resolveOpen"
+      [subject]="resolving()?.subject"
+      [saving]="resolveSaving()"
+      [error]="resolveError()"
+      (confirmed)="applyResolution($event)"
+    />
   `,
 })
 export class TicketList {
@@ -350,6 +365,11 @@ export class TicketList {
   private readonly session = inject(SessionStore);
   private readonly transloco = inject(TranslocoService);
   private readonly toast = inject(ToastService);
+
+  protected readonly resolveOpen = signal(false);
+  protected readonly resolving = signal<TicketSummary | null>(null);
+  protected readonly resolveSaving = signal(false);
+  protected readonly resolveError = signal<string | null>(null);
   /** Re-resolve TS-side copy when the language changes. */
   private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
 
@@ -483,14 +503,42 @@ export class TicketList {
     return CHANNEL_ICON[channel?.toLowerCase()] ?? 'mail';
   }
 
-  /** Optimistic-free: reload the list so the row reflects what the server did. */
-  protected async resolve(ticket: TicketSummary): Promise<void> {
+  /**
+   * Optimistic-free: reload the list so the row reflects what the server did.
+   *
+   * Confirmed first, and here more than anywhere: this is a small icon in a
+   * dense table, one column away from "view", and the row it belongs to is only
+   * obvious while the pointer is on it. The dialog names the ticket, so a slip
+   * on the wrong row is caught by reading rather than by undoing.
+   */
+  protected resolve(ticket: TicketSummary): void {
+    this.resolveError.set(null);
+    this.resolving.set(ticket);
+    this.resolveOpen.set(true);
+  }
+
+  protected async applyResolution(payload: ResolvePayload): Promise<void> {
+    const ticket = this.resolving();
+    if (!ticket) return;
+
+    this.resolveSaving.set(true);
+    this.resolveError.set(null);
     try {
-      await this.api.update(ticket.id, { status: 'resolved' });
+      await this.api.update(ticket.id, {
+        status: payload.status,
+        resolutionNote: payload.note,
+        resolutionLink: payload.link,
+        timeSpentMinutes: payload.minutes,
+      });
+      this.resolveOpen.set(false);
       this.tickets.reload();
       this.toast.success(this.transloco.translate('tickets.resolved'));
     } catch (err) {
-      this.toast.error(errorMessage(err));
+      // Inline in the dialog, not a toast: the note they typed is still on
+      // screen and a toast would send them back to a form they can no longer see.
+      this.resolveError.set(errorMessage(err));
+    } finally {
+      this.resolveSaving.set(false);
     }
   }
 

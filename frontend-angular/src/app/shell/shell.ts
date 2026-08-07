@@ -6,7 +6,7 @@ import { NavigationEnd, type Event as RouterEvent } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { SessionStore, TicketsApi, errorMessage } from '@trackly/core';
 import { ThemeService } from '@trackly/core';
-import { Avatar, AvatarUpload, Button, Dropdown, Icon, Kbd, Modal, Toaster } from '@trackly/ui';
+import { Avatar, AvatarUpload, Button, ConfirmHost, Dropdown, Icon, Kbd, Modal, Toaster } from '@trackly/ui';
 import { CommandPalette } from './command-palette';
 import { NAV, PORTAL_NAV, type NavGroup, type NavItem } from './nav';
 
@@ -31,6 +31,7 @@ import { NAV, PORTAL_NAV, type NavGroup, type NavItem } from './nav';
     Avatar,
     AvatarUpload,
     Button,
+    ConfirmHost,
     Dropdown,
     Icon,
     Kbd,

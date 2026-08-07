@@ -17,6 +17,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<Comment> Comments => Set<Comment>();
     public DbSet<TicketAssignment> TicketAssignments => Set<TicketAssignment>();
     public DbSet<TicketWatcher> TicketWatchers => Set<TicketWatcher>();
+    public DbSet<TicketTimeEntry> TicketTimeEntries => Set<TicketTimeEntry>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<WorkspaceBranding> WorkspaceBrandings => Set<WorkspaceBranding>();
     public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
@@ -162,6 +163,30 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
                 .OnDelete(DeleteBehavior.SetNull);
             e.HasOne(t => t.Team).WithMany().HasForeignKey(t => t.TeamId)
                 .OnDelete(DeleteBehavior.SetNull);
+            // SetNull, not Cascade: deactivating and removing an agent must not
+            // take the resolution of every ticket they ever closed with them.
+            e.HasOne(t => t.ResolvedBy).WithMany().HasForeignKey(t => t.ResolvedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TicketTimeEntry>(e =>
+        {
+            e.ToTable("ticket_time_entries", t =>
+                t.HasCheckConstraint("time_entry_minutes_positive", "minutes > 0"));
+            // The ticket's own panel is the only reader, and it wants them newest
+            // first — so the index carries the sort, not just the filter.
+            e.HasIndex(x => new { x.TicketId, x.SpentAt });
+            e.HasIndex(x => new { x.WorkspaceId, x.UserId });
+            e.HasOne(x => x.Workspace).WithMany().HasForeignKey(x => x.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Ticket).WithMany(t => t.TimeEntries).HasForeignKey(x => x.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Restrict, deliberately: a user row cannot be deleted while their
+            // logged work still exists. Trackly deactivates people rather than
+            // deleting them, and time already spent is a record of what the
+            // workspace was billed for — losing it silently is not acceptable.
+            e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<Comment>(e =>

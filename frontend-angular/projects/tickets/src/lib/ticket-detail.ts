@@ -2,10 +2,12 @@ import {
   ChangeDetectionStrategy,
   Component,
   computed,
+  effect,
   inject,
   input,
   resource,
   signal,
+  viewChild,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -46,6 +48,8 @@ import {
   type TabItem,
 } from '@trackly/ui';
 import { TicketDetailPanel } from './ticket-detail-panel';
+import { ResolveDialog, type ResolvePayload } from './resolve-dialog';
+import { TicketTimeCard } from './ticket-time-card';
 
 /** Channel → icon, matching the ticket list so the same source reads the same. */
 const CHANNEL_ICON: Record<string, IconName> = {
@@ -96,7 +100,9 @@ const CHANNEL_ICON: Record<string, IconName> = {
     SkeletonDirective,
     Spinner,
     Tabs,
+    ResolveDialog,
     TicketDetailPanel,
+    TicketTimeCard,
   ],
   template: `
     <a
@@ -143,8 +149,8 @@ const CHANNEL_ICON: Record<string, IconName> = {
                   inset
                   size="sm"
                   [ariaLabel]="'tickets.columns.status' | transloco"
-                  [value]="data.status"
-                  (valueChange)="update({ status: $event })"
+                  [value]="statusValue()"
+                  (valueChange)="pickStatus($event)"
                 >
                   <tk-option value="open" [label]="'status.open' | transloco" />
                   <tk-option value="pending" [label]="'status.pending' | transloco" />
@@ -155,7 +161,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
                      button invites clicking, and the status select right beside
                      it can already move it back. -->
                 @if (data.status !== 'resolved' && data.status !== 'closed') {
-                  <button tkButton variant="success" size="sm" (click)="update({ status: 'resolved' })">
+                  <button tkButton variant="success" size="sm" (click)="pickStatus('resolved')">
                     <tk-icon name="check" [size]="16" />
                     {{ 'tickets.detail.resolve' | transloco }}
                   </button>
@@ -322,18 +328,34 @@ const CHANNEL_ICON: Record<string, IconName> = {
           </tk-card>
         </div>
 
-        <tk-ticket-detail-panel
-          [ticket]="data"
-          [meId]="meId()"
-          (assignToMe)="assignSelf()"
-          (watchMe)="watchSelf()"
-          (escalate)="escalate()"
-          (change)="update($event)"
-          (tagsChange)="setTags($event)"
-          (watch)="addWatcher($event)"
-          (unwatch)="removeWatcher($event)"
-        />
+        <!-- One grid item, two components: the grid has exactly two columns, so
+             a third child here would wrap onto a row of its own. The time card
+             stays in THIS template rather than inside the panel so the resolve
+             dialog can reach it to refresh after logging time. -->
+        <div class="space-y-4">
+          <tk-ticket-detail-panel
+            [ticket]="data"
+            [meId]="meId()"
+            (assignToMe)="assignSelf()"
+            (watchMe)="watchSelf()"
+            (escalate)="escalate()"
+            (change)="update($event)"
+            (tagsChange)="setTags($event)"
+            (watch)="addWatcher($event)"
+            (unwatch)="removeWatcher($event)"
+          />
+          <tk-ticket-time-card [ticketId]="id()" />
+        </div>
       </div>
+
+      <tk-resolve-dialog
+        [(open)]="resolveOpen"
+        (openChange)="onResolveClosed($event)"
+        [status]="resolveTo()"
+        [saving]="resolveSaving()"
+        [error]="resolveError()"
+        (confirmed)="applyResolution($event)"
+      />
     } @else if (ticket.error()) {
       <tk-alert tone="danger" [heading]="'tickets.detail.loadFailed' | transloco">
         {{ errorText() }}
@@ -389,6 +411,22 @@ export class TicketDetail {
   protected readonly errorText = computed(() => errorMessage(this.ticket.error()));
 
   protected readonly statusTone = computed(() => toneFor(STATUS_TONE, this.ticket.value()?.status));
+
+  /**
+   * The status select's value, owned here rather than read off the resource.
+   *
+   * `tk-select` sets its own model when an option is picked, so binding the
+   * resource straight in leaves no way to put the old value back when someone
+   * cancels the confirmation — the bound expression would never have changed,
+   * and Angular skips a write that looks identical to the last one.
+   */
+  protected readonly statusValue = signal('');
+
+  protected readonly resolveOpen = signal(false);
+  protected readonly resolveTo = signal<'resolved' | 'closed'>('resolved');
+  protected readonly resolveSaving = signal(false);
+  protected readonly resolveError = signal<string | null>(null);
+  private readonly timeCard = viewChild(TicketTimeCard);
   protected readonly priorityTone = computed(() => toneFor(PRIORITY_TONE, this.ticket.value()?.priority));
   protected readonly channelIcon = computed(
     () => CHANNEL_ICON[this.ticket.value()?.channel?.toLowerCase() ?? ''] ?? 'globe',
@@ -443,6 +481,15 @@ export class TicketDetail {
 
   protected attachmentsOf(comment: Comment): AttachmentItem[] {
     return this.commentAttachments().get(comment.id) ?? [];
+  }
+
+  constructor() {
+    // The server is the authority on status: automation can move a ticket on
+    // its own, and a failed write reloads. Either way the select follows.
+    effect(() => {
+      const status = this.ticket.value()?.status;
+      if (status) this.statusValue.set(status);
+    });
   }
 
   /** The API shape plus the URL, which only this feature knows how to build. */
@@ -573,6 +620,66 @@ export class TicketDetail {
 
   protected async update(body: UpdateTicketBody): Promise<void> {
     await this.write(() => this.api.update(this.id(), body));
+  }
+
+  /**
+   * The one way status changes, from the select and the Resolve button alike.
+   *
+   * `statusValue` is mirrored BEFORE the dialog opens, not after. `tk-select`
+   * writes its own model on pick, so the only way to push the old value back on
+   * a cancel is for the bound expression to actually change — and it only
+   * changes if this side moved with the pick first.
+   *
+   * Resolved and Closed go through the resolve dialog, which collects the reason
+   * the API now requires. Open and Pending are a click apart and cost nothing to
+   * undo, so they apply straight away — a dialog there would be noise, and a
+   * dialog people dismiss without reading is worse than none.
+   */
+  protected async pickStatus(status: string): Promise<void> {
+    const previous = this.statusValue();
+    if (status === previous) return;
+    this.statusValue.set(status);
+
+    if (status === 'resolved' || status === 'closed') {
+      this.resolveTo.set(status);
+      this.resolveError.set(null);
+      this.resolveOpen.set(true);
+      return;
+    }
+    await this.write(() => this.api.update(this.id(), { status }));
+  }
+
+  /** The dialog's submit. Only closes once the server has taken it. */
+  protected async applyResolution(payload: ResolvePayload): Promise<void> {
+    this.resolveSaving.set(true);
+    this.resolveError.set(null);
+    try {
+      await this.api.update(this.id(), {
+        status: payload.status,
+        resolutionNote: payload.note,
+        resolutionLink: payload.link,
+        timeSpentMinutes: payload.minutes,
+      });
+      this.resolveOpen.set(false);
+      this.ticket.reload();
+      // The resolution is written into the thread as an internal note, and time
+      // logged here belongs in the card that lists it.
+      this.comments.reload();
+      this.timeCard()?.refresh();
+    } catch (error) {
+      // Stays open with what they typed still in it — retyping a paragraph
+      // because a link was malformed is how people stop writing the note at all.
+      this.resolveError.set(errorMessage(error));
+    } finally {
+      this.resolveSaving.set(false);
+    }
+  }
+
+  /** Cancelled or dismissed: put the select back on the server's value. */
+  protected onResolveClosed(open: boolean): void {
+    if (open) return;
+    const status = this.ticket.value()?.status;
+    if (status) this.statusValue.set(status);
   }
 
   protected async setTags(tags: string[]): Promise<void> {

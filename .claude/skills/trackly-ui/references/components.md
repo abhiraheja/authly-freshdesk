@@ -41,6 +41,7 @@ All standalone, all `OnPush`, all signal-based. Add new controls under
 | `EmptyState` | `tk-empty-state` | `icon`, `heading` (required), `description` |
 | `ToastService` / `Toaster` | `tk-toaster` | `success/error/warning/info/show/dismiss` |
 | `Modal` | `tk-modal` | `[(open)]`, `heading`, `size`, `persistent`; `[modal-footer]` |
+| `ConfirmService` / `ConfirmHost` | `tk-confirm-host` | `await confirm.ask({ heading, message, confirmLabel, tone })` → boolean |
 | `Drawer` | `tk-drawer` | `[(open)]`, `heading`, `persistent`; `[drawer-footer]` |
 | `Dropdown` | `tk-dropdown` | `align`; `[dropdown-trigger]` + `[dropdown-menu]` |
 | `PageHeader` | `tk-page-header` | `title` (required), `subtitle`; `[page-actions]` |
@@ -326,6 +327,31 @@ duplicate of something they already have. Branch on `hasFilters()`.
 The header is fixed and the **body** scrolls, so a tall form can never push its
 own actions off-screen. `persistent` blocks Esc and backdrop dismissal — use it
 only where losing input would be destructive.
+
+### Confirmations go through `ConfirmService`
+
+```ts
+if (!(await this.confirm.ask({ heading: 'Resolve this ticket?', tone: 'success' }))) return;
+```
+
+A promise, not a callback, so the guard reads top to bottom and sits where the
+decision is instead of the real work being buried two levels down in a handler.
+`<tk-confirm-host />` is already mounted in the shell — features only inject the
+service.
+
+**Ask sparingly.** A dialog on something routine trains people to dismiss it
+without reading, which costs you the one time it mattered. It earns its place
+where the action is hard to undo, reaches the customer, or is one slip away from
+a control people use all day — a per-row icon in a dense table, a big coloured
+button beside everyday controls. When a dialog names a specific record, put the
+subject in the `message`: on a list, that is the only thing that catches the
+wrong row.
+
+**Cancelling has to restore the control.** `tk-select` writes its own model when
+an option is picked, so a component that confirms a selection must mirror the
+pick into its own signal *first* — Angular skips an input write that looks
+identical to the last one, so pushing the old value back only works if the bound
+expression actually changed. See `pickStatus` in `ticket-detail.ts`.
 
 ### Never put a backtick inside an inline template
 

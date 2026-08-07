@@ -1134,6 +1134,10 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | POST   | `/api/auth/magic-link/verify` | None | Consume link token or code → issue session |
 | POST   | `/api/auth/logout` | Session | Clear session |
 | GET    | `/api/users/me` | Session | Get current user profile |
+| GET    | `/api/tickets/{id}/time` | AgentOrAdmin | Work logged on a ticket |
+| POST   | `/api/tickets/{id}/time` | AgentOrAdmin | Log minutes + what was done |
+| PUT    | `/api/tickets/{id}/time/{entryId}` | AgentOrAdmin | Own entry; admin may edit anyone's |
+| DELETE | `/api/tickets/{id}/time/{entryId}` | AgentOrAdmin | Same rule as PUT |
 | POST   | `/api/users/{id}/avatar` | Session | Own photo always; anyone else's needs agent/admin. 1 MB, PNG/JPEG/WebP |
 | DELETE | `/api/users/{id}/avatar` | Session | Same rule as POST |
 | GET    | `/api/users/{id}/avatar` | Session | Any member of the same workspace. Streamed, never redirected to a CDN |
@@ -1327,10 +1331,41 @@ CREATE TABLE tickets (
     assignee_id      UUID REFERENCES users(id),
     problem_id       UUID REFERENCES problems(id) ON DELETE SET NULL,
     channel          TEXT NOT NULL DEFAULT 'web',      -- web, widget, email
+    -- Why it was resolved or closed. REQUIRED on the transition out of
+    -- open/pending — enforced in TicketService.UpdateAsync, not in the dialog,
+    -- so the rule holds for any caller. Cleared on reopen; the copy written into
+    -- the thread as an internal comment is what keeps the history.
+    -- Agent-facing: null for every non-agent caller (invariant 5).
+    resolution_note  TEXT,
+    resolution_link  TEXT,                             -- user story / PR, http(s) only
+    resolved_by_id   UUID REFERENCES users(id) ON DELETE SET NULL,
     created_at       TIMESTAMPTZ DEFAULT now(),
     updated_at       TIMESTAMPTZ DEFAULT now(),
     CONSTRAINT requester_or_guest CHECK (requester_id IS NOT NULL OR guest_email IS NOT NULL)
 );
+
+-- Work logged against a ticket. Many rows, not one total on the ticket: a
+-- ticket is worked in sittings and often by more than one person, and a single
+-- number could not say who spent it or on what.
+--
+-- Typed in rather than measured by a running clock. A timer is left going
+-- overnight or never started, and either way the figure is corrected by hand.
+CREATE TABLE ticket_time_entries (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    ticket_id    UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    -- RESTRICT: Trackly deactivates people rather than deleting them, and this
+    -- is a record of time already spent — it must not vanish with the user row.
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+    minutes      INTEGER NOT NULL,
+    note         TEXT,
+    spent_at     TIMESTAMPTZ NOT NULL DEFAULT now(),  -- when the work happened
+    created_at   TIMESTAMPTZ DEFAULT now(),
+    updated_at   TIMESTAMPTZ DEFAULT now(),
+    CONSTRAINT time_entry_minutes_positive CHECK (minutes > 0)
+);
+CREATE INDEX ON ticket_time_entries (ticket_id, spent_at);
+CREATE INDEX ON ticket_time_entries (workspace_id, user_id);
 
 -- Comments / replies
 CREATE TABLE comments (

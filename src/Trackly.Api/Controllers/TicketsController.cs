@@ -63,6 +63,45 @@ public class TicketsController(TicketService tickets, AttachmentService attachme
         return ticket is null ? NotFound() : Ok(ticket);
     }
 
+    // ---- Time spent ----
+    //
+    // Agent/admin throughout: how long a ticket took is internal. The service
+    // re-checks the role as well — the policy here is the outer gate, not the
+    // only one.
+
+    [HttpGet("{id:guid}/time")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> ListTime(Guid id, CancellationToken ct)
+    {
+        var entries = await tickets.TimeEntriesAsync(User.GetActor(), id, ct);
+        return entries is null ? NotFound() : Ok(entries);
+    }
+
+    [HttpPost("{id:guid}/time")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> LogTime(Guid id, [FromBody] LogTimeRequest request, CancellationToken ct)
+    {
+        var entry = await tickets.LogTimeAsync(User.GetActor(), id, request, ct);
+        return entry is null ? NotFound() : StatusCode(StatusCodes.Status201Created, entry);
+    }
+
+    [HttpPut("{id:guid}/time/{entryId:guid}")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> UpdateTime(
+        Guid id, Guid entryId, [FromBody] LogTimeRequest request, CancellationToken ct)
+    {
+        var entry = await tickets.UpdateTimeAsync(User.GetActor(), id, entryId, request, ct);
+        return entry is null ? NotFound() : Ok(entry);
+    }
+
+    [HttpDelete("{id:guid}/time/{entryId:guid}")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> DeleteTime(Guid id, Guid entryId, CancellationToken ct)
+    {
+        var removed = await tickets.DeleteTimeAsync(User.GetActor(), id, entryId, ct);
+        return removed ? NoContent() : NotFound();
+    }
+
     // ---- Watchers ----
 
     [HttpPut("{id:guid}/watchers/{agentId:guid}")]

@@ -1565,6 +1565,18 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("resolved_at");
 
+                    b.Property<Guid?>("ResolvedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resolved_by_id");
+
+                    b.Property<string>("ResolutionLink")
+                        .HasColumnType("text")
+                        .HasColumnName("resolution_link");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasColumnType("text")
+                        .HasColumnName("resolution_note");
+
                     b.Property<DateTime?>("SlaPausedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("sla_paused_at");
@@ -1608,6 +1620,9 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.HasIndex("RequesterId")
                         .HasDatabaseName("ix_tickets_requester_id");
 
+                    b.HasIndex("ResolvedById")
+                        .HasDatabaseName("ix_tickets_resolved_by_id");
+
                     b.HasIndex("TeamId")
                         .HasDatabaseName("ix_tickets_team_id");
 
@@ -1621,6 +1636,63 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_tickets_workspace_id_status");
 
                     b.ToTable("tickets");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketTimeEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<int>("Minutes")
+                        .HasColumnType("integer")
+                        .HasColumnName("minutes");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text")
+                        .HasColumnName("note");
+
+                    b.Property<DateTime>("SpentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("spent_at");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_time_entries");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_ticket_time_entries_user_id");
+
+                    b.HasIndex("TicketId", "SpentAt")
+                        .HasDatabaseName("ix_ticket_time_entries_ticket_id_spent_at");
+
+                    b.HasIndex("WorkspaceId", "UserId")
+                        .HasDatabaseName("ix_ticket_time_entries_workspace_id_user_id");
+
+                    b.ToTable("ticket_time_entries", null, t =>
+                        {
+                            t.HasCheckConstraint("time_entry_minutes_positive", "minutes > 0");
+                        });
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketAssignment", b =>
@@ -2630,6 +2702,12 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_tickets_users_requester_id");
 
+                    b.HasOne("Trackly.Core.Entities.User", "ResolvedBy")
+                        .WithMany()
+                        .HasForeignKey("ResolvedById")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_tickets_users_resolved_by_id");
+
                     b.HasOne("Trackly.Core.Entities.Team", "Team")
                         .WithMany()
                         .HasForeignKey("TeamId")
@@ -2651,7 +2729,39 @@ namespace Trackly.Infrastructure.Data.Migrations
 
                     b.Navigation("Requester");
 
+                    b.Navigation("ResolvedBy");
+
                     b.Navigation("Team");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketTimeEntry", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany("TimeEntries")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_time_entries_tickets_ticket_id");
+
+                    b.HasOne("Trackly.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_time_entries_users_user_id");
+
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_time_entries_workspaces_workspace_id");
+
+                    b.Navigation("Ticket");
+
+                    b.Navigation("User");
 
                     b.Navigation("Workspace");
                 });
@@ -2863,6 +2973,8 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("Comments");
 
                     b.Navigation("TicketTags");
+
+                    b.Navigation("TimeEntries");
 
                     b.Navigation("Watchers");
                 });

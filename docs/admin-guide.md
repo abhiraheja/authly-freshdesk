@@ -36,6 +36,7 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 19. [Security & privacy you should know](#19-security--privacy-you-should-know)
 20. [Attachment storage](#20-attachment-storage)
 21. [Profile photos](#21-profile-photos)
+22. [Resolution notes & time tracking](#22-resolution-notes--time-tracking)
 
 ---
 
@@ -265,7 +266,13 @@ a ticket is pending** and resumes when it’s reopened.
 **Where:** **Admin ▾ → Workflow → SLA policies**.
 
 **Set up.** For each priority, set **first-response** and **resolution** targets
-in minutes. New tickets are stamped with due dates on creation.
+**in hours** — `0.5` is fine for half an hour. Leave a box **blank** for no
+target: that leg's clock simply does not run, which is different from a target
+of zero. Press **Save SLA targets**.
+
+New tickets are stamped with due dates on creation. **Changing a policy does not
+move tickets that are already open** — they keep the deadlines they were given.
+It applies to new tickets, and to any ticket whose priority changes afterwards.
 
 **Use.** Agents see the SLA badge on each ticket; **Analytics** (§17) reports
 first-response and resolution **attainment** (the % met on time).
@@ -587,6 +594,59 @@ centre-cropped to a circle by the browser, so a roughly square photo looks best.
 signed in to the same workspace. They are never given a CDN link and never
 appear on the guest ticket view, which is opened with an emailed link rather
 than a sign-in — agents show as initials there.
+
+---
+
+## 22. Resolution notes & time tracking
+
+### Why a ticket was resolved
+
+**Resolving or closing a ticket now asks what was fixed, and will not proceed
+without it.** The dialog appears wherever a ticket can be ended — the Resolve
+button on the ticket, the status list, and the quick-resolve icon on each row of
+the ticket list.
+
+| Field | Required | What it is |
+|---|---|---|
+| **What was fixed?** | Yes | Root cause, what changed, anything the next person needs |
+| **Related work** | No | User story, pull request or issue. Must be a full `http(s)` URL |
+| **Time spent** | No | Logged against the ticket under your name (see below) |
+
+The note lands in two places: on the ticket, shown as a **Resolution** card in
+the right-hand panel, and in the conversation as an **internal note** so the
+thread reads in order. Reopening the ticket clears the card — it describes the
+resolution the ticket *currently* has — while the internal note stays as history.
+
+**Agents only.** The customer never sees the resolution note, the link, or the
+time. They see that their ticket was resolved, and the resolution email as
+usual. This is on the same footing as a private note.
+
+**Resolved → Closed does not ask again.** The note is required on the way out of
+Open or Pending. Filing an already-resolved ticket away keeps the note it has —
+asking twice is how people learn to type "." to get past a dialog.
+
+> There is one gap worth knowing: a ticket resolved by an **automation rule** has
+> no resolution note, because nobody typed one. Automation is not blocked by this
+> rule, so if you have a rule that auto-resolves, those tickets will show no
+> Resolution card.
+
+### Time spent
+
+**Where:** the **Time spent** card on the right of any ticket.
+
+Press **Log time**, enter hours and minutes, and optionally say what you did.
+The card lists every entry with who logged it and when the work happened, and
+shows the total in its header. A ticket can carry many entries — one per sitting,
+from as many people as worked on it.
+
+- **You can edit or delete your own entries.** Admins can correct anyone's, which
+  is how a fat-fingered eight-hour entry gets fixed after someone has left.
+- One entry is capped at **24 hours** — a typo guard, not a policy.
+- Time entered in the resolve dialog appears here too, under the person who
+  resolved the ticket.
+- Time is entered by hand; there is no running stopwatch. A timer gets left
+  going overnight or never started, and the number ends up corrected by hand
+  anyway.
 
 ---
 

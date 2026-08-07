@@ -144,6 +144,36 @@ export interface TicketDetail extends Omit<TicketSummary, 'commentCount'> {
   problemId: string | null;
   teamId: string | null;
   teamName: string | null;
+
+  /**
+   * Why the ticket was resolved or closed, and by whom. Null while it is open,
+   * and cleared again if it is reopened — the internal note in the thread keeps
+   * the history.
+   *
+   * Agent-facing: the API sends null to every non-agent caller, so a customer
+   * surface never receives it (invariant 5).
+   */
+  resolutionNote: string | null;
+  resolutionLink: string | null;
+  resolvedBy: UserSummary | null;
+  resolvedAt: string | null;
+}
+
+/** One sitting of work on a ticket. */
+export interface TimeEntry {
+  id: string;
+  user: UserSummary;
+  minutes: number;
+  note: string | null;
+  spentAt: string;
+  createdAt: string;
+}
+
+export interface LogTimeBody {
+  minutes: number;
+  note?: string;
+  /** When the work happened. Defaults to now. */
+  spentAt?: string;
 }
 
 export interface Attachment {
@@ -212,6 +242,17 @@ export interface UpdateTicketBody {
   requesterId?: string;
   /** Detaches the customer, leaving none. */
   clearRequester?: boolean;
+
+  /**
+   * Required by the API when `status` moves out of open/pending into resolved
+   * or closed. The server rejects the change without it — the dialog is the
+   * convenience, not the control.
+   */
+  resolutionNote?: string;
+  /** Work item, PR or user story. Must be a full http(s) URL if given. */
+  resolutionLink?: string;
+  /** Logged against the ticket in the same request as the resolution. */
+  timeSpentMinutes?: number;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -372,6 +413,25 @@ export class TicketsApi {
 
   attachments(ticketId: string): Promise<Attachment[]> {
     return this.api.get<Attachment[]>(`/api/tickets/${ticketId}/attachments`);
+  }
+
+  // ── Time spent ────────────────────────────────────────────────────────────
+
+  timeEntries(ticketId: string): Promise<TimeEntry[]> {
+    return this.api.get<TimeEntry[]>(`/api/tickets/${ticketId}/time`);
+  }
+
+  logTime(ticketId: string, body: LogTimeBody): Promise<TimeEntry> {
+    return this.api.post<TimeEntry>(`/api/tickets/${ticketId}/time`, body);
+  }
+
+  /** Your own entry; an admin may edit anyone's. */
+  updateTime(ticketId: string, entryId: string, body: LogTimeBody): Promise<TimeEntry> {
+    return this.api.put<TimeEntry>(`/api/tickets/${ticketId}/time/${entryId}`, body);
+  }
+
+  deleteTime(ticketId: string, entryId: string): Promise<void> {
+    return this.api.delete<void>(`/api/tickets/${ticketId}/time/${entryId}`);
   }
 
   uploadAttachment(

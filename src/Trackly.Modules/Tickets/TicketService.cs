@@ -79,6 +79,7 @@ public class TicketService(
             .Include(t => t.Watchers).ThenInclude(w => w.Agent)
             .Include(t => t.TicketTags).ThenInclude(tt => tt.Tag)
             .Include(t => t.Team)
+            .Include(t => t.ResolvedBy)
             .SingleOrDefaultAsync(t => t.Id == ticketId, ct);
         // Problem grouping and tags are internal — never expose them to a customer.
         return ticket is null ? null : ToDetail(ticket, actor.IsAgentOrAdmin);
@@ -288,17 +289,49 @@ public class TicketService(
         {
             if (!TicketStatus.All.Contains(request.Status))
                 throw new ArgumentException("Invalid status.");
+
+            var wasOpen = previousStatus is TicketStatus.Open or TicketStatus.Pending;
+            var isEnding = request.Status is TicketStatus.Resolved or TicketStatus.Closed;
+            var note = request.ResolutionNote?.Trim();
+
+            // Only the transition OUT of an open state asks. Resolved → Closed is
+            // the same outcome being filed away and already carries a note, so
+            // demanding a second one would train people to type "." to get past it.
+            if (wasOpen && isEnding)
+            {
+                if (string.IsNullOrWhiteSpace(note))
+                    throw new ArgumentException("Say what was fixed before resolving or closing this ticket.");
+                if (note.Length > MaxResolutionNoteLength)
+                    throw new ArgumentException($"Keep the resolution under {MaxResolutionNoteLength} characters.");
+
+                ticket.ResolutionNote = note;
+                ticket.ResolutionLink = CleanLink(request.ResolutionLink);
+                ticket.ResolvedById = actor.UserId;
+            }
+
             ticket.Status = request.Status;
             // Track the resolution time for analytics (Phase 7C). Resolved re-stamps;
             // Closed keeps an existing stamp (or sets one if closed directly);
             // reopening to Open/Pending clears it.
             if (ticket.Status != previousStatus)
+            {
                 ticket.ResolvedAt = ticket.Status switch
                 {
                     TicketStatus.Resolved => DateTime.UtcNow,
                     TicketStatus.Closed => ticket.ResolvedAt ?? DateTime.UtcNow,
                     _ => null,
                 };
+
+                // Reopened: the resolution it had no longer describes it. The
+                // internal comment written below stays, so the history survives
+                // even though the field does not.
+                if (!isEnding)
+                {
+                    ticket.ResolutionNote = null;
+                    ticket.ResolutionLink = null;
+                    ticket.ResolvedById = null;
+                }
+            }
         }
 
         if (request.Priority is not null)
@@ -388,6 +421,47 @@ public class TicketService(
             });
         }
 
+        // The resolution, written into the thread as an internal note.
+        //
+        // The ticket column answers "what is the fix?" for the ticket as it
+        // stands; this answers "what happened, and when" after a reopen has
+        // cleared the column. Internal, always: it is engineering detail, so it
+        // is on the same footing as a private note and never reaches the
+        // customer, the guest view or a connector (invariant 5).
+        if (ticket.Status != previousStatus
+            && previousStatus is TicketStatus.Open or TicketStatus.Pending
+            && ticket.Status is TicketStatus.Resolved or TicketStatus.Closed
+            && ticket.ResolutionNote is { Length: > 0 } resolution)
+        {
+            var body = ticket.ResolutionLink is { Length: > 0 } link
+                ? $"{resolution}\n\n{link}"
+                : resolution;
+            db.Comments.Add(new Comment
+            {
+                TicketId = ticket.Id,
+                AuthorId = actor.UserId,
+                Body = body,
+                IsInternal = true,
+            });
+        }
+
+        // Time logged as part of resolving. Same transaction as the status
+        // change on purpose — two calls could leave a ticket resolved with the
+        // agent's time silently dropped.
+        if (request.TimeSpentMinutes is { } minutes and > 0)
+        {
+            if (minutes > TicketTimeLimits.MaxMinutesPerEntry)
+                throw new ArgumentException("A single time entry cannot exceed 24 hours.");
+            db.TicketTimeEntries.Add(new TicketTimeEntry
+            {
+                WorkspaceId = actor.WorkspaceId,
+                TicketId = ticket.Id,
+                UserId = actor.UserId,
+                Minutes = minutes,
+                Note = request.ResolutionNote?.Trim(),
+            });
+        }
+
         // SLA: recompute on priority change, pause/resume on status change.
         if (ticket.Priority != previousPriority)
             await sla.OnPriorityChangedAsync(ticket, ct);
@@ -419,6 +493,124 @@ public class TicketService(
 
         return await GetAsync(actor, ticketId, ct);
     }
+
+    // ---- Time spent -----------------------------------------------------------
+    //
+    // Agent-facing throughout. A customer has no business seeing how long their
+    // ticket took, so every method here refuses a non-agent outright rather than
+    // filtering the result.
+
+    public async Task<IReadOnlyList<TimeEntryDto>?> TimeEntriesAsync(
+        Actor actor, Guid ticketId, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin)
+            throw new UnauthorizedAccessException();
+        if (!await TicketExistsAsync(actor, ticketId, ct))
+            return null;
+
+        var entries = await db.TicketTimeEntries
+            .Where(e => e.WorkspaceId == actor.WorkspaceId && e.TicketId == ticketId)
+            .Include(e => e.User)
+            // Newest first, then by insert order — two entries logged for the
+            // same day must not swap places between reloads.
+            .OrderByDescending(e => e.SpentAt)
+            .ThenByDescending(e => e.CreatedAt)
+            .ToListAsync(ct);
+
+        return entries.Select(ToTimeEntry).ToList();
+    }
+
+    public async Task<TimeEntryDto?> LogTimeAsync(
+        Actor actor, Guid ticketId, LogTimeRequest request, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin)
+            throw new UnauthorizedAccessException();
+        ValidateMinutes(request.Minutes);
+        if (!await TicketExistsAsync(actor, ticketId, ct))
+            return null;
+
+        var entry = new TicketTimeEntry
+        {
+            WorkspaceId = actor.WorkspaceId,
+            TicketId = ticketId,
+            UserId = actor.UserId,
+            Minutes = request.Minutes,
+            Note = Trim(request.Note),
+            SpentAt = request.SpentAt ?? DateTime.UtcNow,
+        };
+        db.TicketTimeEntries.Add(entry);
+        await db.SaveChangesAsync(ct);
+
+        // Re-read for the author, which the caller renders and the insert does
+        // not populate.
+        await db.Entry(entry).Reference(e => e.User).LoadAsync(ct);
+        return ToTimeEntry(entry);
+    }
+
+    public async Task<TimeEntryDto?> UpdateTimeAsync(
+        Actor actor, Guid ticketId, Guid entryId, LogTimeRequest request, CancellationToken ct)
+    {
+        ValidateMinutes(request.Minutes);
+        var entry = await FindEditableEntryAsync(actor, ticketId, entryId, ct);
+        if (entry is null) return null;
+
+        entry.Minutes = request.Minutes;
+        entry.Note = Trim(request.Note);
+        if (request.SpentAt is { } spentAt) entry.SpentAt = spentAt;
+        entry.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return ToTimeEntry(entry);
+    }
+
+    public async Task<bool> DeleteTimeAsync(Actor actor, Guid ticketId, Guid entryId, CancellationToken ct)
+    {
+        var entry = await FindEditableEntryAsync(actor, ticketId, entryId, ct);
+        if (entry is null) return false;
+
+        db.TicketTimeEntries.Remove(entry);
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>
+    /// Your own entry, or anyone's if you are an admin.
+    ///
+    /// An agent editing a colleague's logged hours is how a timesheet stops
+    /// being evidence of anything. An admin can, because someone has to be able
+    /// to fix a fat-fingered 8-hour entry after the person has left.
+    /// </summary>
+    private async Task<TicketTimeEntry?> FindEditableEntryAsync(
+        Actor actor, Guid ticketId, Guid entryId, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin)
+            throw new UnauthorizedAccessException();
+
+        var entry = await db.TicketTimeEntries
+            .Include(e => e.User)
+            .SingleOrDefaultAsync(
+                e => e.Id == entryId && e.TicketId == ticketId && e.WorkspaceId == actor.WorkspaceId, ct);
+        if (entry is null) return null;
+        if (entry.UserId != actor.UserId && !actor.IsAdmin)
+            throw new UnauthorizedAccessException();
+        return entry;
+    }
+
+    private Task<bool> TicketExistsAsync(Actor actor, Guid ticketId, CancellationToken ct) =>
+        db.Tickets.AnyAsync(t => t.WorkspaceId == actor.WorkspaceId && t.Id == ticketId, ct);
+
+    private static void ValidateMinutes(int minutes)
+    {
+        if (minutes <= 0)
+            throw new ArgumentException("Time spent must be at least one minute.");
+        if (minutes > TicketTimeLimits.MaxMinutesPerEntry)
+            throw new ArgumentException("A single time entry cannot exceed 24 hours.");
+    }
+
+    private static string? Trim(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static TimeEntryDto ToTimeEntry(TicketTimeEntry e) =>
+        new(e.Id, UserSummaryDto.From(e.User)!, e.Minutes, e.Note, e.SpentAt, e.CreatedAt);
 
     // ---- Watchers -------------------------------------------------------------
 
@@ -560,5 +752,30 @@ public class TicketService(
         isAgentOrAdmin ? t.FirstResponseDueAt : null,
         isAgentOrAdmin ? t.ResolveDueAt : null,
         isAgentOrAdmin ? t.FirstResponseAt : null,
+        // Agent-facing only. A customer sees that their ticket was resolved, not
+        // the root cause or the work item it was fixed under.
+        isAgentOrAdmin ? t.ResolutionNote : null,
+        isAgentOrAdmin ? t.ResolutionLink : null,
+        isAgentOrAdmin ? UserSummaryDto.From(t.ResolvedBy) : null,
+        isAgentOrAdmin ? t.ResolvedAt : null,
         t.CreatedAt, t.UpdatedAt);
+
+    private const int MaxResolutionNoteLength = 4000;
+
+    /// <summary>
+    /// Keeps an http(s) URL, drops anything else.
+    ///
+    /// The field is rendered as a link, so `javascript:` and `data:` are not
+    /// merely wrong values — they are a stored payload waiting for the next
+    /// agent to click it.
+    /// </summary>
+    private static string? CleanLink(string? value)
+    {
+        var trimmed = value?.Trim();
+        if (string.IsNullOrEmpty(trimmed)) return null;
+        return Uri.TryCreate(trimmed, UriKind.Absolute, out var uri)
+               && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+            ? trimmed
+            : throw new ArgumentException("The link must be a full http(s) URL.");
+    }
 }

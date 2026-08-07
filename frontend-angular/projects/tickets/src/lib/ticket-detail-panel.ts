@@ -126,6 +126,46 @@ import { CustomerForm } from './customer-form';
         </dl>
       </tk-card>
 
+      <!-- The resolution, when there is one. Directly under the summary because
+           on a closed ticket "what was the fix?" is the first thing anyone
+           coming back to it wants, and reading the thread to find it is the
+           thing this feature exists to avoid.
+
+           Agent-facing: the API sends these fields as null to every non-agent
+           caller, so this card cannot render on a customer surface even if one
+           reused the panel (invariant 5). -->
+      @if (ticket().resolutionNote; as resolution) {
+        <tk-card [heading]="'tickets.resolution.heading' | transloco">
+          <p class="whitespace-pre-wrap text-body">{{ resolution }}</p>
+
+          @if (ticket().resolutionLink; as link) {
+            <a
+              class="mt-2.5 inline-flex max-w-full items-center gap-1.5 text-body font-semibold text-primary hover:underline"
+              [href]="link"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <tk-icon name="external-link" [size]="14" class="shrink-0" />
+              <span class="min-w-0 truncate">{{ link }}</span>
+            </a>
+          }
+
+          <p class="mt-3 flex items-center gap-2 text-meta text-muted-foreground">
+            @if (ticket().resolvedBy; as person) {
+              <tk-avatar
+                [name]="person.name || person.email"
+                [imageUrl]="person.avatarUrl"
+                [size]="20"
+                round
+              />
+              <span class="min-w-0 truncate">{{ person.name || person.email }}</span>
+              <span aria-hidden="true">·</span>
+            }
+            <span class="shrink-0">{{ resolvedAt() }}</span>
+          </p>
+        </tk-card>
+      }
+
       <!-- 2. SLA. Always rendered, never hidden when there is no clock: an
            absent card reads as "not built yet", and the useful information is
            precisely that no policy covers this ticket. -->
@@ -741,6 +781,11 @@ export class TicketDetailPanel {
   protected readonly sla = computed(() => slaState(this.ticket()));
   protected readonly created = computed(() => formatDateTime(this.ticket().createdAt));
   protected readonly updated = computed(() => formatDateTime(this.ticket().updatedAt));
+
+  protected readonly resolvedAt = computed(() => {
+    const at = this.ticket().resolvedAt;
+    return at ? formatDateTime(at) : '—';
+  });
 
   /**
    * Clearing a field is its own flag on the API, not an empty id — a missing

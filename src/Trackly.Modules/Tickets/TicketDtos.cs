@@ -66,8 +66,25 @@ public record TicketDetailDto(
     DateTime? FirstResponseDueAt,
     DateTime? ResolveDueAt,
     DateTime? FirstResponseAt,
+    // Agent-facing only. Never projected onto a guest or customer surface —
+    // this is engineering detail, on the same footing as a private note.
+    string? ResolutionNote,
+    string? ResolutionLink,
+    UserSummaryDto? ResolvedBy,
+    DateTime? ResolvedAt,
     DateTime CreatedAt,
     DateTime UpdatedAt);
+
+/// <summary>One sitting of work on a ticket.</summary>
+public record TimeEntryDto(
+    Guid Id,
+    UserSummaryDto User,
+    int Minutes,
+    string? Note,
+    DateTime SpentAt,
+    DateTime CreatedAt);
+
+public record LogTimeRequest(int Minutes, string? Note, DateTime? SpentAt);
 
 public record CommentDto(
     Guid Id,
@@ -124,7 +141,19 @@ public record UpdateTicketRequest(
     Guid? RequesterId = null,
     // Detaches the customer without putting another in their place: the ticket
     // was linked to the wrong person and the right one isn't known yet.
-    bool ClearRequester = false);
+    bool ClearRequester = false,
+
+    // ── Resolving ───────────────────────────────────────────────────────────
+    // Required when Status moves out of open/pending into resolved or closed.
+    // Rejected server-side, not just hidden behind a dialog: a rule that only
+    // lives in the UI is not a rule, and this one exists so that six months
+    // later "why was this closed?" has an answer.
+    string? ResolutionNote = null,
+    /// <summary>Work item, PR or user story it was fixed under. Optional.</summary>
+    string? ResolutionLink = null,
+    // Logged in the same request as the resolution rather than by a second call,
+    // so a ticket can never end up resolved with its time entry lost in between.
+    int? TimeSpentMinutes = null);
 
 public record CreateCommentRequest(string Body, bool IsInternal);
 

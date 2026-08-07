@@ -35,12 +35,35 @@ public class Ticket
     // Drives resolution-time and SLA-attainment analytics (Phase 7C).
     public DateTime? ResolvedAt { get; set; }
 
+    /// <summary>
+    /// Why this ticket was resolved or closed — what was fixed, by whom.
+    /// Required on the transition out of open/pending, enforced in
+    /// <c>TicketService.UpdateAsync</c> rather than the dialog, because a rule
+    /// that only exists in the UI is not a rule.
+    ///
+    /// **Internal.** It is engineering detail (root cause, a work-item link) and
+    /// never reaches the customer, the guest view or a messaging connector —
+    /// same footing as a private note (invariant 5). The copy that lives in the
+    /// thread is written as an internal comment.
+    ///
+    /// Cleared on reopen: it describes the resolution the ticket currently has,
+    /// and a reopened ticket has none. The comment keeps the history.
+    /// </summary>
+    public string? ResolutionNote { get; set; }
+
+    /// <summary>Work item, PR or user story this was fixed under. Optional.</summary>
+    public string? ResolutionLink { get; set; }
+
+    public Guid? ResolvedById { get; set; }
+    public User? ResolvedBy { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Comment> Comments { get; set; } = new List<Comment>();
     public ICollection<TicketWatcher> Watchers { get; set; } = new List<TicketWatcher>();
     public ICollection<TicketTag> TicketTags { get; set; } = new List<TicketTag>();
+    public ICollection<TicketTimeEntry> TimeEntries { get; set; } = new List<TicketTimeEntry>();
 }
 
 public static class TicketStatus
