@@ -19,6 +19,7 @@ import {
   SessionStore,
   TicketsApi,
   errorMessage,
+  isTerminalCategory,
   slaState,
   timeAgo,
   toneFor,
@@ -72,10 +73,16 @@ const CHANNEL_ICON: Record<string, IconName> = {
   manual: 'pencil',
 };
 
-/** A saved view maps to the API filter it can actually express. */
-const VIEW_STATUS: Record<string, string | undefined> = {
+/**
+ * A saved view maps to a status **category**, not a status.
+ *
+ * "Open" has to mean every status in the open category. A workspace with "Todo"
+ * and "Estimation required" would otherwise have an Open view showing neither.
+ */
+const VIEW_CATEGORY: Record<string, string | undefined> = {
   open: 'open',
   pending: 'pending',
+  active: 'active',
   resolved: 'resolved',
   closed: 'closed',
 };
@@ -168,6 +175,7 @@ function orUndefined(values: string[]): string[] | undefined {
           <tk-option value="" [label]="'tickets.allStatus' | transloco" />
           <tk-option value="open" [label]="'status.open' | transloco" />
           <tk-option value="pending" [label]="'status.pending' | transloco" />
+          <tk-option value="active" [label]="'status.active' | transloco" />
           <tk-option value="resolved" [label]="'status.resolved' | transloco" />
           <tk-option value="closed" [label]="'status.closed' | transloco" />
           <tk-option value="mine" [label]="'tickets.assignedToMe' | transloco" />
@@ -332,7 +340,7 @@ function orUndefined(values: string[]): string[] | undefined {
                       <tk-badge [tone]="priorityOf(ticket).tone">{{ priorityOf(ticket).labelKey | transloco }}</tk-badge>
                     </td>
                     <td>
-                      <tk-badge [tone]="statusOf(ticket).tone" dot>{{ statusOf(ticket).labelKey | transloco }}</tk-badge>
+                      <tk-badge [tone]="statusOf(ticket).tone" dot>{{ ticket.statusName }}</tk-badge>
                     </td>
                     <td>
                       @if (ticket.assignee; as agent) {
@@ -369,7 +377,7 @@ function orUndefined(values: string[]): string[] | undefined {
                           type="button"
                           class="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-success disabled:opacity-40"
                           [attr.aria-label]="'tickets.actions.resolve' | transloco"
-                          [disabled]="ticket.status === 'resolved' || ticket.status === 'closed'"
+                          [disabled]="isFinished(ticket)"
                           (click)="resolve(ticket)"
                         >
                           <tk-icon name="check-circle" [size]="16" />
@@ -528,10 +536,13 @@ export class TicketList {
     // same filter. The rail wins when it has anything in it, because it is the
     // one the user just touched.
     const statuses = split(this.st());
-    const viewStatus = VIEW_STATUS[view];
+    const viewCategory = VIEW_CATEGORY[view];
 
     return {
-      status: statuses.length ? statuses : viewStatus ? [viewStatus] : undefined,
+      status: orUndefined(statuses),
+      // The rail narrows by status; the sidebar narrows by category. Both can
+      // be set, and together they read as "a status in this category".
+      category: viewCategory ? [viewCategory] : undefined,
       priority: split(this.pr()).length ? split(this.pr()) : this.priority() || undefined,
       channel: orUndefined(split(this.ch())),
       teamId: orUndefined(split(this.tm())),
@@ -740,7 +751,7 @@ export class TicketList {
       [TicketList.FACET_PARAM[key]]: next.length ? next.join(',') : null,
       page: null,
     };
-    if (key === 'status' && VIEW_STATUS[this.view()]) params['view'] = null;
+    if (key === 'status' && VIEW_CATEGORY[this.view()]) params['view'] = null;
 
     void this.router.navigate([], { queryParams: params, queryParamsHandling: 'merge' });
   }
@@ -846,7 +857,11 @@ export class TicketList {
     return this.transloco.translate('tickets.noCustomer');
   }
 
-  protected statusOf = (ticket: TicketSummary) => toneFor(STATUS_TONE, ticket.status);
+  /** Tone by category — a workspace status name has no colour this map knows. */
+  protected statusOf = (ticket: TicketSummary) => toneFor(STATUS_TONE, ticket.statusCategory);
+
+  /** The work is over, whatever this workspace calls that state. */
+  protected isFinished = (ticket: TicketSummary) => isTerminalCategory(ticket.statusCategory);
   protected priorityOf = (ticket: TicketSummary) => toneFor(PRIORITY_TONE, ticket.priority);
   protected sla = slaState;
   protected ago = timeAgo;

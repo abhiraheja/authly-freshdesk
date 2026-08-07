@@ -271,8 +271,24 @@ target: that leg's clock simply does not run, which is different from a target
 of zero. Press **Save SLA targets**.
 
 New tickets are stamped with due dates on creation. **Changing a policy does not
-move tickets that are already open** — they keep the deadlines they were given.
+move tickets that already have deadlines** — they keep the ones they were given.
 It applies to new tickets, and to any ticket whose priority changes afterwards.
+
+**One exception, and it matters on day one.** A ticket raised *before* anybody
+configured SLA has no deadlines at all — it was never given any. Saving a policy
+adopts those: every **open or pending** ticket of that priority that has no
+targets gets them, measured from when it was created. Without this, every ticket
+raised before you reached this screen would stay outside SLA for the rest of its
+life with no way to bring it in.
+
+> Expect some of them to appear **already breached**, and that is the honest
+> reading — you have just declared that an urgent ticket gets two hours, and a
+> day-old unanswered urgent ticket is late by that standard. Resolved and closed
+> tickets are left alone; the work is over and a deadline on it is a number
+> nobody can act on.
+
+**On a resolved ticket** the SLA card says the clock *stopped*, not that no
+policy covers it, and shows whether the ticket beat its resolve target.
 
 **Use.** Agents see the SLA badge on each ticket; **Analytics** (§17) reports
 first-response and resolution **attainment** (the % met on time).

@@ -56,6 +56,7 @@ export const NAV: readonly NavGroup[] = [
       // wrong tickets. It lands with the API change.
       { labelKey: 'nav.items.open', tone: 'info', route: '/dashboard/tickets', params: { view: 'open' }, countKey: 'open' },
       { labelKey: 'nav.items.pending', tone: 'warning', route: '/dashboard/tickets', params: { view: 'pending' }, countKey: 'pending' },
+      { labelKey: 'nav.items.active', tone: 'primary', route: '/dashboard/tickets', params: { view: 'active' } },
       { labelKey: 'nav.items.resolved', tone: 'success', route: '/dashboard/tickets', params: { view: 'resolved' }, countKey: 'resolved' },
       { labelKey: 'nav.items.closed', tone: 'neutral', route: '/dashboard/tickets', params: { view: 'closed' }, countKey: 'closed' },
     ],
@@ -75,6 +76,7 @@ export const NAV: readonly NavGroup[] = [
     adminOnly: true,
     items: [
       { labelKey: 'nav.items.configuration', icon: 'sliders-horizontal', route: '/admin/settings/configuration' },
+      { labelKey: 'nav.items.statuses', icon: 'circle', route: '/admin/settings/statuses' },
       { labelKey: 'nav.items.ticketLayout', icon: 'panel-left-close', route: '/admin/settings/ticket-layout' },
       { labelKey: 'nav.items.analytics', icon: 'bar-chart-3', route: '/admin/analytics' },
       { labelKey: 'nav.items.announcements', icon: 'megaphone', route: '/admin/announcements' },

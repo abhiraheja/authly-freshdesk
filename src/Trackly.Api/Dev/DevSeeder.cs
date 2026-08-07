@@ -62,18 +62,18 @@ public class DevSeeder(TracklyDbContext db)
 
         // ---- Tickets ----------------------------------------------------------
         // (subject, description, requester, priority, status, category, assignee, ageHours, tags, problem, firstDueInMins, resolveDueInMins, responded)
-        var t1 = MakeTicket(workspaceId, "Can't pay — card keeps declining", "Every card I try is declined at checkout.", alice, TicketPriority.Urgent, TicketStatus.Open, technical, maya, 2, [vip, bug], problem, 30, 240, false);
-        var t2 = MakeTicket(workspaceId, "Checkout error 500", "I get a server error when I click Pay.", bob, TicketPriority.High, TicketStatus.Open, technical, sam, 5, [bug], problem, 120, 480, true);
-        var t3 = MakeTicket(workspaceId, "Payment failed but I was charged", "My card was charged twice but the order failed.", carol, TicketPriority.Urgent, TicketStatus.Pending, billing, maya, 26, [refund], problem, 30, 240, true);
-        var t4 = MakeTicket(workspaceId, "How do I change my plan?", "I want to upgrade from Team to Enterprise.", alice, TicketPriority.Medium, TicketStatus.Open, billing, null, 8, [], null, 480, 1440, false);
-        var t5 = MakeTicket(workspaceId, "Invoice missing VAT number", "Can you add our VAT number to invoices?", bob, TicketPriority.Low, TicketStatus.Pending, billing, sam, 50, [], null, 960, 2880, true);
-        var t6 = MakeTicket(workspaceId, "Feature request: dark mode", "Would love a dark mode in the portal.", carol, TicketPriority.Low, TicketStatus.Open, general, null, 70, [], null, 960, 2880, false);
-        var t7 = MakeTicket(workspaceId, "Password reset email not arriving", "I never get the reset email.", alice, TicketPriority.High, TicketStatus.Resolved, technical, maya, 96, [], null, 120, 480, true);
-        var t8 = MakeTicket(workspaceId, "Thanks for the quick help!", "Just wanted to say your team was great.", bob, TicketPriority.Low, TicketStatus.Closed, general, sam, 120, [vip], null, 960, 2880, true);
+        var t1 = MakeTicket(workspaceId, "Can't pay — card keeps declining", "Every card I try is declined at checkout.", alice, TicketPriority.Urgent, "open", technical, maya, 2, [vip, bug], problem, 30, 240, false);
+        var t2 = MakeTicket(workspaceId, "Checkout error 500", "I get a server error when I click Pay.", bob, TicketPriority.High, "open", technical, sam, 5, [bug], problem, 120, 480, true);
+        var t3 = MakeTicket(workspaceId, "Payment failed but I was charged", "My card was charged twice but the order failed.", carol, TicketPriority.Urgent, "pending", billing, maya, 26, [refund], problem, 30, 240, true);
+        var t4 = MakeTicket(workspaceId, "How do I change my plan?", "I want to upgrade from Team to Enterprise.", alice, TicketPriority.Medium, "open", billing, null, 8, [], null, 480, 1440, false);
+        var t5 = MakeTicket(workspaceId, "Invoice missing VAT number", "Can you add our VAT number to invoices?", bob, TicketPriority.Low, "pending", billing, sam, 50, [], null, 960, 2880, true);
+        var t6 = MakeTicket(workspaceId, "Feature request: dark mode", "Would love a dark mode in the portal.", carol, TicketPriority.Low, "open", general, null, 70, [], null, 960, 2880, false);
+        var t7 = MakeTicket(workspaceId, "Password reset email not arriving", "I never get the reset email.", alice, TicketPriority.High, "resolved", technical, maya, 96, [], null, 120, 480, true);
+        var t8 = MakeTicket(workspaceId, "Thanks for the quick help!", "Just wanted to say your team was great.", bob, TicketPriority.Low, "closed", general, sam, 120, [vip], null, 960, 2880, true);
 
         // A couple of guest tickets (no account).
-        var g1 = MakeGuestTicket(workspaceId, "Website is down", "Your marketing site returns 502.", "dana@prospect.com", "Dana Prospect", TicketPriority.High, TicketStatus.Open, technical, maya, 3, 120, 480, false);
-        var g2 = MakeGuestTicket(workspaceId, "Question about pricing", "Do you offer nonprofit discounts?", "evan@nonprofit.org", "Evan Reyes", TicketPriority.Medium, TicketStatus.Open, general, null, 12, 480, 1440, false);
+        var g1 = MakeGuestTicket(workspaceId, "Website is down", "Your marketing site returns 502.", "dana@prospect.com", "Dana Prospect", TicketPriority.High, "open", technical, maya, 3, 120, 480, false);
+        var g2 = MakeGuestTicket(workspaceId, "Question about pricing", "Do you offer nonprofit discounts?", "evan@nonprofit.org", "Evan Reyes", TicketPriority.Medium, "open", general, null, 12, 480, 1440, false);
 
         var tickets = new[] { t1, t2, t3, t4, t5, t6, t7, t8, g1, g2 };
         db.Tickets.AddRange(tickets);

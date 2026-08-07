@@ -10,7 +10,8 @@ namespace Trackly.Modules.Tickets;
 
 public class TicketService(
     TracklyDbContext db, NotificationService notifications, SlaService sla, AutomationService automation,
-    CsatService csat, TagService tags, TicketOptionService options, NotificationFeed feed)
+    CsatService csat, TagService tags, TicketOptionService options, NotificationFeed feed,
+    TicketStatusService statuses)
 {
     // ---- Queries ------------------------------------------------------------
 
@@ -39,6 +40,11 @@ public class TicketService(
 
         if (except != "status" && query.Status is { Count: > 0 } statuses)
             tickets = tickets.Where(t => statuses.Contains(t.Status));
+        // Shares the "status" facet key deliberately: both narrow the same
+        // column of the rail, so counting one while the other is applied would
+        // report numbers the results underneath do not match.
+        if (except != "status" && query.Category is { Count: > 0 } statusCategories)
+            tickets = tickets.Where(t => statusCategories.Contains(t.StatusCategory));
         if (except != "priority" && query.Priority is { Count: > 0 } priorities)
             tickets = tickets.Where(t => priorities.Contains(t.Priority));
         if (except != "channel" && query.Channel is { Count: > 0 } channels)
@@ -97,11 +103,19 @@ public class TicketService(
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var page = Math.Max(query.Page, 1);
 
-        var items = await Sorted(actor, tickets, query)
+        var items = await Sorted(tickets, query)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(t => new TicketSummaryDto(
-                t.Id, t.Subject, t.Status, t.Priority, t.Channel,
+                t.Id, t.Subject, t.Status, t.StatusCategory,
+                // Inlined, not a helper method. EF refuses a projection that
+                // calls an instance method — the expression tree would capture
+                // this whole service, which it reports as a memory-leak risk.
+                db.TicketStatuses
+                    .Where(s => s.WorkspaceId == t.WorkspaceId && s.Value == t.Status)
+                    .Select(s => s.Name)
+                    .FirstOrDefault() ?? t.Status,
+                t.Priority, t.Channel,
                 CategoryDto.From(t.Category),
                 UserSummaryDto.From(t.Requester),
                 t.GuestName, t.GuestEmail,
@@ -128,7 +142,7 @@ public class TicketService(
     /// several at once — can swap places between page 1 and page 2, so one is
     /// shown twice and another is never shown at all.
     /// </summary>
-    private IQueryable<Ticket> Sorted(Actor actor, IQueryable<Ticket> tickets, TicketListQuery query)
+    private IQueryable<Ticket> Sorted(IQueryable<Ticket> tickets, TicketListQuery query)
     {
         var desc = query.Desc;
 
@@ -149,9 +163,23 @@ public class TicketService(
             // The workspace's own order, not the alphabet: "high" sorting above
             // "urgent" is the kind of wrong that makes a queue useless. The rank
             // comes from the same ticket_options row the picker is built from.
+            //
+            // Inlined for the same reason as the status name above: a helper
+            // method here puts a call to this service in the expression tree,
+            // which EF cannot translate.
             TicketSort.Priority => desc
-                ? tickets.OrderByDescending(t => PriorityRank(actor.WorkspaceId, t.Priority))
-                : tickets.OrderBy(t => PriorityRank(actor.WorkspaceId, t.Priority)),
+                ? tickets.OrderByDescending(t => db.TicketOptions
+                    .Where(o => o.WorkspaceId == t.WorkspaceId
+                                && o.Kind == TicketOptionKind.Priority
+                                && o.Value == t.Priority)
+                    .Select(o => (int?)o.SortOrder)
+                    .FirstOrDefault() ?? int.MaxValue)
+                : tickets.OrderBy(t => db.TicketOptions
+                    .Where(o => o.WorkspaceId == t.WorkspaceId
+                                && o.Kind == TicketOptionKind.Priority
+                                && o.Value == t.Priority)
+                    .Select(o => (int?)o.SortOrder)
+                    .FirstOrDefault() ?? int.MaxValue),
 
             // Nulls last either way. A ticket with no SLA is not "the most
             // urgent" and it is not "the least" — it simply has no deadline, and
@@ -169,19 +197,12 @@ public class TicketService(
         return ordered.ThenBy(t => t.Id);
     }
 
-    /// <summary>
-    /// The configured position of a priority, as a correlated subquery.
-    ///
-    /// A value with no row left (a priority that was deleted out from under a
-    /// ticket) sorts to the end rather than the front — an orphan is not urgent.
-    /// </summary>
-    private int PriorityRank(Guid workspaceId, string priority) =>
-        db.TicketOptions
-            .Where(o => o.WorkspaceId == workspaceId
-                        && o.Kind == TicketOptionKind.Priority
-                        && o.Value == priority)
-            .Select(o => (int?)o.SortOrder)
-            .FirstOrDefault() ?? int.MaxValue;
+    // The status-name and priority-rank subqueries used to live here as helper
+    // methods. They are inlined at their call sites instead: a method call in a
+    // projection or an OrderBy puts a reference to this service into the
+    // expression tree, and EF refuses it — "the client projection contains a
+    // reference to a constant expression of TicketService through the instance
+    // method". Tempting to reintroduce; do not.
 
     /// <summary>
     /// The counts behind the filter rail — agent-facing, like every other
@@ -326,7 +347,11 @@ public class TicketService(
             .Include(t => t.ResolvedBy)
             .SingleOrDefaultAsync(t => t.Id == ticketId, ct);
         // Problem grouping and tags are internal — never expose them to a customer.
-        return ticket is null ? null : ToDetail(ticket, actor.IsAgentOrAdmin);
+        if (ticket is null) return null;
+
+        // The status row carries the label; the ticket only carries the value.
+        var status = await statuses.ResolveAsync(actor.WorkspaceId, ticket.Status, ct);
+        return ToDetail(ticket, status?.Name ?? ticket.Status, actor.IsAgentOrAdmin);
     }
 
     // ---- Create + round-robin assignment ------------------------------------
@@ -407,9 +432,14 @@ public class TicketService(
             teamId = wantedTeam;
         }
 
+        // Where new tickets start is the workspace's choice, not a constant.
+        var start = await statuses.DefaultAsync(actor.WorkspaceId, ct);
+
         var ticket = new Ticket
         {
             WorkspaceId = actor.WorkspaceId,
+            Status = start.Value,
+            StatusCategory = start.Category,
             Subject = request.Subject.Trim(),
             Description = request.Description.Trim(),
             Priority = priority,
@@ -497,7 +527,7 @@ public class TicketService(
                 u.Id,
                 OpenCount = db.Tickets.Count(t =>
                     t.AssigneeId == u.Id &&
-                    (t.Status == TicketStatus.Open || t.Status == TicketStatus.Pending)),
+                    (t.StatusCategory != TicketStatusCategory.Resolved && t.StatusCategory != TicketStatusCategory.Closed)),
             })
             .OrderBy(x => x.OpenCount)
             .ThenBy(x => x.Id)
@@ -519,6 +549,7 @@ public class TicketService(
             return null;
 
         var previousStatus = ticket.Status;
+        var previousCategory = ticket.StatusCategory;
         var previousAssignee = ticket.AssigneeId;
         var previousPriority = ticket.Priority;
 
@@ -531,11 +562,23 @@ public class TicketService(
 
         if (request.Status is not null)
         {
-            if (!TicketStatus.All.Contains(request.Status))
-                throw new ArgumentException("Invalid status.");
+            // The status has to be one this workspace defines, and the workflow
+            // has to permit the move. Both are checked here rather than in the
+            // picker: the picker only offers legal moves, but a picker is not a
+            // rule — the whole point of a workflow is that it holds for anything
+            // that can post JSON.
+            var target = await statuses.ResolveAsync(actor.WorkspaceId, request.Status, ct)
+                         ?? throw new ArgumentException("Unknown status.");
+            if (!target.IsActive && target.Value != previousStatus)
+                throw new ArgumentException($"\"{target.Name}\" has been retired and cannot be set.");
+            if (!await statuses.CanTransitionAsync(actor.WorkspaceId, previousStatus, target.Value, ct))
+                throw new ArgumentException($"This ticket cannot move straight to \"{target.Name}\".");
 
-            var wasOpen = previousStatus is TicketStatus.Open or TicketStatus.Pending;
-            var isEnding = request.Status is TicketStatus.Resolved or TicketStatus.Closed;
+            // Every rule below is written against the CATEGORY. A workspace can
+            // name its states anything; what Trackly needs to know is whether the
+            // work is over, which is what the category answers.
+            var wasOpen = TicketStatusCategory.IsOpen(previousCategory);
+            var isEnding = TicketStatusCategory.IsTerminal(target.Category);
             var note = request.ResolutionNote?.Trim();
 
             // Only the transition OUT of an open state asks. Resolved → Closed is
@@ -553,16 +596,21 @@ public class TicketService(
                 ticket.ResolvedById = actor.UserId;
             }
 
-            ticket.Status = request.Status;
-            // Track the resolution time for analytics (Phase 7C). Resolved re-stamps;
-            // Closed keeps an existing stamp (or sets one if closed directly);
-            // reopening to Open/Pending clears it.
+            // Set together, always — the category is what every rule reads, and
+            // a status without its matching category is a ticket the system will
+            // reason about incorrectly.
+            ticket.Status = target.Value;
+            ticket.StatusCategory = target.Category;
+
+            // Track the resolution time for analytics (Phase 7C). Resolved
+            // re-stamps; Closed keeps an existing stamp (or sets one if closed
+            // directly); reopening into any open category clears it.
             if (ticket.Status != previousStatus)
             {
-                ticket.ResolvedAt = ticket.Status switch
+                ticket.ResolvedAt = target.Category switch
                 {
-                    TicketStatus.Resolved => DateTime.UtcNow,
-                    TicketStatus.Closed => ticket.ResolvedAt ?? DateTime.UtcNow,
+                    TicketStatusCategory.Resolved => DateTime.UtcNow,
+                    TicketStatusCategory.Closed => ticket.ResolvedAt ?? DateTime.UtcNow,
                     _ => null,
                 };
 
@@ -673,8 +721,8 @@ public class TicketService(
         // is on the same footing as a private note and never reaches the
         // customer, the guest view or a connector (invariant 5).
         if (ticket.Status != previousStatus
-            && previousStatus is TicketStatus.Open or TicketStatus.Pending
-            && ticket.Status is TicketStatus.Resolved or TicketStatus.Closed
+            && TicketStatusCategory.IsOpen(previousCategory)
+            && TicketStatusCategory.IsTerminal(ticket.StatusCategory)
             && ticket.ResolutionNote is { Length: > 0 } resolution)
         {
             var body = ticket.ResolutionLink is { Length: > 0 } link
@@ -716,7 +764,7 @@ public class TicketService(
         if (ticket.Priority != previousPriority)
             await sla.OnPriorityChangedAsync(ticket, ct);
         if (ticket.Status != previousStatus)
-            sla.OnStatusChanged(ticket, previousStatus, ticket.Status);
+            sla.OnStatusChanged(ticket, previousCategory, ticket.StatusCategory);
 
         // Automation on update runs after the agent's change (its own mutations
         // are not re-evaluated, so rules can't loop).
@@ -749,7 +797,7 @@ public class TicketService(
 
         if (ticket.Status != previousStatus)
         {
-            if (ticket.Status == TicketStatus.Resolved)
+            if (ticket.StatusCategory == TicketStatusCategory.Resolved)
             {
                 // Issue a CSAT survey and fold its rating link into the resolution email.
                 var csatToken = await csat.IssueForResolutionAsync(ticket, ct);
@@ -1251,8 +1299,9 @@ public class TicketService(
 
     // ---- Mapping -----------------------------------------------------------------
 
-    private static TicketDetailDto ToDetail(Ticket t, bool isAgentOrAdmin) => new(
-        t.Id, t.Subject, t.Description, t.Status, t.Priority, t.Channel,
+    private static TicketDetailDto ToDetail(Ticket t, string statusName, bool isAgentOrAdmin) => new(
+        t.Id, t.Subject, t.Description, t.Status, t.StatusCategory, statusName,
+        t.Priority, t.Channel,
         CategoryDto.From(t.Category),
         UserSummaryDto.From(t.Requester),
         t.GuestName, t.GuestEmail,

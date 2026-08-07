@@ -26,6 +26,10 @@ export const adminRoutes: Routes = [
     path: 'settings/ticket-layout',
     loadComponent: () => import('./ticket-layout-settings').then((m) => m.TicketLayoutSettings),
   },
+  {
+    path: 'settings/statuses',
+    loadComponent: () => import('./ticket-status-settings').then((m) => m.TicketStatusSettings),
+  },
   { path: 'analytics', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.analytics', from: 'frontend/src/pages/admin/AnalyticsPage.tsx' } },
   { path: 'announcements', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.announcements', from: 'frontend/src/pages/admin/AnnouncementsPage.tsx' } },
   { path: 'users', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.members', from: 'frontend/src/pages/admin/UsersPage.tsx' } },

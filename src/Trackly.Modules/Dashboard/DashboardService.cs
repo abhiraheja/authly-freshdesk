@@ -28,10 +28,10 @@ public class DashboardService(TracklyDbContext db)
         var tickets = db.Tickets.Where(t => t.WorkspaceId == actor.WorkspaceId);
         return new DashboardStatsDto(
             await tickets.CountAsync(ct),
-            await tickets.CountAsync(t => t.Status == TicketStatus.Open, ct),
-            await tickets.CountAsync(t => t.Status == TicketStatus.Pending, ct),
-            await tickets.CountAsync(t => t.Status == TicketStatus.Resolved, ct),
-            await tickets.CountAsync(t => t.Status == TicketStatus.Closed, ct),
+            await tickets.CountAsync(t => t.StatusCategory == TicketStatusCategory.Open, ct),
+            await tickets.CountAsync(t => t.StatusCategory == TicketStatusCategory.Pending, ct),
+            await tickets.CountAsync(t => t.StatusCategory == TicketStatusCategory.Resolved, ct),
+            await tickets.CountAsync(t => t.StatusCategory == TicketStatusCategory.Closed, ct),
             await tickets.CountAsync(t => t.AssigneeId == null, ct),
             await tickets.CountAsync(t => t.AssigneeId == actor.UserId, ct),
             await db.Problems.CountAsync(

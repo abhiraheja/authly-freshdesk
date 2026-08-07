@@ -11,7 +11,8 @@ namespace Trackly.Modules.Tickets;
 // tracked ticket (and add tag/note entities) without saving — the caller's
 // SaveChanges persists everything atomically. Automation's own mutations are not
 // re-evaluated, so rules can't loop.
-public class AutomationService(TracklyDbContext db, ILogger<AutomationService> logger)
+public class AutomationService(
+    TracklyDbContext db, ILogger<AutomationService> logger, TicketStatusService statuses)
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
@@ -82,9 +83,25 @@ public class AutomationService(TracklyDbContext db, ILogger<AutomationService> l
                 ticket.Priority = value;
                 break;
 
-            case AutomationActionType.SetStatus when TicketStatus.All.Contains(value):
-                ticket.Status = value;
+            // The rule names a status; the workspace decides whether that status
+            // exists. A rule written against one that was later deleted simply
+            // does nothing, rather than putting a ticket into a value nothing
+            // explains.
+            //
+            // Deliberately NOT workflow-checked: a rule is the workspace's own
+            // instruction, already approved by an admin, and a transition
+            // restriction meant to guide agents through a picker should not
+            // silently disarm the automation they wrote.
+            case AutomationActionType.SetStatus:
+            {
+                var target = await statuses.ResolveAsync(ticket.WorkspaceId, value, ct);
+                if (target is { IsActive: true })
+                {
+                    ticket.Status = target.Value;
+                    ticket.StatusCategory = target.Category;
+                }
                 break;
+            }
 
             case AutomationActionType.AssignTeam when Guid.TryParse(value, out var teamId):
                 if (await db.Teams.AnyAsync(t => t.Id == teamId && t.WorkspaceId == ticket.WorkspaceId, ct))
@@ -138,7 +155,7 @@ public class AutomationService(TracklyDbContext db, ILogger<AutomationService> l
             {
                 u.Id,
                 OpenCount = db.Tickets.Count(t =>
-                    t.AssigneeId == u.Id && (t.Status == TicketStatus.Open || t.Status == TicketStatus.Pending)),
+                    t.AssigneeId == u.Id && (t.StatusCategory != TicketStatusCategory.Resolved && t.StatusCategory != TicketStatusCategory.Closed)),
             })
             .OrderBy(x => x.OpenCount).ThenBy(x => x.Id)
             .Select(x => (Guid?)x.Id)

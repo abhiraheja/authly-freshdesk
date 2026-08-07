@@ -29,6 +29,13 @@ public record TicketSummaryDto(
     Guid Id,
     string Subject,
     string Status,
+    /// <summary>
+    /// The status's category. The client badges and groups by this, because the
+    /// status itself is workspace vocabulary and a client that switched on it
+    /// would go blank the moment somebody added one.
+    /// </summary>
+    string StatusCategory,
+    string StatusName,
     string Priority,
     string Channel,
     CategoryDto? Category,
@@ -51,6 +58,8 @@ public record TicketDetailDto(
     string Subject,
     string Description,
     string Status,
+    string StatusCategory,
+    string StatusName,
     string Priority,
     string Channel,
     CategoryDto? Category,
@@ -204,6 +213,14 @@ public record CreateCommentRequest(
 /// </summary>
 public record TicketListQuery(
     List<string>? Status,
+    /// <summary>
+    /// Filter by status CATEGORY rather than by status.
+    ///
+    /// What the sidebar's saved views send. "Open" has to mean every status in
+    /// the open category — a workspace with "Todo" and "Estimation required"
+    /// would otherwise have an Open view that showed neither of them.
+    /// </summary>
+    List<string>? Category,
     List<string>? Priority,
     List<Guid>? AssigneeId,
     string? Search,

@@ -87,10 +87,23 @@ import { Icon } from '../icon/icon';
           {{ label() || ('upload.browse' | transloco) }}
         </label>
       }
+    } @else if (headless()) {
+      <!-- No trigger of our own, but the input still has to exist for open()
+           to click. Bare rather than inside a label: the label IS the trigger,
+           and a second one here would be a second thing to click. -->
+      <input
+        #field
+        type="file"
+        class="sr-only"
+        [accept]="accept() ?? ''"
+        [multiple]="multiple()"
+        [disabled]="disabled()"
+        (change)="onPick($event)"
+      />
     }
 
     @if (files().length) {
-      <ul class="file-list" [class.mt-2]="showTrigger()">
+      <ul class="file-list" [class.mt-2]="showTrigger() || headless()">
         @for (file of files(); track file) {
           <li class="file-chip">
             <tk-icon name="paperclip" [size]="15" class="shrink-0 text-muted-foreground" />
@@ -141,6 +154,18 @@ export class FilePicker {
   readonly files = model<File[]>([]);
 
   readonly variant = input<'dropzone' | 'inline'>('dropzone');
+
+  /**
+   * Renders no trigger of its own — just the chips, the progress bar and any
+   * message. The host supplies its own button and calls {@link open}.
+   *
+   * For a trigger that has to live somewhere this component cannot reach: the
+   * composer puts a paperclip in the editor's toolbar, but the chips belong
+   * under the editor, not inside a row of formatting buttons. Splitting the two
+   * into separate components would split the file list from the input that
+   * fills it, which is the state this component exists to own.
+   */
+  readonly headless = input(false, { transform: booleanAttribute });
   /** An `accept` attribute value: `image/*`, `.pdf`, `image/png,image/jpeg`. */
   readonly accept = input<string>();
   readonly maxBytes = input(MAX_ATTACHMENT_BYTES);
@@ -165,7 +190,9 @@ export class FilePicker {
   protected readonly message = computed(() => this.error() || this.localError());
 
   /** In single mode the trigger gives way to the chip; in multi it stays. */
-  protected readonly showTrigger = computed(() => this.multiple() || this.files().length === 0);
+  protected readonly showTrigger = computed(
+    () => !this.headless() && (this.multiple() || this.files().length === 0),
+  );
 
   protected readonly hintText = computed(() => {
     const custom = this.hint();
@@ -205,6 +232,15 @@ export class FilePicker {
   protected remove(file: File): void {
     this.files.update((current) => current.filter((existing) => existing !== file));
     this.localError.set(null);
+  }
+
+  /**
+   * Opens the file dialog. For a {@link headless} picker whose trigger lives
+   * somewhere else — the editor toolbar, a menu item, an empty-state button.
+   */
+  open(): void {
+    if (this.disabled()) return;
+    this.field()?.nativeElement.click();
   }
 
   /** Drops the selection and any message. For a caller resetting a form. */

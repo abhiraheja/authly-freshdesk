@@ -161,6 +161,24 @@ prefix: logos are written `gcs-public:…`, everything else `gcs:…`, and
   signed URLs issued *after* the permission check (Azure SAS / GCS V4), not a
   public CDN.
 
+### Browser caching of attachments and avatars
+
+Both endpoints answer with `Cache-Control: private` **and `Vary: Cookie`**.
+
+The `Vary` is the load-bearing half. These responses are authorised per user, so
+a long `max-age` on a shared machine would otherwise let the next person to sign
+in read a colleague's document straight out of the browser cache without the
+server ever seeing the request. Keying the cache entry on the session cookie
+makes that a miss and a real authorisation check.
+
+**Do not put a shared/proxy cache in front of these routes**, and do not
+"optimise" the `private` to `public`. If a reverse proxy is added, confirm it
+honours `Vary` — several do not by default.
+
+Attachments use `max-age=86400`: the bytes behind an id never change (there is
+no endpoint that replaces one). Avatars use a year plus `immutable`, because
+their URL carries a version token derived from the storage key.
+
 ---
 
 ## 4. Email (Phase 4)

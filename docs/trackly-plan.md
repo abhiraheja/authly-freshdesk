@@ -1141,6 +1141,14 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | GET    | `/api/tickets/{id}/links` | AgentOrAdmin | Related work — stories, PRs, docs |
 | POST   | `/api/tickets/{id}/links` | AgentOrAdmin | Add one; url must be absolute http(s) |
 | DELETE | `/api/tickets/{id}/links/{linkId}` | AgentOrAdmin | Any agent may remove any link |
+| GET    | `/api/ticket-statuses` | AgentOrAdmin | The vocabulary. `?includeInactive` for admin |
+| GET    | `/api/ticket-statuses/reachable` | AgentOrAdmin | `?from=` — what the picker offers |
+| GET    | `/api/ticket-statuses/categories` | AgentOrAdmin | The fixed five |
+| POST   | `/api/ticket-statuses` | Admin | Add one to a category |
+| PUT    | `/api/ticket-statuses/{id}` | Admin | Rename, recolour, recategorise, retire, set default |
+| DELETE | `/api/ticket-statuses/{id}` | Admin | Only when unused and not built-in |
+| GET    | `/api/ticket-statuses/workflow` | AgentOrAdmin | Every transition |
+| PUT    | `/api/ticket-statuses/workflow` | Admin | Replaces the lot — see below |
 | GET    | `/api/notifications` | Any | The caller's bell. `?unreadOnly` |
 | GET    | `/api/notifications/unread-count` | Any | Just the badge number |
 | POST   | `/api/notifications/{id}/read` | Any | Own rows only — no id in the filter |
@@ -1149,6 +1157,25 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 `GET /api/tickets` also takes `?mentioned=true` and `?watching=true`. Both are
 **flags, not ids**: they resolve to the caller server-side, so there is no shape
 of request that could ask for somebody else's mentions.
+
+### Statuses and the workflow
+
+`PUT /workflow` **replaces** every transition in one call. A matrix screen edits
+every cell at once, so sending diffs would put the "what changed" calculation in
+the client — which is how a half-applied workflow happens, with a ticket that
+can no longer move anywhere.
+
+Where the workflow is and is not enforced, and why:
+
+| Path | Enforced? | Why |
+|---|---|---|
+| `PATCH /api/tickets/{id}` | **Yes** | A picker is not a rule. The whole point is that it holds for anything that can post JSON. |
+| Automation `set_status` | No | A rule is the workspace's own approved instruction; a restriction meant to guide agents through a picker should not silently disarm it. |
+| Problem bulk-resolve | No | Closing a problem is one decision about all its tickets; a rule blocking one would leave the problem resolved with a ticket open under it. |
+
+Retiring a status keeps it on tickets that already carry it and removes it from
+pickers. Deleting is refused while any ticket holds the value — a ticket showing
+a value with no name reads as corrupt data, not as history.
 
 ### List filtering, sorting and facets
 
@@ -1359,13 +1386,81 @@ CREATE TABLE email_tokens (
 -- Magic-link verify page never consumes the token on GET (link scanners
 -- prefetch URLs) — only the explicit "Confirm sign-in" POST does.
 
+-- Statuses a workspace defines for itself, and the workflow between them.
+--
+-- THE ONE RULE: a workspace invents statuses; Trackly only ever reasons about
+-- their CATEGORY. Five categories, fixed — open, pending, active, resolved,
+-- closed — and every behaviour in the system is written against those:
+--
+--   open      SLA response clock runs
+--   pending   resolve clock PAUSES (waiting on someone outside the team)
+--   active    clocks run
+--   resolved  stamps resolved_at, issues the CSAT survey, stops the clock
+--   closed    stops the clock, no survey
+--
+-- That split is what lets a team add "Estimation required", "Testing" or
+-- "Awaiting CAB" without Trackly needing to know they exist. The alternative —
+-- features testing status NAMES — is how a helpdesk ends up with
+-- `if (status == "Done" || status == "Complete" || status == "Closed")`
+-- scattered through it, one arm short in three places.
+--
+-- Statuses are seeded lazily on first read (one per category), like
+-- ticket_options: it fixes existing workspaces and new ones by the same path.
+CREATE TABLE ticket_statuses (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    category     TEXT NOT NULL,   -- open | pending | active | resolved | closed
+    value        TEXT NOT NULL,   -- lands on the ticket; stable, never edited
+    name         TEXT NOT NULL,   -- what people read; safe to change
+    color        TEXT,
+    sort_order   INTEGER NOT NULL DEFAULT 0,
+    is_active    BOOLEAN NOT NULL DEFAULT true,   -- retired = keeps existing tickets, leaves pickers
+    is_default   BOOLEAN NOT NULL DEFAULT false,  -- where a new ticket starts; exactly one
+    is_system    BOOLEAN NOT NULL DEFAULT false   -- shipped: renameable, never deletable
+);
+-- Unique because the value sits on every ticket: two statuses sharing one would
+-- be indistinguishable once stored.
+CREATE UNIQUE INDEX ON ticket_statuses (workspace_id, value);
+
+-- The workflow: which moves are legal. Transitions only — no conditions,
+-- validators or post-functions. Those are a different feature and overlap the
+-- automation engine.
+CREATE TABLE ticket_status_transitions (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id   UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    -- NULL = "from any status" (Jira's ANY STATUS). A workspace that has never
+    -- touched the workflow is seeded entirely with these, reproducing the old
+    -- behaviour where every status reached every other.
+    from_status_id UUID REFERENCES ticket_statuses(id),
+    to_status_id   UUID NOT NULL REFERENCES ticket_statuses(id)
+);
+CREATE INDEX ON ticket_status_transitions (workspace_id, from_status_id);
+
+-- AN EMPTY TRANSITION TABLE MEANS EVERYTHING IS ALLOWED, NOT NOTHING. A
+-- workspace whose rows were somehow all deleted must not become a place where
+-- no ticket can ever change status again.
+--
+-- One workflow per workspace, not per department or ticket type. Both of those
+-- are defensible and neither is built; adding one later means a scope column on
+-- both tables, not a redesign.
+
 -- Tickets
 CREATE TABLE tickets (
     id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id     UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
     subject          TEXT NOT NULL,
     description      TEXT NOT NULL,
-    status           TEXT NOT NULL DEFAULT 'open',    -- open, pending, resolved, closed
+    -- A ticket_statuses.value, NOT a foreign key: it is what automation rules
+    -- match, what the email and chat connectors write, and what every row
+    -- already held before workflows existed.
+    status           TEXT NOT NULL DEFAULT 'open',
+    -- The category of that status, denormalised. EVERY RULE IN TRACKLY TESTS
+    -- THIS, never the status. Keeping it on the row is what lets "open
+    -- tickets", "pause the clock", "ask for a resolution note" and "issue a
+    -- CSAT survey" stay single indexed comparisons instead of a join in every
+    -- query. Written whenever status is written; re-written across affected
+    -- tickets when an admin moves a status to another category.
+    status_category  TEXT NOT NULL DEFAULT 'open',
     priority         TEXT NOT NULL DEFAULT 'medium',  -- low, medium, high, urgent
     category_id      UUID REFERENCES categories(id),
     requester_id     UUID REFERENCES users(id),       -- null if anonymous

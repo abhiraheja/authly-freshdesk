@@ -124,10 +124,13 @@ public class NotificationService(
             var ctx = await ResolveAsync(ticket.WorkspaceId, ct);
 
             var author = await db.Users.Where(u => u.Id == actorId).Select(u => u.Name ?? u.Email).SingleOrDefaultAsync(ct);
+            // Naming yourself is a legitimate bookmark — it files the ticket
+            // under "Mentioning me". Emailing yourself your own note is not.
             var recipients = await db.Users
-                .Where(u => userIds.Contains(u.Id) && u.IsActive && u.Email != null)
+                .Where(u => userIds.Contains(u.Id) && u.Id != actorId && u.IsActive && u.Email != null)
                 .Select(u => new { u.Email, u.Name })
                 .ToListAsync(ct);
+            if (recipients.Count == 0) return;
 
             var quoted = string.IsNullOrWhiteSpace(excerpt) ? "" : $"\n\n{excerpt.Trim()}";
             foreach (var person in recipients)

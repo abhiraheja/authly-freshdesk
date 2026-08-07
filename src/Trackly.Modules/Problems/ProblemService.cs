@@ -8,7 +8,8 @@ namespace Trackly.Modules.Problems;
 
 // Problems group related tickets under a root cause. Agent/admin-only (enforced
 // by the controller policy); every query is still workspace-scoped here.
-public class ProblemService(TracklyDbContext db, NotificationService notifications)
+public class ProblemService(
+    TracklyDbContext db, NotificationService notifications, TicketStatusService statuses)
 {
     private IQueryable<Problem> Visible(Actor actor) =>
         db.Problems.Where(p => p.WorkspaceId == actor.WorkspaceId);
@@ -37,7 +38,10 @@ public class ProblemService(TracklyDbContext db, NotificationService notificatio
             .Where(t => t.ProblemId == id)
             .OrderByDescending(t => t.UpdatedAt)
             .Select(t => new TicketSummaryDto(
-                t.Id, t.Subject, t.Status, t.Priority, t.Channel,
+                t.Id, t.Subject, t.Status, t.StatusCategory,
+                db.TicketStatuses.Where(x => x.WorkspaceId == t.WorkspaceId && x.Value == t.Status)
+                    .Select(x => x.Name).FirstOrDefault() ?? t.Status,
+                t.Priority, t.Channel,
                 CategoryDto.From(t.Category),
                 UserSummaryDto.From(t.Requester),
                 t.GuestName, t.GuestEmail,
@@ -141,20 +145,31 @@ public class ProblemService(TracklyDbContext db, NotificationService notificatio
 
         if (bulkResolveTickets)
         {
-            // Resolve every still-open linked ticket in one action, then notify.
+            // Which status "resolved" means is the workspace's to decide, so it
+            // is looked up rather than assumed. Deliberately bypasses the
+            // workflow: closing a problem is a decision about all of its tickets
+            // at once, and a transition rule that blocked one of them would
+            // leave the problem resolved with a ticket still open under it.
+            var resolved = await statuses.DefaultForCategoryAsync(
+                actor.WorkspaceId, TicketStatusCategory.Resolved, ct);
+
             var ticketIds = await db.Tickets
-                .Where(t => t.ProblemId == id && t.Status != TicketStatus.Resolved && t.Status != TicketStatus.Closed)
+                .Where(t => t.ProblemId == id
+                            && t.StatusCategory != TicketStatusCategory.Resolved
+                            && t.StatusCategory != TicketStatusCategory.Closed)
                 .Select(t => t.Id)
                 .ToListAsync(ct);
             await db.Tickets
                 .Where(t => ticketIds.Contains(t.Id))
                 .ExecuteUpdateAsync(s => s
-                    .SetProperty(t => t.Status, TicketStatus.Resolved)
+                    .SetProperty(t => t.Status, resolved.Value)
+                    .SetProperty(t => t.StatusCategory, resolved.Category)
+                    .SetProperty(t => t.ResolvedAt, DateTime.UtcNow)
                     .SetProperty(t => t.UpdatedAt, DateTime.UtcNow), ct);
             await db.SaveChangesAsync(ct);
 
             foreach (var ticketId in ticketIds)
-                await notifications.OnStatusChangedAsync(ticketId, TicketStatus.Resolved, ct);
+                await notifications.OnStatusChangedAsync(ticketId, resolved.Name, ct);
         }
         else
         {

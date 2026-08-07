@@ -135,7 +135,16 @@ export interface CustomerBody {
 export interface TicketSummary {
   id: string;
   subject: string;
+  /** The workspace status value. Never switch on it — see statusCategory. */
   status: string;
+  /**
+   * One of the fixed five. **Badge, group and reason by this**, because the
+   * status is workspace vocabulary and a client that switched on it would go
+   * blank the moment somebody added one.
+   */
+  statusCategory: string;
+  /** What the workspace calls it. Render this. */
+  statusName: string;
   priority: string;
   channel: string;
   category: Category | null;
@@ -193,6 +202,53 @@ export interface LogTimeBody {
   note?: string;
   /** When the work happened. Defaults to now. */
   spentAt?: string;
+}
+
+/**
+ * The five buckets every status falls into. **Fixed** — a workspace adds
+ * statuses, never categories, because every rule in Trackly is written against
+ * this list.
+ */
+export type StatusCategory = 'open' | 'pending' | 'active' | 'resolved' | 'closed';
+
+export const STATUS_CATEGORIES: readonly StatusCategory[] = [
+  'open',
+  'pending',
+  'active',
+  'resolved',
+  'closed',
+];
+
+/** The work is over — no clock, no queue. */
+export function isTerminalCategory(category: string): boolean {
+  return category === 'resolved' || category === 'closed';
+}
+
+/**
+ * A status as the workspace defines it.
+ *
+ * `value` is what sits on the ticket and what automation matches; `name` is what
+ * people read. Bind `value`, render `name` — never the other way round.
+ */
+export interface TicketStatus {
+  id: string;
+  category: string;
+  value: string;
+  name: string;
+  color: string | null;
+  sortOrder: number;
+  isActive: boolean;
+  /** Where a new ticket starts. Exactly one per workspace. */
+  isDefault: boolean;
+  /** Ships with Trackly: rename and retire yes, delete no. */
+  isSystem: boolean;
+}
+
+/** One legal move. `fromStatusId: null` means "from any status". */
+export interface StatusTransition {
+  id: string;
+  fromStatusId: string | null;
+  toStatusId: string;
 }
 
 /** What Trackly offers in the picker — the server accepts any string. */
@@ -307,7 +363,13 @@ export interface TicketFacets {
  * value per field cannot say.
  */
 export interface TicketListParams {
+  /** A status VALUE. For a saved view you almost always want . */
   status?: string | string[];
+  /**
+   * A status CATEGORY. What the saved views send: "Open" must mean every
+   * status in the open category, not the single status called "open".
+   */
+  category?: string | string[];
   /** Every ticket raised by one customer — the profile page's history. */
   requesterId?: string;
   priority?: string | string[];
@@ -475,6 +537,56 @@ export class TicketsApi {
    * the admin screen passes `includeInactive` so a retired option can be
    * brought back.
    */
+  // ── Statuses + workflow ───────────────────────────────────────────────────
+
+  /** The vocabulary. `includeInactive` is for the admin screen. */
+  ticketStatuses(includeInactive = false): Promise<TicketStatus[]> {
+    return this.api.get<TicketStatus[]>('/api/ticket-statuses', { includeInactive });
+  }
+
+  /**
+   * What a ticket in `from` may move to — what the picker is built from.
+   * Includes the current status, so the picker can show what is selected.
+   */
+  reachableStatuses(from: string): Promise<TicketStatus[]> {
+    return this.api.get<TicketStatus[]>('/api/ticket-statuses/reachable', { from });
+  }
+
+  createTicketStatus(body: { category: string; name: string; color?: string }): Promise<TicketStatus> {
+    return this.api.post<TicketStatus>('/api/ticket-statuses', body);
+  }
+
+  updateTicketStatus(
+    id: string,
+    body: {
+      name?: string;
+      category?: string;
+      color?: string;
+      sortOrder?: number;
+      isActive?: boolean;
+      isDefault?: boolean;
+    },
+  ): Promise<TicketStatus> {
+    return this.api.put<TicketStatus>(`/api/ticket-statuses/${id}`, body);
+  }
+
+  deleteTicketStatus(id: string): Promise<void> {
+    return this.api.delete<void>(`/api/ticket-statuses/${id}`);
+  }
+
+  workflow(): Promise<StatusTransition[]> {
+    return this.api.get<StatusTransition[]>('/api/ticket-statuses/workflow');
+  }
+
+  /**
+   * Replaces the whole workflow. The matrix edits every cell at once, so a diff
+   * would put "what changed" in the client — which is how a half-applied
+   * workflow happens.
+   */
+  saveWorkflow(transitions: { fromStatusId: string | null; toStatusId: string }[]): Promise<void> {
+    return this.api.put<void>('/api/ticket-statuses/workflow', { transitions });
+  }
+
   ticketOptions(kind: TicketOptionKind, includeInactive = false): Promise<TicketOption[]> {
     return this.api.get<TicketOption[]>('/api/ticket-options', { kind, includeInactive });
   }
@@ -654,12 +766,23 @@ export interface SlaState {
 }
 
 export function slaState(
-  ticket: Pick<TicketSummary, 'status' | 'firstResponseDueAt' | 'resolveDueAt' | 'firstResponseAt'>,
+  ticket: Pick<
+    TicketSummary,
+    'statusCategory' | 'firstResponseDueAt' | 'resolveDueAt' | 'firstResponseAt'
+  >,
 ): SlaState | null {
+  // Terminal first, before either clock. This used to be checked only on the
+  // resolve leg, so a ticket closed without anybody replying kept counting its
+  // first-response breach up forever — the card read "Breached, 17:06:00 over"
+  // on a ticket whose work had finished the day before.
+  //
+  // Category, not status: a workspace can call its finished state anything.
+  if (isTerminalCategory(ticket.statusCategory)) return null;
+
   if (ticket.firstResponseDueAt && !ticket.firstResponseAt) {
     return { ...remaining(ticket.firstResponseDueAt), prefixKey: 'sla.response' };
   }
-  if (ticket.resolveDueAt && ticket.status !== 'resolved' && ticket.status !== 'closed') {
+  if (ticket.resolveDueAt) {
     return { ...remaining(ticket.resolveDueAt), prefixKey: 'sla.resolve' };
   }
   return null;

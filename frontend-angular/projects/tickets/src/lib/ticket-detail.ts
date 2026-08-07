@@ -21,6 +21,7 @@ import {
   TicketsApi,
   errorMessage,
   formatDateTime,
+  isTerminalCategory,
   timeAgo,
   toneFor,
   valueOr,
@@ -133,7 +134,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
               <div class="min-w-0">
                 <div class="mb-2 flex flex-wrap items-center gap-2">
                   <span class="font-mono text-meta font-bold text-primary">#{{ data.id.slice(0, 8) }}</span>
-                  <tk-badge [tone]="statusTone().tone" dot>{{ statusTone().labelKey | transloco }}</tk-badge>
+                  <tk-badge [tone]="statusTone().tone" dot>{{ statusLabel() }}</tk-badge>
                   <tk-badge [tone]="priorityTone().tone">{{ priorityTone().labelKey | transloco }}</tk-badge>
                   <span class="inline-flex items-center gap-1.5 text-meta text-muted-foreground">
                     <tk-icon [name]="channelIcon()" [size]="14" />
@@ -147,6 +148,9 @@ const CHANNEL_ICON: Record<string, IconName> = {
               </div>
 
               <div class="flex shrink-0 items-center gap-2">
+                <!-- Only the moves the workflow allows, plus the one it is in.
+                     The server refuses anything else, so offering more would be
+                     offering a click that fails. -->
                 <tk-select
                   auto
                   inset
@@ -155,16 +159,15 @@ const CHANNEL_ICON: Record<string, IconName> = {
                   [value]="statusValue()"
                   (valueChange)="pickStatus($event)"
                 >
-                  <tk-option value="open" [label]="'status.open' | transloco" />
-                  <tk-option value="pending" [label]="'status.pending' | transloco" />
-                  <tk-option value="resolved" [label]="'status.resolved' | transloco" />
-                  <tk-option value="closed" [label]="'status.closed' | transloco" />
+                  @for (option of reachable(); track option.id) {
+                    <tk-option [value]="option.value" [label]="option.name" />
+                  }
                 </tk-select>
-                <!-- Hidden once it is resolved rather than disabled: a dead
+                <!-- Hidden once the work is over rather than disabled: a dead
                      button invites clicking, and the status select right beside
                      it can already move it back. -->
-                @if (data.status !== 'resolved' && data.status !== 'closed') {
-                  <button tkButton variant="success" size="sm" (click)="pickStatus('resolved')">
+                @if (!finished()) {
+                  <button tkButton variant="success" size="sm" (click)="pickStatus(resolvedValue())">
                     <tk-icon name="check" [size]="16" />
                     {{ 'tickets.detail.resolve' | transloco }}
                   </button>
@@ -185,7 +188,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
               @switch (threadTab()) {
                 @case ('attachments') {
                   @if (allAttachments().length) {
-                    <tk-attachment-list layout="rows" class="space-y-3" [items]="allAttachments()" />
+                    <tk-attachment-list [items]="allAttachments()" />
                   } @else {
                     <p class="py-6 text-center text-body text-muted-foreground">
                       {{ 'tickets.detail.noAttachments' | transloco }}
@@ -202,14 +205,14 @@ const CHANNEL_ICON: Record<string, IconName> = {
                         [size]="34"
                         class="mt-0.5 shrink-0"
                       />
-                      <div class="min-w-0 flex-1">
+                      <div class="flex min-w-0 flex-1 flex-col items-start">
                         <p class="mb-1 text-meta text-muted-foreground">
                           <span class="font-semibold text-foreground">{{ requesterName() }}</span>
                           · {{ createdAt() }}
                         </p>
                         <!-- The description stays plain text: it is written on
                              the submit form, which customers use too. -->
-                        <div class="rounded-2xl rounded-tl-sm border border-border bg-card p-4">
+                        <div class="max-w-full rounded-2xl rounded-tl-sm border border-border bg-card p-4 sm:max-w-[42rem]">
                           <p class="whitespace-pre-wrap text-body">{{ data.description }}</p>
                           <tk-attachment-list [items]="ticketAttachments()" />
                         </div>
@@ -225,7 +228,15 @@ const CHANNEL_ICON: Record<string, IconName> = {
                         [size]="34"
                         class="mt-0.5 shrink-0"
                       />
-                      <div class="min-w-0 flex-1">
+                      <!-- A column flex container, because align-items on one is
+                           what makes the bubble shrink to its content. As a
+                           plain block the bubble filled the whole width, so a
+                           two-word reply came out as a wall of colour. -->
+                      <div
+                        class="flex min-w-0 flex-1 flex-col"
+                        [class.items-end]="fromTeam(comment)"
+                        [class.items-start]="!fromTeam(comment)"
+                      >
                         <p class="mb-1 text-meta text-muted-foreground" [class.text-right]="fromTeam(comment)">
                           <!-- Two different labels, because they are two
                                different promises. "Team note" means every agent
@@ -249,7 +260,11 @@ const CHANNEL_ICON: Record<string, IconName> = {
                           }
                           · {{ at(comment) }}
                         </p>
-                        <div class="rounded-2xl border p-4" [class]="bubbleClass(comment)">
+                        <!-- Capped so a long paragraph stays readable and a
+                             short one stays short. 42rem is roughly the 70–80
+                             characters a line can be before the eye loses the
+                             next one. -->
+                        <div class="max-w-full rounded-2xl border p-4 sm:max-w-[42rem]" [class]="bubbleClass(comment)">
                           <!-- Branches on the stored format, never on what the
                                body looks like: "<3 that fix" is text that reads
                                as markup, and guessing wrong shows a customer a
@@ -334,26 +349,43 @@ const CHANNEL_ICON: Record<string, IconName> = {
               [mentionable]="mentionable()"
               [placeholder]="composerPlaceholder()"
               [ariaLabel]="composerPlaceholder()"
+            >
+              <!-- display:contents so the wrapper carries the slot attribute
+                   without becoming a flex item — the divider and the button end
+                   up as direct children of the toolbar, spaced like the rest. -->
+              <span editor-tools class="contents">
+                <span class="editor-tool-divider" aria-hidden="true"></span>
+                <button
+                  type="button"
+                  class="editor-tool"
+                  [disabled]="sending()"
+                  [attr.aria-label]="'tickets.detail.attach' | transloco"
+                  [title]="'tickets.detail.attach' | transloco"
+                  (click)="picker.open()"
+                >
+                  <tk-icon name="paperclip" [size]="15" />
+                </button>
+              </span>
+            </tk-editor>
+
+            <!-- Headless: the trigger is the toolbar button above, but the chips
+                 belong here rather than in a row of formatting controls. One
+                 component still owns the input and the list it fills. -->
+            <tk-file-picker
+              #picker
+              headless
+              multiple
+              [(files)]="files"
+              [maxBytes]="maxUploadBytes"
+              [disabled]="sending()"
+              [progress]="uploadProgress()"
             />
 
             @if (sendError(); as message) {
               <tk-alert tone="danger" class="mt-3">{{ message }}</tk-alert>
             }
 
-            <div class="mt-3 flex items-end justify-between gap-3">
-              <!-- Inline variant: in a composer the picker is one action among
-                   several, so it reads as a button rather than taking a
-                   dropzone's worth of vertical space above the Send button. -->
-              <tk-file-picker
-                class="min-w-0 flex-1"
-                variant="inline"
-                multiple
-                [(files)]="files"
-                [maxBytes]="maxUploadBytes"
-                [disabled]="sending()"
-                [progress]="uploadProgress()"
-                [label]="'tickets.detail.attach' | transloco"
-              />
+            <div class="mt-3 flex justify-end">
               <button tkButton class="shrink-0" [disabled]="composerEmpty() || sending()" (click)="send()">
                 @if (sending()) {
                   <tk-spinner [size]="16" />
@@ -387,7 +419,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
       <tk-resolve-dialog
         [(open)]="resolveOpen"
         (openChange)="onResolveClosed($event)"
-        [status]="resolveTo()"
+        [status]="resolveCategory()"
         [saving]="resolveSaving()"
         [error]="resolveError()"
         (confirmed)="applyResolution($event)"
@@ -446,7 +478,36 @@ export class TicketDetail {
 
   protected readonly errorText = computed(() => errorMessage(this.ticket.error()));
 
-  protected readonly statusTone = computed(() => toneFor(STATUS_TONE, this.ticket.value()?.status));
+  /** Tone comes from the category; the words come from the workspace. */
+  protected readonly statusTone = computed(() =>
+    toneFor(STATUS_TONE, this.ticket.value()?.statusCategory),
+  );
+  protected readonly statusLabel = computed(() => this.ticket.value()?.statusName ?? '');
+
+  /** Resolved or closed — the work is over. */
+  protected readonly finished = computed(() =>
+    isTerminalCategory(this.ticket.value()?.statusCategory ?? ''),
+  );
+
+  /**
+   * The moves the workflow allows from where the ticket is now, plus the status
+   * it is in.
+   *
+   * Keyed on the ticket's own status so it re-fetches when the status changes —
+   * the next set of legal moves depends on where it just landed.
+   */
+  private readonly reachableStatuses = resource({
+    params: () => ({ from: this.ticket.value()?.status ?? '' }),
+    loader: ({ params }) =>
+      params.from ? this.api.reachableStatuses(params.from) : Promise.resolve([]),
+  });
+
+  protected readonly reachable = computed(() => valueOr(this.reachableStatuses, []));
+
+  /** Category of a status value, for deciding whether the resolve dialog opens. */
+  private categoryOf(value: string): string {
+    return this.reachable().find((s) => s.value === value)?.category ?? '';
+  }
 
   /**
    * The status select's value, owned here rather than read off the resource.
@@ -459,7 +520,22 @@ export class TicketDetail {
   protected readonly statusValue = signal('');
 
   protected readonly resolveOpen = signal(false);
-  protected readonly resolveTo = signal<'resolved' | 'closed'>('resolved');
+  /**
+   * The status the Resolve button moves to: the first reachable one in the
+   * resolved category.
+   *
+   * A button labelled Resolve that sent the literal word "resolved" would 400
+   * the moment a workspace renamed or replaced that status — which is the whole
+   * point of letting them.
+   */
+  protected readonly resolvedValue = computed(
+    () => this.reachable().find((status) => status.category === 'resolved')?.value ?? '',
+  );
+
+  /** The status VALUE being moved to — a workspace name, not one of two words. */
+  protected readonly resolveTo = signal('');
+  /** Its category, which is what decides the dialog's wording. */
+  protected readonly resolveCategory = signal<'resolved' | 'closed'>('resolved');
   protected readonly resolveSaving = signal(false);
   protected readonly resolveError = signal<string | null>(null);
 
@@ -573,22 +649,36 @@ export class TicketDetail {
   });
 
   /**
-   * Agents this composer can name — empty in private mode, which is how the
-   * editor knows to switch mentions off rather than offer a control that would
-   * notify nobody.
+   * Who this composer can name.
+   *
+   * Empty in private mode — that is how the editor switches mentions off
+   * altogether, rather than offering a picker that would notify nobody.
+   *
+   * **Agents and admins only.** A customer is not mentionable: the notification
+   * is agent-facing and being named would hand them a "mentioning me" view of
+   * tickets that are not theirs.
+   *
+   * **You are in your own list.** Excluding yourself seemed tidy and was wrong
+   * twice over: in a workspace with one agent it left the list empty, which the
+   * editor reads as "mentions are off", so typing @ did nothing at all and
+   * looked broken. And naming yourself is genuinely useful — it files the ticket
+   * under Mentioning me as a bookmark. Nothing is sent: both the bell and the
+   * email skip the person who wrote the comment.
    */
   protected readonly mentionable = computed<MentionCandidate[]>(() => {
+    this.lang();
     if (this.mode() === 'private') return [];
     const me = this.session.user()?.id;
-    return valueOr(this.agents, [])
-      // Naming yourself is not a way to leave yourself a note — that is what
-      // the private mode beside it is for.
-      .filter((agent) => agent.id !== me)
-      .map((agent) => ({
-        id: agent.id,
-        name: agent.name || agent.email || '',
-        detail: agent.name ? (agent.email ?? undefined) : undefined,
-      }));
+    return valueOr(this.agents, []).map((agent) => ({
+      id: agent.id,
+      name: agent.name || agent.email || '',
+      detail:
+        agent.id === me
+          ? this.transloco.translate('tickets.detail.you')
+          : agent.name
+            ? (agent.email ?? undefined)
+            : undefined,
+    }));
   });
 
   private readonly agents = resource({ loader: () => this.api.agents() });
@@ -752,8 +842,17 @@ export class TicketDetail {
     if (status === previous) return;
     this.statusValue.set(status);
 
-    if (status === 'resolved' || status === 'closed') {
+    // Whether to ask for a resolution is a CATEGORY question. A workspace's
+    // "Shipped" or "Won't fix" sits in resolved or closed just as much as the
+    // built-in names do, and the API asks for a note on every one of them —
+    // matching on the two literal words would send half of them to a 400.
+    const category = this.categoryOf(status);
+    if (isTerminalCategory(category)) {
       this.resolveTo.set(status);
+      // Narrowed here rather than typing categoryOf: the dialog only has copy
+      // for the two terminal ones, and isTerminalCategory has already proved it
+      // is one of them.
+      this.resolveCategory.set(category === 'closed' ? 'closed' : 'resolved');
       this.resolveError.set(null);
       this.resolveOpen.set(true);
       return;
@@ -767,7 +866,7 @@ export class TicketDetail {
     this.resolveError.set(null);
     try {
       await this.api.update(this.id(), {
-        status: payload.status,
+        status: this.resolveTo(),
         resolutionNote: payload.note,
         resolutionLink: payload.link,
         timeSpentMinutes: payload.minutes,

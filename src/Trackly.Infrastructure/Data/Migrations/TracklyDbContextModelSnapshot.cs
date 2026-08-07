@@ -62,6 +62,13 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("sent_at");
 
+                    b.Property<string>("StatusCategory")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("open")
+                        .HasColumnName("status_category");
+
                     b.Property<string>("Subject")
                         .IsRequired()
                         .HasColumnType("text")
@@ -1649,6 +1656,9 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.HasIndex("WorkspaceId", "Status")
                         .HasDatabaseName("ix_tickets_workspace_id_status");
 
+                    b.HasIndex("WorkspaceId", "StatusCategory")
+                        .HasDatabaseName("ix_tickets_workspace_id_status_category");
+
                     b.ToTable("tickets");
                 });
 
@@ -1800,6 +1810,95 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_ticket_links_ticket_id_url");
 
                     b.ToTable("ticket_links", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketStatus", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("category");
+
+                    b.Property<string>("Color")
+                        .HasColumnType("text")
+                        .HasColumnName("color");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_default");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_system");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("value");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_statuses");
+
+                    b.HasIndex("WorkspaceId", "Value")
+                        .IsUnique()
+                        .HasDatabaseName("ix_ticket_statuses_workspace_id_value");
+
+                    b.ToTable("ticket_statuses", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketStatusTransition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("FromStatusId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("from_status_id");
+
+                    b.Property<Guid>("ToStatusId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("to_status_id");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_status_transitions");
+
+                    b.HasIndex("ToStatusId")
+                        .HasDatabaseName("ix_ticket_status_transitions_to_status_id");
+
+                    b.HasIndex("WorkspaceId", "FromStatusId")
+                        .HasDatabaseName("ix_ticket_status_transitions_workspace_id_from_status_id");
+
+                    b.ToTable("ticket_status_transitions", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketTimeEntry", b =>
@@ -2991,6 +3090,45 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("CreatedBy");
 
                     b.Navigation("Ticket");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketStatus", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_statuses_workspaces_workspace_id");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketStatusTransition", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.TicketStatus", "FromStatus")
+                        .WithMany()
+                        .HasForeignKey("FromStatusId")
+                        .HasConstraintName("fk_ticket_status_transitions_ticket_statuses_from_status_id");
+
+                    b.HasOne("Trackly.Core.Entities.TicketStatus", "ToStatus")
+                        .WithMany()
+                        .HasForeignKey("ToStatusId")
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_status_transitions_ticket_statuses_to_status_id");
+
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_status_transitions_workspaces_workspace_id");
+
+                    b.Navigation("FromStatus");
+
+                    b.Navigation("ToStatus");
 
                     b.Navigation("Workspace");
                 });

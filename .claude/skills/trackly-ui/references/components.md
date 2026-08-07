@@ -265,6 +265,30 @@ Four rules:
 Prose styling (`.rich-text`, `.editor-surface`) lives in `styles.scss` and is
 shared by both, so what you type is what you see afterwards.
 
+### Putting the trigger somewhere else
+
+`headless` renders no trigger — just the chips, progress bar and messages — and
+`open()` opens the dialog. Use it when the button has to live somewhere the
+picker cannot reach, like the editor's toolbar:
+
+```html
+<tk-editor [(value)]="body">
+  <span editor-tools class="contents">
+    <span class="editor-tool-divider" aria-hidden="true"></span>
+    <button type="button" class="editor-tool" (click)="picker.open()">
+      <tk-icon name="paperclip" [size]="15" />
+    </button>
+  </span>
+</tk-editor>
+<tk-file-picker #picker headless multiple [(files)]="files" />
+```
+
+`class="contents"` on the slot wrapper is what keeps the divider and the button
+as direct flex children of the toolbar instead of one nested box.
+
+Do **not** solve this by splitting the picker in two — the file list and the
+input that fills it are the state this component exists to own.
+
 ### Never hand-roll a file input
 
 `tk-file-picker` is the only file input in the app. Writing
@@ -423,6 +447,31 @@ to @Component") and never at the comment, so the cause is genuinely hard to see.
 
 Quote with "double quotes" in template comments. Save backticks for JSDoc above
 the `@Component`, which is ordinary code.
+
+It is easy to do by reflex when writing a comment that mentions a CSS property
+or a method name — `align-items`, `open()`. Write them bare. The build always
+catches it, but it reports six unrelated TypeScript errors and none of them
+mention the file's comment, so it costs a minute every time.
+
+### A popup inside a modal must leave the DOM
+
+`position: fixed` does **not** escape an ancestor that has a `transform` — that
+ancestor becomes the containing block for fixed descendants. Trackly's modal
+animates in with `animate-float-in`, whose keyframes use `transform`, so
+anything `fixed` inside a dialog is positioned against the *modal* and then
+clipped away by the modal's own `overflow: hidden`.
+
+`absolute` fares no better: `.modal > .card-body` scrolls, so it clips too.
+
+The only thing that works is moving the element to `<body>` while it is open —
+see `Combobox`. Angular keeps owning the node: its bindings still update and it
+still removes it, because removal asks for the node's *current* parent. Two
+things the move breaks, both handled there:
+
+- `host.contains(relatedTarget)` in a focus-out check no longer sees it, so the
+  popup has to be checked separately or dragging its scrollbar closes it.
+- If the component is destroyed while open, remove the node in `onDestroy` —
+  Angular cannot reach it from the view.
 
 ### Never centre an animated panel with `transform`
 

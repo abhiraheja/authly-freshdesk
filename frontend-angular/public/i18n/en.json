@@ -65,8 +65,10 @@
       "newTicket": "New ticket",
       "configuration": "Configuration",
       "ticketLayout": "Ticket layout",
+      "statuses": "Statuses & workflow",
       "mentioned": "Mentioning me",
-      "watching": "Watching"
+      "watching": "Watching",
+      "active": "Active"
     }
   },
   "palette": {
@@ -299,7 +301,10 @@
       "onlyYou": "Only you",
       "placeholderPublic": "Reply to {{name}} — the customer will see this",
       "placeholderTeam": "Note for the team — every agent sees this, the customer does not. Type @ to mention someone.",
-      "placeholderPrivate": "A note only you can read. Nobody else sees it, not even an admin."
+      "placeholderPrivate": "A note only you can read. Nobody else sees it, not even an admin.",
+      "slaStopped": "The clock stopped when this ticket was resolved.",
+      "slaMet": "Resolved within target",
+      "slaMissed": "Resolved after target"
     },
     "noCustomer": "No customer",
     "links": {
@@ -326,7 +331,8 @@
     "open": "Open",
     "pending": "Pending",
     "resolved": "Resolved",
-    "closed": "Closed"
+    "closed": "Closed",
+    "active": "Active"
   },
   "priority": {
     "low": "Low",
@@ -438,7 +444,7 @@
       "loadFailed": "Couldn't load SLA policies",
       "firstResponse": "First response (h)",
       "resolution": "Resolution (h)",
-      "hint": "Applies to new tickets and to any ticket whose priority changes — tickets already open keep the deadlines they were given. The resolve clock pauses while a ticket is Pending.",
+      "hint": "Applies to new tickets, to any ticket whose priority changes, and — when you save — to open tickets that never had a target at all. Tickets that already have deadlines keep them. The resolve clock pauses while a ticket is Pending.",
       "save": "Save SLA targets",
       "saved": "SLA targets saved"
     },
@@ -498,6 +504,57 @@
       "renameLabel": "New name",
       "saved": "Ticket layout saved",
       "reset": "Reset to defaults"
+    },
+    "statuses": {
+      "title": "Statuses & workflow",
+      "subtitle": "The states a ticket can be in, and which moves between them are allowed.",
+      "tabStatuses": "Statuses",
+      "tabWorkflow": "Workflow",
+      "loadFailed": "Couldn't load the statuses",
+      "categoryHint": "Every status sits under one of five fixed categories. The name is yours; the category is what Trackly reasons about — SLA clocks, dashboard counts and \"is this ticket still open\" all read the category, never the name.",
+      "addPlaceholder": "New status name",
+      "add": "Add",
+      "addTo": "Add a status to {{category}}",
+      "empty": "No statuses in this category yet.",
+      "default": "Default",
+      "defaultHint": "Where a new ticket starts",
+      "builtIn": "Built-in",
+      "makeDefault": "Make default",
+      "categoryLabel": "Category",
+      "nameLabel": "Status name",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "created": "Status added",
+      "saved": "Status saved",
+      "deleted": "Status deleted",
+      "deleteHeading": "Delete \"{{name}}\"?",
+      "deleteMessage": "It disappears from every picker and from the workflow. Statuses that tickets are using can't be deleted — retire those instead.",
+      "recategorise": "Moving a status to another category changes how Trackly treats every ticket already in it.",
+      "behaviour": {
+        "open": "Counts as open. SLA clocks run. A new ticket starts here.",
+        "pending": "Counts as open, but SLA clocks pause while a ticket sits here and resume with the waiting time added back on.",
+        "active": "Counts as open. SLA clocks run. Use it for work someone has actually picked up.",
+        "resolved": "Ends the ticket. Both clocks stop, a resolution note is required, and the customer gets the resolution email and the CSAT survey.",
+        "closed": "Ends the ticket. Both clocks stop and a resolution note is required, but no survey is sent."
+      }
+    },
+    "workflow": {
+      "intro": "Tick a cell to allow that move. A row is where the ticket is now; a column is where it may go.",
+      "anyStatus": "Any status",
+      "anyStatusHint": "Allowed from wherever the ticket happens to be.",
+      "from": "From",
+      "to": "To",
+      "openAll": "Allow everything",
+      "clearAll": "Clear all",
+      "save": "Save workflow",
+      "saved": "Workflow saved",
+      "loadFailed": "Couldn't load the workflow",
+      "unsaved": "Unsaved changes",
+      "emptyWarning": "Nothing is allowed yet, so every status change would be rejected. Trackly treats a completely empty workflow as \"allow everything\" instead — tick at least one cell to take control of it.",
+      "unreachable": "Nothing can reach {{names}}. Agents will never be able to move a ticket into it.",
+      "sameStatus": "Staying put is always allowed.",
+      "impliedByAny": "Already allowed from any status.",
+      "cellLabel": "{{from}} to {{to}}"
     }
   },
   "customers": {

@@ -19,6 +19,8 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<TicketWatcher> TicketWatchers => Set<TicketWatcher>();
     public DbSet<TicketTimeEntry> TicketTimeEntries => Set<TicketTimeEntry>();
     public DbSet<TicketLink> TicketLinks => Set<TicketLink>();
+    public DbSet<TicketStatus> TicketStatuses => Set<TicketStatus>();
+    public DbSet<TicketStatusTransition> TicketStatusTransitions => Set<TicketStatusTransition>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<CommentMention> CommentMentions => Set<CommentMention>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
@@ -148,10 +150,15 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             // Nothing depended on the guarantee: every customer-facing send in
             // NotificationService already bails on a null email.
             e.ToTable("tickets");
-            e.Property(t => t.Status).HasDefaultValue(TicketStatus.Open);
+            e.Property(t => t.Status).HasDefaultValue(TicketStatusCategory.DefaultValue);
+            e.Property(t => t.StatusCategory).HasDefaultValue(TicketStatusCategory.Open);
             e.Property(t => t.Priority).HasDefaultValue(TicketPriority.Medium);
             e.Property(t => t.Channel).HasDefaultValue(TicketChannel.Web);
             e.HasIndex(t => new { t.WorkspaceId, t.Status });
+            // Every rule in Trackly filters on the category, not the status, so
+            // this is the index that actually gets used by the queue counts, the
+            // SLA sweep and the "needs attention" views.
+            e.HasIndex(t => new { t.WorkspaceId, t.StatusCategory });
             e.HasIndex(t => new { t.WorkspaceId, t.AssigneeId });
             e.HasIndex(t => new { t.WorkspaceId, t.RequesterId });
             e.HasOne(t => t.Workspace).WithMany().HasForeignKey(t => t.WorkspaceId)
@@ -190,6 +197,33 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             // workspace was billed for — losing it silently is not acceptable.
             e.HasOne(x => x.User).WithMany().HasForeignKey(x => x.UserId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<TicketStatus>(e =>
+        {
+            e.ToTable("ticket_statuses");
+            e.Property(s => s.IsActive).HasDefaultValue(true);
+            // The value is what sits on every ticket, so it has to be unique
+            // within a workspace or two statuses would be indistinguishable
+            // once stored.
+            e.HasIndex(s => new { s.WorkspaceId, s.Value }).IsUnique();
+            e.HasOne(s => s.Workspace).WithMany().HasForeignKey(s => s.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TicketStatusTransition>(e =>
+        {
+            e.ToTable("ticket_status_transitions");
+            e.HasIndex(t => new { t.WorkspaceId, t.FromStatusId });
+            e.HasOne(t => t.Workspace).WithMany().HasForeignKey(t => t.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // NoAction on both: the service deletes a status's transitions
+            // explicitly, and two cascade paths from ticket_statuses into this
+            // table is a schema PostgreSQL will not create.
+            e.HasOne(t => t.FromStatus).WithMany().HasForeignKey(t => t.FromStatusId)
+                .OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(t => t.ToStatus).WithMany().HasForeignKey(t => t.ToStatusId)
+                .OnDelete(DeleteBehavior.NoAction);
         });
 
         modelBuilder.Entity<TicketLink>(e =>

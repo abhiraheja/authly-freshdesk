@@ -7,7 +7,30 @@ public class Ticket
     public Workspace Workspace { get; set; } = null!;
     public string Subject { get; set; } = null!;
     public string Description { get; set; } = null!;
-    public string Status { get; set; } = TicketStatus.Open;
+
+    /// <summary>
+    /// The workspace status's <see cref="TicketStatus.Value"/>, not its id.
+    ///
+    /// A value rather than a foreign key because it is what automation rules
+    /// match on, what the email and chat connectors write, and what every
+    /// pre-workflow row already holds — an id would have made all three a
+    /// migration.
+    /// </summary>
+    public string Status { get; set; } = TicketStatusCategory.DefaultValue;
+
+    /// <summary>
+    /// The category of <see cref="Status"/>, denormalised.
+    ///
+    /// **Every rule in Trackly tests this, never the status.** Keeping it on the
+    /// row is what lets "open tickets", "pause the clock", "ask for a resolution
+    /// note" and "issue a CSAT survey" stay single indexed comparisons instead of
+    /// a join in every query in the system.
+    ///
+    /// Written whenever Status is written, and re-written across every affected
+    /// ticket when an admin moves a status to another category. Never set one
+    /// without the other.
+    /// </summary>
+    public string StatusCategory { get; set; } = TicketStatusCategory.Open;
     public string Priority { get; set; } = TicketPriority.Medium;
     public Guid? CategoryId { get; set; }
     public Category? Category { get; set; }
@@ -65,15 +88,6 @@ public class Ticket
     public ICollection<TicketTag> TicketTags { get; set; } = new List<TicketTag>();
     public ICollection<TicketTimeEntry> TimeEntries { get; set; } = new List<TicketTimeEntry>();
     public ICollection<TicketLink> Links { get; set; } = new List<TicketLink>();
-}
-
-public static class TicketStatus
-{
-    public const string Open = "open";
-    public const string Pending = "pending";
-    public const string Resolved = "resolved";
-    public const string Closed = "closed";
-    public static readonly string[] All = [Open, Pending, Resolved, Closed];
 }
 
 public static class TicketPriority

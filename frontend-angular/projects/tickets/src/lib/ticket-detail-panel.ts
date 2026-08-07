@@ -21,10 +21,12 @@ import {
   UiPrefsStore,
   formatDateTime,
   errorMessage,
+  isTerminalCategory,
   valueOr,
   slaState,
   toneFor,
   type TicketDetail,
+  type Tone,
   type TriageSuggestion,
   type UpdateTicketBody,
 } from '@trackly/core';
@@ -254,6 +256,16 @@ const PANEL_BY_KEY = new Map(PANEL_DEFAULTS.map((panel) => [panel.key, panel]));
           <div class="mt-3 h-2 overflow-hidden rounded-full bg-muted">
             <div class="h-full rounded-full transition-[width]" [class]="slaBarClass()" [style.width.%]="slaPercent()"></div>
           </div>
+        } @else if (finished()) {
+          <!-- The clock did not fail to start, it stopped. Saying "no policy
+               covers this ticket" on something that was resolved sends an agent
+               to the settings screen to fix a setting that is already right. -->
+          <p class="text-body text-muted-foreground">{{ 'tickets.detail.slaStopped' | transloco }}</p>
+          @if (slaOutcome(); as outcome) {
+            <p class="mt-2">
+              <tk-badge [tone]="outcome.tone">{{ outcome.labelKey | transloco }}</tk-badge>
+            </p>
+          }
         } @else {
           <p class="text-body text-muted-foreground">{{ 'tickets.detail.noSla' | transloco }}</p>
           <a tkButton variant="outline" size="sm" class="mt-3 w-full" routerLink="/admin/settings/sla">
@@ -854,11 +866,36 @@ export class TicketDetailPanel {
     inject(DestroyRef).onDestroy(() => clearInterval(handle));
   }
 
-  /** The deadline actually in play: first response until it is met, then resolve. */
+  /** Resolved or closed — the clock stopped rather than never started. */
+  protected readonly finished = computed(() => isTerminalCategory(this.ticket().statusCategory));
+
+  /**
+   * Whether a finished ticket beat its resolve target.
+   *
+   * Null when there is nothing to compare — no target was ever set, or the
+   * ticket has no resolution time. An absent verdict is better than a green
+   * badge earned by the absence of a deadline.
+   */
+  protected readonly slaOutcome = computed<{ tone: Tone; labelKey: string } | null>(() => {
+    const t = this.ticket();
+    if (!this.finished() || !t.resolveDueAt || !t.resolvedAt) return null;
+    return new Date(t.resolvedAt) <= new Date(t.resolveDueAt)
+      ? { tone: 'success', labelKey: 'tickets.detail.slaMet' }
+      : { tone: 'danger', labelKey: 'tickets.detail.slaMissed' };
+  });
+
+  /**
+   * The deadline actually in play: first response until it is met, then resolve.
+   *
+   * The terminal check comes FIRST. It used to sit between the two legs, so a
+   * ticket closed without anybody replying kept counting its first-response
+   * breach upward forever — the card read "Breached, 17:06:00 over" on work
+   * that had finished the previous day.
+   */
   private readonly dueAt = computed(() => {
     const t = this.ticket();
+    if (this.finished()) return null;
     if (t.firstResponseDueAt && !t.firstResponseAt) return t.firstResponseDueAt;
-    if (t.status === 'resolved' || t.status === 'closed') return null;
     return t.resolveDueAt;
   });
 

@@ -37,6 +37,7 @@ builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<AttachmentService>();
 builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<TicketOptionService>();
+builder.Services.AddScoped<TicketStatusService>();
 builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<SlaService>();
 builder.Services.AddScoped<KbService>();

@@ -30,16 +30,18 @@ export interface AttachmentItem {
 }
 
 /**
- * Attachments under a message, or as a list.
+ * Attachments under a message, or as a list. **One presentation everywhere:** a
+ * compact row — thumbnail, name, size — that opens the image full size.
  *
- * **An image is shown, not named.** A filename tells you nothing about a
- * screenshot, and a screenshot is most of what a support desk receives — so
- * anything that decodes as an image renders as a thumbnail that opens full size.
- * Everything else stays a chip.
+ * There used to be a second one: images rendered as large inline previews under
+ * the message, on the argument that a filename says nothing about a screenshot.
+ * True, and a 14rem picture beside the word "test" still turned a reply into an
+ * attachment with a caption. The row keeps the useful half — you can see at a
+ * glance that it is a screenshot rather than a PDF — and costs one line instead
+ * of ten. The picture is a click away, which is where it belongs.
  *
  * ```html
  * <tk-attachment-list [items]="attachmentsOf(comment)" [dark]="isAgentReply(comment)" />
- * <tk-attachment-list layout="rows" [items]="allAttachments()" />
  * ```
  */
 @Component({
@@ -48,63 +50,50 @@ export interface AttachmentItem {
   imports: [Icon, TranslocoPipe],
   host: { class: 'block' },
   template: `
-    @if (layout() === 'rows') {
-      @for (file of items(); track file.id) {
-        <!-- Still a real <a> even though a plain click is intercepted: that is
-             what keeps Ctrl/⌘-click, middle-click and "copy link address"
-             working, which a <button> would silently take away. -->
-        <a
-          class="attachment-row"
-          [class.is-image]="showsImage(file)"
-          [href]="file.url"
-          target="_blank"
-          rel="noopener"
-          (click)="onRowClick(file, $event)"
-        >
-          @if (showsImage(file)) {
-            <img
-              class="attachment-row-thumb"
-              [src]="file.url"
-              [alt]="file.fileName"
-              loading="lazy"
-              (error)="onImageError(file)"
-            />
-          } @else {
-            <tk-icon name="paperclip" [size]="16" class="shrink-0 text-muted-foreground" />
-          }
-          <span class="min-w-0 flex-1 truncate font-semibold">{{ file.fileName }}</span>
-          <span class="shrink-0 text-meta text-muted-foreground">{{ size(file) }}</span>
-        </a>
-      }
-    } @else {
-      @if (previews().length) {
-        <div class="attachment-previews">
-          @for (file of previews(); track file.id) {
-            <button
-              type="button"
-              class="attachment-preview"
-              [attr.aria-label]="file.fileName"
-              (click)="viewing.set(file)"
-            >
-              <img [src]="file.url" [alt]="file.fileName" loading="lazy" (error)="onImageError(file)" />
-              <span class="attachment-preview-caption">{{ file.fileName }} · {{ size(file) }}</span>
-            </button>
-          }
-        </div>
-      }
+    @if (items().length) {
+      <div class="attachment-rows">
+        @for (file of items(); track file.id) {
+          <!-- Still a real <a> even though a plain click is intercepted: that is
+               what keeps Ctrl/⌘-click, middle-click and "copy link address"
+               working, which a <button> would silently take away. -->
+          <a
+            class="attachment-row"
+            [class.is-image]="showsImage(file)"
+            [class.on-dark]="dark()"
+            [href]="file.url"
+            [title]="file.fileName"
+            target="_blank"
+            rel="noopener"
+            (click)="onRowClick(file, $event)"
+          >
+            @if (showsImage(file)) {
+              <img
+                class="attachment-row-thumb"
+                [src]="file.url"
+                [alt]="file.fileName"
+                loading="lazy"
+                (error)="onImageError(file)"
+              />
+            } @else {
+              <span class="attachment-row-icon">
+                <tk-icon name="paperclip" [size]="16" />
+              </span>
+            }
 
-      @for (file of chips(); track file.id) {
-        <a
-          class="attachment-chip"
-          [class.attachment-chip-on-dark]="dark()"
-          [href]="file.url"
-          target="_blank"
-          rel="noopener"
-        >
-          <tk-icon name="paperclip" [size]="14" />
-          {{ file.fileName }} · {{ size(file) }}
-        </a>
-      }
+            <span class="min-w-0 flex-1">
+              <span class="block truncate font-semibold">{{ file.fileName }}</span>
+              <span class="attachment-row-size">{{ size(file) }}</span>
+            </span>
+
+            <!-- Only on images: it is the one kind that opens here rather than
+                 downloading, and an eye beside a PDF would promise a viewer
+                 Trackly does not have. -->
+            @if (showsImage(file)) {
+              <tk-icon name="eye" [size]="16" class="attachment-row-action" />
+            }
+          </a>
+        }
+      </div>
     }
 
     <!-- Full-size viewer. Its own overlay rather than tk-modal: a modal's card
@@ -139,8 +128,6 @@ export interface AttachmentItem {
 })
 export class AttachmentList {
   readonly items = input<readonly AttachmentItem[]>([]);
-  /** `chips` under a message bubble; `rows` for a full-width list. */
-  readonly layout = input<'chips' | 'rows'>('chips');
   /**
    * Set on a coloured message bubble so the chip stays legible.
    *
@@ -163,9 +150,6 @@ export class AttachmentList {
   private readonly broken = signal<ReadonlySet<string>>(new Set());
 
   private readonly viewer = viewChild<ElementRef<HTMLElement>>('viewer');
-
-  protected readonly previews = computed(() => this.items().filter((file) => this.showsImage(file)));
-  protected readonly chips = computed(() => this.items().filter((file) => !this.showsImage(file)));
 
   constructor() {
     // Focus the overlay so Esc reaches it — without this the key goes to

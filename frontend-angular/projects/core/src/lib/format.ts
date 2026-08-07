@@ -21,9 +21,21 @@ export interface ToneLabel {
   labelKey: string;
 }
 
+/**
+ * Tone and label by status **category**, not by status.
+ *
+ * A workspace can call its states anything — "Estimation required", "Awaiting
+ * CAB" — and there is no colour this map could hold for a name it has never
+ * seen. The category is the fixed five, so it always has an answer.
+ *
+ * The `labelKey` is only used where no status name is available (an old row, a
+ * summary that predates the field). Everywhere a ticket is on screen, render
+ * `statusName` and take only the tone from here.
+ */
 export const STATUS_TONE: Record<string, ToneLabel> = {
   open: { tone: 'info', labelKey: 'status.open' },
   pending: { tone: 'warning', labelKey: 'status.pending' },
+  active: { tone: 'primary', labelKey: 'status.active' },
   resolved: { tone: 'success', labelKey: 'status.resolved' },
   closed: { tone: 'neutral', labelKey: 'status.closed' },
 };

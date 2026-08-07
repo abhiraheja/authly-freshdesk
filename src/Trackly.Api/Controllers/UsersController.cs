@@ -150,7 +150,7 @@ public class UsersController(TracklyDbContext db, IWorkspaceFileStorage storage)
             user.Role, user.IsActive, user.CreatedAt, user.CustomFields,
             AvatarUrl = UserAvatar.UrlFor(user),
             TotalTickets = await tickets.CountAsync(ct),
-            OpenTickets = await tickets.CountAsync(t => t.Status == TicketStatus.Open, ct),
+            OpenTickets = await tickets.CountAsync(t => t.StatusCategory == TicketStatusCategory.Open, ct),
         });
     }
 
@@ -234,8 +234,11 @@ public class UsersController(TracklyDbContext db, IWorkspaceFileStorage storage)
 
         // A year is safe because the URL carries a version token derived from the
         // storage key — replacing the photo changes the URL, so nothing stale is
-        // ever reachable. `private` keeps it out of shared proxy caches.
+        // ever reachable. `private` keeps it out of shared proxy caches, and
+        // `Vary: Cookie` keys the entry by session so the next person to sign in
+        // on a shared machine gets a real authorisation check rather than a hit.
         Response.Headers.CacheControl = "private, max-age=31536000, immutable";
+        Response.Headers.Vary = "Cookie";
 
         var stream = await storage.OpenReadAsync(workspaceId, user.AvatarStorageKey, ct);
         return File(stream, user.AvatarContentType ?? "application/octet-stream");
