@@ -10,13 +10,22 @@ public class TeamService(TracklyDbContext db)
 {
     public async Task<IReadOnlyList<TeamDto>> ListAsync(Actor actor, CancellationToken ct)
     {
-        return await db.Teams
+        // Materialised before projecting, not projected in SQL: the member DTO
+        // now carries an avatar path that is computed in C#, and EF only client-
+        // evaluates the OUTER projection — inside a nested collection select it
+        // would fail to translate.
+        var teams = await db.Teams
             .Where(t => t.WorkspaceId == actor.WorkspaceId)
             .OrderBy(t => t.Name)
+            .Include(t => t.Members)
+            .ThenInclude(m => m.User)
+            .ToListAsync(ct);
+
+        return teams
             .Select(t => new TeamDto(
                 t.Id, t.Name,
-                t.Members.Select(m => new UserSummaryDto(m.User.Id, m.User.Name, m.User.Email, m.User.Role)).ToList()))
-            .ToListAsync(ct);
+                t.Members.Select(m => UserSummaryDto.From(m.User)!).ToList()))
+            .ToList();
     }
 
     public async Task<TeamDto> CreateAsync(Actor actor, string name, CancellationToken ct)

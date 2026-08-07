@@ -13,7 +13,7 @@ import {
 } from '@trackly/core';
 import {
   Alert,
-  Avatar,
+  AvatarUpload,
   Badge,
   Button,
   Card,
@@ -41,7 +41,7 @@ import { CustomerForm } from './customer-form';
     TranslocoPipe,
     RouterLink,
     Alert,
-    Avatar,
+    AvatarUpload,
     Badge,
     Button,
     Card,
@@ -68,7 +68,15 @@ import { CustomerForm } from './customer-form';
         <div class="space-y-4">
           <tk-card>
             <div class="text-center">
-              <tk-avatar class="mx-auto" [name]="displayName()" [size]="72" />
+              <tk-avatar-upload
+                [name]="displayName()"
+                [imageUrl]="person.avatarUrl"
+                [size]="88"
+                [uploading]="photoBusy()"
+                [error]="photoError()"
+                (selected)="uploadPhoto($event)"
+                (removed)="removePhoto()"
+              />
               <h1 class="mt-3 font-display text-section font-extrabold">{{ displayName() }}</h1>
               @if (person.company) {
                 <p class="text-body text-muted-foreground">{{ person.company }}</p>
@@ -239,6 +247,9 @@ export class CustomerDetail {
   protected readonly saving = signal(false);
   protected readonly form = viewChild(CustomerForm);
 
+  protected readonly photoBusy = signal(false);
+  protected readonly photoError = signal<string | undefined>(undefined);
+
   protected readonly errorText = computed(() => errorMessage(this.customer.error()));
   protected readonly ticketList = computed(() => this.tickets.value()?.items ?? []);
   protected readonly displayName = computed(() => {
@@ -280,6 +291,40 @@ export class CustomerDetail {
 
   protected openEdit(): void {
     this.editing.set(true);
+  }
+
+  /**
+   * Patches the loaded customer instead of reloading it.
+   *
+   * `reload()` would put the profile back on the wire and, worse, leave the old
+   * photo on screen for the length of that round trip — the picker drops its
+   * local preview the moment `uploading` goes false. The response already
+   * carries the new URL, so there is nothing to go and ask for.
+   */
+  protected async uploadPhoto(file: File): Promise<void> {
+    this.photoBusy.set(true);
+    this.photoError.set(undefined);
+    try {
+      const { avatarUrl } = await this.api.uploadAvatar(this.id(), file);
+      this.customer.update((current) => (current ? { ...current, avatarUrl } : current));
+    } catch (error) {
+      this.photoError.set(errorMessage(error));
+    } finally {
+      this.photoBusy.set(false);
+    }
+  }
+
+  protected async removePhoto(): Promise<void> {
+    this.photoBusy.set(true);
+    this.photoError.set(undefined);
+    try {
+      await this.api.removeAvatar(this.id());
+      this.customer.update((current) => (current ? { ...current, avatarUrl: null } : current));
+    } catch (error) {
+      this.photoError.set(errorMessage(error));
+    } finally {
+      this.photoBusy.set(false);
+    }
   }
 
   protected async save(): Promise<void> {

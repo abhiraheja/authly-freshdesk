@@ -31,3 +31,4 @@ export * from './lib/auth/guards';
 export * from './lib/theme/theme.service';
 export * from './lib/format';
 export * from './lib/resource-utils';
+export * from './lib/upload/file-rules';

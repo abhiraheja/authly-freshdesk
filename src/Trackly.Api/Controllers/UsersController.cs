@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Trackly.Api.Auth;
 using Trackly.Core.Entities;
+using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
 
 namespace Trackly.Api.Controllers;
@@ -10,8 +11,11 @@ namespace Trackly.Api.Controllers;
 [ApiController]
 [Route("api/users")]
 [Authorize]
-public class UsersController(TracklyDbContext db) : ControllerBase
+public class UsersController(TracklyDbContext db, IWorkspaceFileStorage storage) : ControllerBase
 {
+    private const long MaxAvatarBytes = 1024 * 1024; // 1 MB — matches the logo cap
+    private static readonly string[] AllowedAvatarTypes = ["image/png", "image/jpeg", "image/webp"];
+
     [HttpGet("me")]
     public async Task<IActionResult> Me(CancellationToken ct)
     {
@@ -36,11 +40,18 @@ public class UsersController(TracklyDbContext db) : ControllerBase
         else if (!string.IsNullOrEmpty(role))
             users = users.Where(u => u.Role == role);
 
-        var list = await users
+        // Two steps: the avatar path is built in C#, and EF cannot translate it.
+        // Only the five columns come back, so this is still a narrow read.
+        var rows = await users
             .OrderBy(u => u.Name ?? u.Email)
-            .Select(u => new { u.Id, u.Name, u.Email, u.Role })
+            .Select(u => new { u.Id, u.Name, u.Email, u.Role, u.AvatarStorageKey })
             .ToListAsync(ct);
-        return Ok(list);
+
+        return Ok(rows.Select(u => new
+        {
+            u.Id, u.Name, u.Email, u.Role,
+            AvatarUrl = UserAvatar.UrlFor(u.Id, u.AvatarStorageKey),
+        }));
     }
 
     public record CustomerRequest(
@@ -137,10 +148,105 @@ public class UsersController(TracklyDbContext db) : ControllerBase
         {
             user.Id, user.Name, user.Email, user.Phone, user.Company, user.Location,
             user.Role, user.IsActive, user.CreatedAt, user.CustomFields,
+            AvatarUrl = UserAvatar.UrlFor(user),
             TotalTickets = await tickets.CountAsync(ct),
             OpenTickets = await tickets.CountAsync(t => t.Status == TicketStatus.Open, ct),
         });
     }
+
+    // ── Profile photo ───────────────────────────────────────────────────────
+    //
+    // Private, unlike the workspace logo: a logo is meant to be seen by anyone
+    // who lands on the portal, whereas a person's photo is theirs. It is stored
+    // with the default Private visibility, so `PublicUrlAsync` refuses it and no
+    // CDN URL for it can ever exist — the bytes only leave through the endpoint
+    // below, after the workspace check.
+
+    [HttpPost("{id:guid}/avatar")]
+    [RequestSizeLimit(MaxAvatarBytes + 1024)]
+    public async Task<IActionResult> UploadAvatar(Guid id, IFormFile file, CancellationToken ct)
+    {
+        if (!MayEditPhotoOf(id))
+            return Forbid();
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "A photo file is required." });
+        if (file.Length > MaxAvatarBytes)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, new { error = "Photos are limited to 1 MB." });
+        if (!AllowedAvatarTypes.Contains(file.ContentType))
+            return BadRequest(new { error = "Photo must be PNG, JPEG or WebP." });
+
+        var workspaceId = User.GetWorkspaceId();
+        var user = await db.Users.SingleOrDefaultAsync(u => u.WorkspaceId == workspaceId && u.Id == id, ct);
+        if (user is null) return NotFound();
+
+        var oldKey = user.AvatarStorageKey;
+        await using var stream = file.OpenReadStream();
+        user.AvatarStorageKey = await storage.SaveAsync(
+            workspaceId, $"{workspaceId}/avatars/{id}", file.FileName, stream, ct: ct);
+        user.AvatarContentType = file.ContentType;
+        user.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        // New key committed before the old blob goes, as in BrandingController:
+        // a failed delete then costs an orphaned object, not a user row pointing
+        // at bytes that no longer exist.
+        if (oldKey is not null)
+            await storage.DeleteAsync(workspaceId, oldKey, ct);
+
+        return Ok(new { AvatarUrl = UserAvatar.UrlFor(user) });
+    }
+
+    [HttpDelete("{id:guid}/avatar")]
+    public async Task<IActionResult> DeleteAvatar(Guid id, CancellationToken ct)
+    {
+        if (!MayEditPhotoOf(id))
+            return Forbid();
+
+        var workspaceId = User.GetWorkspaceId();
+        var user = await db.Users.SingleOrDefaultAsync(u => u.WorkspaceId == workspaceId && u.Id == id, ct);
+        if (user is null) return NotFound();
+
+        var key = user.AvatarStorageKey;
+        user.AvatarStorageKey = null;
+        user.AvatarContentType = null;
+        user.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        if (key is not null)
+            await storage.DeleteAsync(workspaceId, key, ct);
+        return NoContent();
+    }
+
+    // Readable by any signed-in member of the same workspace: avatars appear on
+    // ticket lists, comment threads and pickers, so restricting this further
+    // would just render broken images across the app. The workspace filter is
+    // what matters, and it is on the query.
+    [HttpGet("{id:guid}/avatar")]
+    public async Task<IActionResult> GetAvatar(Guid id, CancellationToken ct)
+    {
+        var workspaceId = User.GetWorkspaceId();
+        var user = await db.Users
+            .Where(u => u.WorkspaceId == workspaceId && u.Id == id)
+            .Select(u => new { u.AvatarStorageKey, u.AvatarContentType })
+            .SingleOrDefaultAsync(ct);
+        if (user?.AvatarStorageKey is null)
+            return NotFound();
+
+        // A year is safe because the URL carries a version token derived from the
+        // storage key — replacing the photo changes the URL, so nothing stale is
+        // ever reachable. `private` keeps it out of shared proxy caches.
+        Response.Headers.CacheControl = "private, max-age=31536000, immutable";
+
+        var stream = await storage.OpenReadAsync(workspaceId, user.AvatarStorageKey, ct);
+        return File(stream, user.AvatarContentType ?? "application/octet-stream");
+    }
+
+    /// <summary>
+    /// Your own photo always; anyone else's only as an agent or admin. A customer
+    /// editing another customer's profile photo has no legitimate path here.
+    /// </summary>
+    private bool MayEditPhotoOf(Guid userId) =>
+        userId == User.GetUserId() || User.GetActor().IsAgentOrAdmin;
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -160,6 +266,7 @@ public class UsersController(TracklyDbContext db) : ControllerBase
     private static object Dto(Trackly.Core.Entities.User u) => new
     {
         u.Id, u.Name, u.Email, u.Phone, u.Company, u.Location, u.Role, u.CustomFields,
+        AvatarUrl = UserAvatar.UrlFor(u),
     };
 
     public record UpdateUserRequest(string? Role, bool? IsActive);

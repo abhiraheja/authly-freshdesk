@@ -12,6 +12,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
+  MAX_ATTACHMENT_BYTES,
   PRIORITY_TONE,
   STATUS_TONE,
   SessionStore,
@@ -31,6 +32,7 @@ import {
   Badge,
   Button,
   Card,
+  FilePicker,
   Icon,
   InputDirective,
   Select,
@@ -58,8 +60,6 @@ const CHANNEL_ICON: Record<string, IconName> = {
   manual: 'pencil',
 };
 
-/** Matches the server's cap — see AttachmentService.MaxSizeBytes. */
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
 /**
  * The ticket view: conversation on the left, properties on the right.
@@ -86,6 +86,7 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
     Badge,
     Button,
     Card,
+    FilePicker,
     Icon,
     InputDirective,
     Select,
@@ -188,7 +189,12 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
                 @default {
                   @if (threadTab() === 'conversation') {
                     <article class="flex gap-3">
-                      <tk-avatar [name]="requesterName()" [size]="34" class="mt-0.5 shrink-0" />
+                      <tk-avatar
+                        [name]="requesterName()"
+                        [imageUrl]="data.requester?.avatarUrl ?? null"
+                        [size]="34"
+                        class="mt-0.5 shrink-0"
+                      />
                       <div class="min-w-0 flex-1">
                         <p class="mb-1 text-meta text-muted-foreground">
                           <span class="font-semibold text-foreground">{{ requesterName() }}</span>
@@ -209,7 +215,12 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 
                   @for (comment of visibleComments(); track comment.id) {
                     <article class="flex gap-3" [class.flex-row-reverse]="fromTeam(comment)">
-                      <tk-avatar [name]="authorName(comment)" [size]="34" class="mt-0.5 shrink-0" />
+                      <tk-avatar
+                        [name]="authorName(comment)"
+                        [imageUrl]="comment.author?.avatarUrl ?? null"
+                        [size]="34"
+                        class="mt-0.5 shrink-0"
+                      />
                       <div class="min-w-0 flex-1">
                         <p class="mb-1 text-meta text-muted-foreground" [class.text-right]="fromTeam(comment)">
                           @if (comment.isInternal) {
@@ -290,34 +301,25 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
               [(ngModel)]="body"
             ></textarea>
 
-            @if (file(); as chosen) {
-              <div class="mt-2 flex items-center gap-2 text-meta text-muted-foreground">
-                <tk-icon name="paperclip" [size]="14" />
-                <span class="min-w-0 flex-1 truncate">{{ chosen.name }} · {{ chosenSize() }}</span>
-                <button
-                  type="button"
-                  class="grid size-6 place-items-center rounded-md hover:bg-accent hover:text-danger"
-                  [attr.aria-label]="'tickets.new.removeFile' | transloco"
-                  (click)="file.set(null)"
-                >
-                  <tk-icon name="x" [size]="14" />
-                </button>
-              </div>
-            }
-            @if (fileError()) {
-              <p class="mt-2 text-meta text-danger">{{ fileError() }}</p>
-            }
             @if (sendError(); as message) {
               <tk-alert tone="danger" class="mt-3">{{ message }}</tk-alert>
             }
 
-            <div class="mt-3 flex items-center justify-between gap-2">
-              <label class="inline-flex cursor-pointer items-center gap-1.5 text-body font-semibold text-muted-foreground hover:text-foreground">
-                <tk-icon name="paperclip" [size]="16" />
-                {{ 'tickets.detail.attach' | transloco }}
-                <input type="file" class="sr-only" (change)="pick($event)" />
-              </label>
-              <button tkButton [disabled]="!body().trim() || sending()" (click)="send()">
+            <div class="mt-3 flex items-end justify-between gap-3">
+              <!-- Inline variant: in a composer the picker is one action among
+                   several, so it reads as a button rather than taking a
+                   dropzone's worth of vertical space above the Send button. -->
+              <tk-file-picker
+                class="min-w-0 flex-1"
+                variant="inline"
+                multiple
+                [(files)]="files"
+                [maxBytes]="maxUploadBytes"
+                [disabled]="sending()"
+                [progress]="uploadProgress()"
+                [label]="'tickets.detail.attach' | transloco"
+              />
+              <button tkButton class="shrink-0" [disabled]="!body().trim() || sending()" (click)="send()">
                 @if (sending()) {
                   <tk-spinner [size]="16" />
                 } @else {
@@ -387,8 +389,9 @@ export class TicketDetail {
   protected readonly threadTab = signal<'conversation' | 'notes' | 'attachments'>('conversation');
   protected readonly mode = signal<'reply' | 'note'>('reply');
   protected readonly body = signal('');
-  protected readonly file = signal<File | null>(null);
-  protected readonly fileError = signal<string | null>(null);
+  protected readonly files = signal<File[]>([]);
+  protected readonly maxUploadBytes = MAX_ATTACHMENT_BYTES;
+  protected readonly uploadProgress = signal<number | null>(null);
   protected readonly sendError = signal<string | null>(null);
   protected readonly sending = signal(false);
 
@@ -439,11 +442,6 @@ export class TicketDetail {
 
   protected readonly opened = computed(() => timeAgo(this.ticket.value()?.createdAt ?? ''));
   protected readonly createdAt = computed(() => formatDateTime(this.ticket.value()?.createdAt ?? ''));
-  protected readonly chosenSize = computed(() => {
-    const chosen = this.file();
-    return chosen ? formatBytes(chosen.size) : '';
-  });
-
   protected readonly composerPlaceholder = computed(() =>
     this.mode() === 'reply'
       ? `Reply to ${this.requesterName()}… (the customer will see this)`
@@ -495,16 +493,6 @@ export class TicketDetail {
     return formatBytes(file.sizeBytes);
   }
 
-  protected pick(event: Event): void {
-    const chosen = (event.target as HTMLInputElement).files?.[0] ?? null;
-    if (chosen && chosen.size > MAX_UPLOAD_BYTES) {
-      this.fileError.set(`Attachment is larger than ${formatBytes(MAX_UPLOAD_BYTES)}.`);
-      return;
-    }
-    this.fileError.set(null);
-    this.file.set(chosen);
-  }
-
   /**
    * The comment is posted first because an attachment has to hang off one. If
    * the upload then fails the comment is already public — so it warns and keeps
@@ -519,16 +507,22 @@ export class TicketDetail {
     this.sendError.set(null);
     try {
       const comment = await this.api.addComment(this.id(), { body, isInternal: this.mode() === 'note' });
-      const chosen = this.file();
-      if (chosen) {
+
+      // One at a time, so the bar tracks a single file and a slow connection
+      // isn't split five ways. A failure warns per file and the rest continue.
+      for (const file of this.files()) {
         try {
-          await this.api.uploadAttachment(this.id(), chosen, comment.id);
+          await this.api.uploadAttachment(this.id(), file, comment.id, (p) =>
+            this.uploadProgress.set(p.percent),
+          );
         } catch (uploadError) {
           this.toast.warning(errorMessage(uploadError));
         }
       }
+      this.uploadProgress.set(null);
+
       this.body.set('');
-      this.file.set(null);
+      this.files.set([]);
       this.comments.reload();
       this.attachments.reload();
       this.ticket.reload();

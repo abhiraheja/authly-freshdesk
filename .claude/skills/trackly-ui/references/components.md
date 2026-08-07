@@ -30,6 +30,8 @@ All standalone, all `OnPush`, all signal-based. Add new controls under
 | `Checkbox` | `tk-checkbox` | `[(checked)]`, `indeterminate`, `disabled`, `inputId`, `ariaLabel` |
 | `Switch` | `tk-switch` | `[(checked)]`, `disabled`, `inputId`, `ariaLabel` |
 | `RadioGroup` / `Radio` | `tk-radio-group` / `tk-radio` | `[(value)]`, `ariaLabel`, `disabled`; option: `value`, `label`, `hint` |
+| `FilePicker` | `tk-file-picker` | `[(files)]`, `variant` (`dropzone`\|`inline`), `accept`, `maxBytes`, `multiple`, `disabled`, `label`, `hint`, `progress`, `error`, `(rejected)` |
+| `AvatarUpload` | `tk-avatar-upload` | `name`, `imageUrl`, `size`, `accept`, `maxBytes`, `uploading`, `disabled`, `error`, `(selected)`, `(removed)` |
 | `Tabs` | `tk-tabs` | `items`, `[(active)]` — presentational; caller renders the panel |
 | `SkeletonDirective` | `[tkSkeleton]` | size it with utilities |
 | `Spinner` | `tk-spinner` | `size` |
@@ -201,8 +203,35 @@ unpredictable. All three wrap a real native input (clipped, never
 `display: none`), so focus, the space key and screen-reader semantics come from
 the browser rather than being re-implemented.
 
-`.dropzone` in `styles.scss` styles a drag-and-drop file area; keep the hidden
-`<input type="file">` inside a `<label>` so keyboard users can reach it.
+### Never hand-roll a file input
+
+`tk-file-picker` is the only file input in the app. Writing
+`<input type="file">` by hand means re-deriving drag-and-drop, the size check,
+the accept check that drops bypass, the chosen-file chip, the remove button, the
+`input.value = ''` reset that lets the same file be picked twice, and the
+translated rejection message — and the two screens that did it had already
+drifted apart and were emitting hard-coded English.
+
+```html
+<!-- A form: a dropzone earns its vertical space -->
+<tk-file-picker multiple [(files)]="files" [maxBytes]="maxUploadBytes" [progress]="uploadProgress()" />
+
+<!-- A composer: one action among several -->
+<tk-file-picker variant="inline" [(files)]="files" [label]="'tickets.detail.attach' | transloco" />
+```
+
+Rules and constants live in `@trackly/core` (`MAX_ATTACHMENT_BYTES`,
+`MAX_IMAGE_BYTES`, `IMAGE_ACCEPT`, `checkFile`) so the client and the API agree
+on one number. **The picker does not upload** — it produces a validated
+`File[]`. Uploading belongs in a typed `*.api.ts` calling `ApiService.upload`,
+whose `onProgress` callback feeds `[progress]` back in. Client-side checking is
+a courtesy that saves a round trip; the API re-checks everything.
+
+`tk-avatar-upload` is the photo case: the avatar *is* the target, and it shows a
+local `URL.createObjectURL` preview until `uploading` goes false, so the new
+photo lands immediately. The parent does the upload and patches its own state
+from the response — reloading a resource instead would leave the old photo on
+screen for the length of the round trip.
 
 ---
 

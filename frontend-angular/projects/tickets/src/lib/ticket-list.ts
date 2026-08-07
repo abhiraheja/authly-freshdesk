@@ -235,7 +235,13 @@ const VIEW_STATUS: Record<string, string | undefined> = {
                     </td>
                     <td>
                       <span class="flex items-center gap-2">
-                        <tk-avatar [name]="requesterOf(ticket)" [size]="26" round fallback="G" />
+                        <tk-avatar
+                          [name]="requesterOf(ticket)"
+                          [imageUrl]="ticket.requester?.avatarUrl ?? null"
+                          [size]="26"
+                          round
+                          fallback="G"
+                        />
                         <span class="truncate">{{ requesterOf(ticket) }}</span>
                       </span>
                     </td>
@@ -251,7 +257,7 @@ const VIEW_STATUS: Record<string, string | undefined> = {
                     <td>
                       @if (ticket.assignee; as agent) {
                         <span class="flex items-center gap-2">
-                          <tk-avatar [name]="agent.name ?? agent.email" [size]="24" round />
+                          <tk-avatar [name]="agent.name ?? agent.email" [imageUrl]="agent.avatarUrl" [size]="24" round />
                           <span class="truncate">{{ agent.name ?? agent.email }}</span>
                         </span>
                       } @else {

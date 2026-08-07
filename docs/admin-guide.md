@@ -35,6 +35,7 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 18. [Where everything lives (nav map)](#18-where-everything-lives)
 19. [Security & privacy you should know](#19-security--privacy-you-should-know)
 20. [Attachment storage](#20-attachment-storage)
+21. [Profile photos](#21-profile-photos)
 
 ---
 
@@ -540,10 +541,10 @@ is no tool that copies objects between providers.
 name is *not* part of a CDN path. The preview on the page shows the finished URL
 as you type.
 
-Only your **logo** is ever served from the CDN. Ticket attachments never are — a
-CDN link carries no sign-in, so it would sidestep the checks that keep one
-customer from reading another's ticket, and keep an internal note's attachment
-away from the customer.
+Only your **logo** is ever served from the CDN. Ticket attachments and profile
+photos never are — a CDN link carries no sign-in, so it would sidestep the checks
+that keep one customer from reading another's ticket, and keep an internal note's
+attachment away from the customer.
 
 > ⚠️ A CDN needs the bucket to be publicly readable, and attachments live in the
 > same bucket. Trackly never hands out an attachment's path, but it cannot make a
@@ -559,6 +560,33 @@ away from the customer.
 - The 10 MB per-file limit is the same whichever provider you use.
 - Logos are covered by [Branding](#10-branding); this section only decides where
   the file physically lives.
+- Profile photos land in the same place, under `<workspace-id>/avatars/`.
+
+---
+
+## 21. Profile photos
+
+**What it is.** A photo shown wherever a person appears — ticket lists, the
+conversation thread, the assignee and watcher lists, the sidebar. Without one,
+Trackly draws their initials on a colour derived from their name, so nobody looks
+unfinished.
+
+**Your own photo.** Click your name at the foot of the sidebar → **Change
+photo**. Click the avatar in the dialog to pick a file; **Remove photo** clears
+it. The change is live everywhere the moment it saves.
+
+**Someone else's.** Open the customer (**Tickets → a customer's name**) and click
+their avatar. Agents and admins can set or clear any photo in the workspace;
+everyone else can only change their own.
+
+**Rules.** PNG, JPEG or WebP, up to **1 MB**. There is no cropper — the image is
+centre-cropped to a circle by the browser, so a roughly square photo looks best.
+
+**Privacy.** Photos are stored **privately**, wherever
+[Attachment storage](#20-attachment-storage) points, and served only to people
+signed in to the same workspace. They are never given a CDN link and never
+appear on the guest ticket view, which is opened with an emailed link rather
+than a sign-in — agents show as initials there.
 
 ---
 

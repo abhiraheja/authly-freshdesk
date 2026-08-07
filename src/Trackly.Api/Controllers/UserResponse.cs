@@ -7,10 +7,11 @@ public record UserResponse(
     string? Email,
     string? Name,
     string Role,
+    string? AvatarUrl,
     WorkspaceResponse Workspace)
 {
     public static UserResponse From(User user) => new(
-        user.Id, user.Email, user.Name, user.Role,
+        user.Id, user.Email, user.Name, user.Role, UserAvatar.UrlFor(user),
         new WorkspaceResponse(user.Workspace.Id, user.Workspace.Name, user.Workspace.Slug));
 }
 

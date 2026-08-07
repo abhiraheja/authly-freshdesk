@@ -2,10 +2,19 @@ using Trackly.Core.Entities;
 
 namespace Trackly.Modules.Tickets;
 
-public record UserSummaryDto(Guid Id, string? Name, string? Email, string Role)
+public record UserSummaryDto(Guid Id, string? Name, string? Email, string Role, string? AvatarUrl)
 {
-    public static UserSummaryDto? From(User? user) =>
-        user is null ? null : new UserSummaryDto(user.Id, user.Name, user.Email, user.Role);
+    /// <param name="withAvatar">
+    /// False on customer-facing surfaces that have no session. The avatar path
+    /// needs one, so sending it there would render a broken image instead of the
+    /// initials fallback — worse than no photo.
+    /// </param>
+    public static UserSummaryDto? From(User? user, bool withAvatar = true) =>
+        user is null
+            ? null
+            : new UserSummaryDto(
+                user.Id, user.Name, user.Email, user.Role,
+                withAvatar ? UserAvatar.UrlFor(user) : null);
 }
 
 public record CategoryDto(Guid Id, string Name, string? Color)

@@ -1,7 +1,20 @@
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpEventType, HttpParams } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { firstValueFrom } from 'rxjs';
+import { filter, firstValueFrom, map, tap } from 'rxjs';
 import { TRACKLY_CONFIG } from '../core.config';
+
+/** Bytes sent so far. `percent` is -1 while the total length is unknown. */
+export interface UploadProgress {
+  loaded: number;
+  total: number;
+  percent: number;
+}
+
+export interface UploadOptions {
+  params?: QueryParams;
+  /** Called repeatedly while the body is on the wire, then once at 100. */
+  onProgress?: (progress: UploadProgress) => void;
+}
 
 /** Query-string values a caller may pass; `undefined` and `''` are dropped. */
 export type QueryParams = Record<string, string | number | boolean | undefined | null>;
@@ -44,9 +57,38 @@ export class ApiService {
   /**
    * Multipart upload. Content-Type is deliberately unset — the browser must add
    * it itself so the multipart boundary is correct.
+   *
+   * Every upload in the app goes through here, so the progress plumbing and the
+   * boundary rule live in one place. Pass `onProgress` to drive a progress bar;
+   * without it this behaves exactly like `post`.
    */
-  upload<T>(path: string, form: FormData, params?: QueryParams): Promise<T> {
-    return firstValueFrom(this.http.post<T>(this.url(path), form, { params: toHttpParams(params) }));
+  upload<T>(path: string, form: FormData, options?: UploadOptions): Promise<T> {
+    const request = { params: toHttpParams(options?.params) };
+    if (!options?.onProgress)
+      return firstValueFrom(this.http.post<T>(this.url(path), form, request));
+
+    // `observe: 'events'` changes the stream to every lifecycle event, so the
+    // final response has to be picked out of it — and `reportProgress` is what
+    // makes the browser emit UploadProgress at all.
+    return firstValueFrom(
+      this.http
+        .post<T>(this.url(path), form, { ...request, observe: 'events', reportProgress: true })
+        .pipe(
+          tap((event) => {
+            if (event.type !== HttpEventType.UploadProgress) return;
+            // `total` is absent on a chunked body. Report -1 rather than a made-up
+            // denominator so the bar can switch to indeterminate instead of lying.
+            const total = event.total ?? 0;
+            options.onProgress!({
+              loaded: event.loaded,
+              total,
+              percent: total > 0 ? Math.round((event.loaded / total) * 100) : -1,
+            });
+          }),
+          filter((event) => event.type === HttpEventType.Response),
+          map((event) => event.body as T),
+        ),
+    );
   }
 
   /** Absolute URL for links the browser fetches directly (attachments, exports). */

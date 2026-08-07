@@ -73,7 +73,7 @@ Generate a master key:
 
 ---
 
-## 3. File storage (attachments + workspace logos)
+## 3. File storage (attachments, profile photos, workspace logos)
 
 Storage is **per workspace**, chosen by an admin under **Admin → Storage**, not
 by an environment variable. Three providers:
@@ -84,8 +84,20 @@ by an environment variable. Three providers:
 | `azure` | Connection string + container | Container auto-created if the credential may |
 | `gcs` | Service-account JSON + bucket | Bucket must already exist |
 
-One bucket per workspace holds both attachments and logos; an optional folder
-prefix keeps them out of the way of anything else sharing it.
+One bucket per workspace holds everything Trackly writes; an optional folder
+prefix keeps it out of the way of anything else sharing that bucket. Three kinds
+of object, at `<prefix>/<workspace-id>/…`:
+
+| Path | What | Visibility |
+|---|---|---|
+| `<ticket-id>/…` | Ticket attachments | Private — `GET /api/attachments/{id}` |
+| `avatars/<user-id>/…` | Profile photos | Private — `GET /api/users/{id}/avatar` |
+| `branding/…` | Workspace logo | Public — the only thing a CDN URL is ever built for |
+
+Only the logo is saved with `StorageVisibility.Public`, which is what puts the
+`-public` marker in its storage key. `PublicUrlAsync` returns null for any key
+without it, so no code path can hand out a CDN link to an attachment or a photo
+even by mistake.
 
 Both cloud credentials are AES-256-GCM encrypted with `Security:MasterKey`, so
 **that key must be set and backed up before any workspace configures one** —

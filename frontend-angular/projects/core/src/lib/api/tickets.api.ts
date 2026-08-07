@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { ApiService, type QueryParams } from './api.service';
+import { ApiService, type QueryParams, type UploadProgress } from './api.service';
 
 export interface Category {
   id: string;
@@ -74,6 +74,11 @@ export interface UserSummary {
   name: string | null;
   email: string | null;
   role: string;
+  /**
+   * API path to their photo, or null for the initials fallback. Never a storage
+   * URL — the server decides whether to stream the bytes or redirect to a CDN.
+   */
+  avatarUrl: string | null;
 }
 
 /**
@@ -369,14 +374,41 @@ export class TicketsApi {
     return this.api.get<Attachment[]>(`/api/tickets/${ticketId}/attachments`);
   }
 
-  uploadAttachment(ticketId: string, file: File, commentId?: string): Promise<Attachment> {
+  uploadAttachment(
+    ticketId: string,
+    file: File,
+    commentId?: string,
+    onProgress?: (progress: UploadProgress) => void,
+  ): Promise<Attachment> {
     const form = new FormData();
     form.append('file', file);
-    return this.api.upload<Attachment>(`/api/tickets/${ticketId}/attachments`, form, { commentId });
+    return this.api.upload<Attachment>(`/api/tickets/${ticketId}/attachments`, form, {
+      params: { commentId },
+      onProgress,
+    });
   }
 
   attachmentUrl(id: string): string {
     return this.api.url(`/api/attachments/${id}`);
+  }
+
+  /**
+   * Replaces a person's photo. Returns the new `avatarUrl`, which carries a
+   * version query so the browser drops the cached copy of the old one — the
+   * path itself never changes, so without it the old photo stays on screen.
+   */
+  uploadAvatar(
+    userId: string,
+    file: File,
+    onProgress?: (progress: UploadProgress) => void,
+  ): Promise<{ avatarUrl: string }> {
+    const form = new FormData();
+    form.append('file', file);
+    return this.api.upload<{ avatarUrl: string }>(`/api/users/${userId}/avatar`, form, { onProgress });
+  }
+
+  removeAvatar(userId: string): Promise<void> {
+    return this.api.delete<void>(`/api/users/${userId}/avatar`);
   }
 
   /**

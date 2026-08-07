@@ -1773,9 +1773,13 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
-                    b.Property<string>("AvatarUrl")
+                    b.Property<string>("AvatarContentType")
                         .HasColumnType("text")
-                        .HasColumnName("avatar_url");
+                        .HasColumnName("avatar_content_type");
+
+                    b.Property<string>("AvatarStorageKey")
+                        .HasColumnType("text")
+                        .HasColumnName("avatar_storage_key");
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")

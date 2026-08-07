@@ -12,12 +12,13 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe } from '@jsverse/transloco';
-import { TicketsApi, errorMessage, formatBytes } from '@trackly/core';
+import { MAX_ATTACHMENT_BYTES, TicketsApi, errorMessage } from '@trackly/core';
 import {
   Alert,
   Button,
   Card,
   Combobox,
+  FilePicker,
   Icon,
   InputDirective,
   LabelDirective,
@@ -54,6 +55,7 @@ import {
     Button,
     Card,
     Combobox,
+    FilePicker,
     Icon,
     InputDirective,
     LabelDirective,
@@ -191,35 +193,17 @@ import {
 
             <div>
               <span class="mb-1.5 block text-meta font-semibold">{{ 'tickets.new.attachment' | transloco }}</span>
-              @if (file(); as chosen) {
-                <div class="flex items-center gap-3 rounded-xl border border-border bg-muted px-3 py-2.5">
-                  <tk-icon name="paperclip" [size]="16" class="shrink-0 text-muted-foreground" />
-                  <span class="min-w-0 flex-1">
-                    <span class="block truncate text-body font-semibold">{{ chosen.name }}</span>
-                    <span class="block text-meta text-muted-foreground">{{ size() }}</span>
-                  </span>
-                  <button
-                    type="button"
-                    class="grid size-8 shrink-0 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-danger"
-                    [attr.aria-label]="'tickets.new.removeFile' | transloco"
-                    (click)="clearFile()"
-                  >
-                    <tk-icon name="x" [size]="16" />
-                  </button>
-                </div>
-              } @else {
-                <!-- The input lives INSIDE the label, so the dropzone is reachable
-                     by keyboard and by click without any JS. -->
-                <label class="dropzone" [class.is-dragging]="dragging()"
-                       (dragover)="onDragOver($event)" (dragleave)="dragging.set(false)" (drop)="onDrop($event)">
-                  <tk-icon name="upload-cloud" [size]="24" />
-                  <span class="text-body font-semibold">{{ 'tickets.new.dropHint' | transloco }}</span>
-                  <span class="text-meta">{{ 'tickets.new.dropLimit' | transloco }}</span>
-                  <input type="file" class="sr-only" (change)="pick($event)" />
-                </label>
-              }
-              @if (fileError()) {
-                <p class="mt-1.5 text-meta text-danger">{{ fileError() }}</p>
+              <tk-file-picker
+                multiple
+                [(files)]="files"
+                [maxBytes]="maxUploadBytes"
+                [disabled]="saving()"
+                [progress]="uploadProgress()"
+              />
+              @if (uploadingName(); as name) {
+                <p class="mt-1.5 text-meta text-muted-foreground">
+                  {{ 'upload.uploadingFile' | transloco: { name: name } }}
+                </p>
               }
             </div>
 
@@ -272,11 +256,17 @@ export class TicketNew {
   protected readonly tags = signal<string[]>([]);
   /** What the agent typed into the requester box — a display name, not an id. */
   protected readonly requesterLabel = signal('');
-  protected readonly file = signal<File | null>(null);
-  protected readonly fileError = signal<string | null>(null);
-  protected readonly dragging = signal(false);
+  protected readonly files = signal<File[]>([]);
   protected readonly saving = signal(false);
   protected readonly error = signal<string | null>(null);
+
+  /** Exposed for the template — picker rules are constants, not state. */
+  protected readonly maxUploadBytes = MAX_ATTACHMENT_BYTES;
+
+  /** Percent for the bar, or null when nothing is on the wire. */
+  protected readonly uploadProgress = signal<number | null>(null);
+  /** Which file is going up right now, so a queue of five isn't a mystery. */
+  protected readonly uploadingName = signal<string | null>(null);
 
   /**
    * Three independent suggestion sources. Each is its own resource so one
@@ -321,43 +311,9 @@ export class TicketNew {
       .map((tag) => tag.name),
   );
 
-  protected readonly size = computed(() => {
-    const chosen = this.file();
-    return chosen ? formatBytes(chosen.size) : '';
-  });
-
   protected readonly canSubmit = computed(
     () => !this.saving() && this.subject().trim().length > 0 && this.description().trim().length > 0,
   );
-
-  protected pick(event: Event): void {
-    this.take((event.target as HTMLInputElement).files?.[0] ?? null);
-  }
-
-  protected onDragOver(event: DragEvent): void {
-    event.preventDefault();
-    this.dragging.set(true);
-  }
-
-  protected onDrop(event: DragEvent): void {
-    event.preventDefault();
-    this.dragging.set(false);
-    this.take(event.dataTransfer?.files?.[0] ?? null);
-  }
-
-  private take(chosen: File | null): void {
-    if (chosen && chosen.size > MAX_UPLOAD_BYTES) {
-      this.fileError.set(`Attachment is larger than ${formatBytes(MAX_UPLOAD_BYTES)}.`);
-      return;
-    }
-    this.fileError.set(null);
-    this.file.set(chosen);
-  }
-
-  protected clearFile(): void {
-    this.file.set(null);
-    this.fileError.set(null);
-  }
 
   /**
    * Two calls, because attachments hang off a ticket that already exists.
@@ -388,14 +344,22 @@ export class TicketNew {
         requesterId: this.requesterId() ?? undefined,
       });
 
-      const chosen = this.file();
-      if (chosen) {
+      // Sequential, not Promise.all: one bar showing one file is readable, and
+      // five parallel 10 MB bodies on a shared connection is how the last one
+      // times out. Each failure is reported on its own so a bad file among four
+      // doesn't lose the other three.
+      for (const file of this.files()) {
+        this.uploadingName.set(file.name);
         try {
-          await this.api.uploadAttachment(ticket.id, chosen);
+          await this.api.uploadAttachment(ticket.id, file, undefined, (p) =>
+            this.uploadProgress.set(p.percent),
+          );
         } catch (uploadError) {
           this.toast.warning(errorMessage(uploadError));
         }
       }
+      this.uploadingName.set(null);
+      this.uploadProgress.set(null);
 
       this.toast.success(ticket.subject);
       // The detail screen is still on ComingSoon; once it lands, send them to
@@ -408,6 +372,3 @@ export class TicketNew {
     }
   }
 }
-
-/** Matches the server's upload cap — see `AttachmentService`. */
-const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;

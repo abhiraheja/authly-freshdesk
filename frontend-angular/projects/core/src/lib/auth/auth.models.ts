@@ -11,6 +11,8 @@ export interface User {
   email: string | null;
   name: string | null;
   role: UserRole;
+  /** API path to their photo, or null for the initials fallback. */
+  avatarUrl: string | null;
   workspace: Workspace;
 }
 

@@ -181,9 +181,6 @@
       "description": "Description",
       "descriptionPlaceholder": "What happened, what you expected, and any error messages…",
       "attachment": "Attachment",
-      "dropHint": "Drop a file here or click to browse",
-      "dropLimit": "One file, up to 10 MB",
-      "removeFile": "Remove attachment",
       "submit": "Create ticket",
       "failed": "Couldn't create the ticket",
       "channel": "Channel",
@@ -283,6 +280,22 @@
     "resolve": "Resolve",
     "inTime": "in {{time}}",
     "overdue": "Overdue {{time}}"
+  },
+  "upload": {
+    "dropHint": "Drop files here or click to browse",
+    "browse": "Attach",
+    "limit": "Up to {{limit}} each",
+    "limitTypes": "{{types}} · up to {{limit}} each",
+    "remove": "Remove file",
+    "uploading": "Uploading",
+    "uploadingFile": "Uploading {{name}}…",
+    "changePhoto": "Change photo",
+    "removePhoto": "Remove photo",
+    "rejected": {
+      "empty": "{{name}} is empty.",
+      "tooLarge": "{{name}} is larger than {{limit}}.",
+      "wrongType": "{{name}} isn't an accepted file type — pick {{types}}."
+    }
   },
   "ui": {
     "pagination": {

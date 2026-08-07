@@ -226,7 +226,10 @@ public class GuestService(
             ticket.GuestName ?? "Guest",
             ticket.GuestEmail!,
             comments.Select(c => new CommentDto(
-                c.Id, UserSummaryDto.From(c.Author), c.GuestEmail, c.Body, false, c.Source,
+                // No avatar: this view is reached with a link token, not a
+                // session, so the photo endpoint would 401 and the agent would
+                // render as a broken image rather than their initials.
+                c.Id, UserSummaryDto.From(c.Author, withAvatar: false), c.GuestEmail, c.Body, false, c.Source,
                 attachments.Where(a => a.CommentId == c.Id).Select(ToDto).ToList(),
                 c.CreatedAt)).ToList(),
             attachments.Where(a => a.CommentId == null).Select(ToDto).ToList(),

@@ -96,7 +96,7 @@ import { CustomerForm } from './customer-form';
             <dt class="text-muted-foreground">{{ 'tickets.columns.assignee' | transloco }}</dt>
             <dd class="flex min-w-0 items-center gap-1.5 font-semibold">
               @if (ticket().assignee; as agent) {
-                <tk-avatar [name]="agent.name || agent.email" [size]="20" />
+                <tk-avatar [name]="agent.name || agent.email" [imageUrl]="agent.avatarUrl" [size]="20" />
                 <span class="truncate">{{ agent.name || agent.email }}</span>
               } @else {
                 <span class="text-muted-foreground">{{ 'tickets.unassigned' | transloco }}</span>
@@ -216,7 +216,7 @@ import { CustomerForm } from './customer-form';
       <tk-card [heading]="'tickets.new.requester' | transloco">
         @if (ticket().requester; as person) {
           <div class="flex items-center gap-3">
-            <tk-avatar [name]="customerName()" [size]="40" />
+            <tk-avatar [name]="customerName()" [imageUrl]="person.avatarUrl" [size]="40" />
             <div class="min-w-0">
               <p class="truncate text-body font-semibold">{{ customerName() }}</p>
               @if (person.email; as email) {
@@ -431,7 +431,11 @@ import { CustomerForm } from './customer-form';
         <div class="space-y-2">
           @for (watcher of ticket().watchers; track watcher.agent.id) {
             <div class="flex items-center gap-2.5">
-              <tk-avatar [name]="watcher.agent.name || watcher.agent.email" [size]="28" />
+              <tk-avatar
+                [name]="watcher.agent.name || watcher.agent.email"
+                [imageUrl]="watcher.agent.avatarUrl"
+                [size]="28"
+              />
               <span class="min-w-0 flex-1 truncate text-body">{{ watcher.agent.name || watcher.agent.email }}</span>
               <button
                 type="button"

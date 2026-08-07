@@ -1134,6 +1134,9 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | POST   | `/api/auth/magic-link/verify` | None | Consume link token or code → issue session |
 | POST   | `/api/auth/logout` | Session | Clear session |
 | GET    | `/api/users/me` | Session | Get current user profile |
+| POST   | `/api/users/{id}/avatar` | Session | Own photo always; anyone else's needs agent/admin. 1 MB, PNG/JPEG/WebP |
+| DELETE | `/api/users/{id}/avatar` | Session | Same rule as POST |
+| GET    | `/api/users/{id}/avatar` | Session | Any member of the same workspace. Streamed, never redirected to a CDN |
 | GET    | `/api/tickets` | Session | agent/admin: all; customer: own |
 | POST   | `/api/tickets` | Session | customer, agent, admin |
 | GET    | `/api/tickets/channels` | Session | agent/admin — channel suggestions (used + built-in) |
@@ -1230,7 +1233,13 @@ CREATE TABLE users (
     email         TEXT,
     phone         TEXT,
     name          TEXT,
-    avatar_url    TEXT,
+    -- Profile photo. A STORAGE KEY, not a URL: the photo is private and is only
+    -- served by GET /api/users/{id}/avatar, which checks the workspace first.
+    -- The response path carries a ?v= token derived from this key, so it can be
+    -- cached immutably and a replacement busts it. Never given a CDN URL —
+    -- SaveAsync uses the default Private visibility, so PublicUrlAsync refuses.
+    avatar_storage_key  TEXT,
+    avatar_content_type TEXT,
     role          TEXT NOT NULL DEFAULT 'customer',  -- customer, agent, admin
     -- no password_hash: Trackly is passwordless (SSO or magic link only)
     is_active     BOOLEAN DEFAULT true,

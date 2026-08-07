@@ -80,7 +80,7 @@
         [attr.aria-expanded]="profileOpen()"
         (click)="profileOpen.set(!profileOpen())"
       >
-        <tk-avatar [name]="session.displayName()" [size]="36" />
+        <tk-avatar [name]="session.displayName()" [imageUrl]="session.user()?.avatarUrl ?? null" [size]="36" />
         <span class="min-w-0 flex-1">
           <span class="block truncate text-body font-semibold">{{ session.displayName() }}</span>
           <span class="block truncate text-meta capitalize text-muted-foreground">{{ session.role() }}</span>
@@ -96,6 +96,10 @@
           (click)="profileOpen.set(false)"
         ></button>
         <div class="menu absolute bottom-full left-3 right-3 z-50 mb-2 animate-float-in">
+          <button type="button" class="menu-item" (click)="openPhoto()">
+            <tk-icon name="camera" [size]="16" />
+            {{ 'upload.changePhoto' | transloco }}
+          </button>
           <button type="button" class="menu-item" (click)="theme.toggle(); profileOpen.set(false)">
             <tk-icon [name]="theme.dark() ? 'sun' : 'moon'" [size]="16" />
             {{ (theme.dark() ? 'common.lightMode' : 'common.darkMode') | transloco }}
@@ -109,6 +113,22 @@
       }
     </div>
   </aside>
+
+  <!-- Your own photo. A modal rather than a settings page: it is one control,
+       and there is nothing else on a profile screen worth the navigation. -->
+  <tk-modal [(open)]="photoOpen" [heading]="'upload.changePhoto' | transloco">
+    <div class="py-2 text-center">
+      <tk-avatar-upload
+        [name]="session.displayName()"
+        [imageUrl]="session.user()?.avatarUrl ?? null"
+        [size]="112"
+        [uploading]="photoBusy()"
+        [error]="photoError()"
+        (selected)="uploadPhoto($event)"
+        (removed)="removePhoto()"
+      />
+    </div>
+  </tk-modal>
 
   <!-- Mobile backdrop -->
   @if (mobileOpen()) {

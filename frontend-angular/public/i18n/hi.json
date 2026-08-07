@@ -181,9 +181,6 @@
       "description": "विवरण",
       "descriptionPlaceholder": "क्या हुआ, आपको क्या अपेक्षित था, और कोई एरर मैसेज…",
       "attachment": "अटैचमेंट",
-      "dropHint": "फ़ाइल यहाँ छोड़ें या चुनने के लिए क्लिक करें",
-      "dropLimit": "एक फ़ाइल, अधिकतम 10 MB",
-      "removeFile": "अटैचमेंट हटाएँ",
       "submit": "टिकट बनाएँ",
       "failed": "टिकट नहीं बन सका",
       "channel": "चैनल",
@@ -283,6 +280,22 @@
     "resolve": "समाधान",
     "inTime": "{{time}} में",
     "overdue": "{{time}} से विलंबित"
+  },
+  "upload": {
+    "dropHint": "फ़ाइलें यहाँ छोड़ें या चुनने के लिए क्लिक करें",
+    "browse": "अटैच करें",
+    "limit": "प्रत्येक अधिकतम {{limit}}",
+    "limitTypes": "{{types}} · प्रत्येक अधिकतम {{limit}}",
+    "remove": "फ़ाइल हटाएँ",
+    "uploading": "अपलोड हो रहा है",
+    "uploadingFile": "{{name}} अपलोड हो रही है…",
+    "changePhoto": "फ़ोटो बदलें",
+    "removePhoto": "फ़ोटो हटाएँ",
+    "rejected": {
+      "empty": "{{name}} खाली है।",
+      "tooLarge": "{{name}} {{limit}} से बड़ी है।",
+      "wrongType": "{{name}} स्वीकार्य प्रकार की नहीं है — {{types}} चुनें।"
+    }
   },
   "ui": {
     "pagination": {

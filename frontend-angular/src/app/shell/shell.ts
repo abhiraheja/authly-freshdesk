@@ -4,9 +4,9 @@ import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, type Event as RouterEvent } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
-import { SessionStore } from '@trackly/core';
+import { SessionStore, TicketsApi, errorMessage } from '@trackly/core';
 import { ThemeService } from '@trackly/core';
-import { Avatar, Button, Dropdown, Icon, Kbd, Toaster } from '@trackly/ui';
+import { Avatar, AvatarUpload, Button, Dropdown, Icon, Kbd, Modal, Toaster } from '@trackly/ui';
 import { CommandPalette } from './command-palette';
 import { NAV, PORTAL_NAV, type NavGroup, type NavItem } from './nav';
 
@@ -24,12 +24,26 @@ import { NAV, PORTAL_NAV, type NavGroup, type NavItem } from './nav';
 @Component({
   selector: 'tk-shell',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterOutlet, RouterLink, TranslocoPipe, Avatar, Button, Dropdown, Icon, Kbd, Toaster, CommandPalette],
+  imports: [
+    RouterOutlet,
+    RouterLink,
+    TranslocoPipe,
+    Avatar,
+    AvatarUpload,
+    Button,
+    Dropdown,
+    Icon,
+    Kbd,
+    Modal,
+    Toaster,
+    CommandPalette,
+  ],
   host: { '(document:keydown)': 'onKeydown($event)' },
   templateUrl: './shell.html',
 })
 export class Shell {
   private readonly router = inject(Router);
+  private readonly api = inject(TicketsApi);
   protected readonly session = inject(SessionStore);
   protected readonly theme = inject(ThemeService);
 
@@ -46,6 +60,10 @@ export class Shell {
   protected readonly mobileOpen = signal(false);
   protected readonly paletteOpen = signal(false);
   protected readonly profileOpen = signal(false);
+
+  protected readonly photoOpen = signal(false);
+  protected readonly photoBusy = signal(false);
+  protected readonly photoError = signal<string | undefined>(undefined);
 
   /**
    * Admin is collapsed by default — thirteen rows would otherwise dominate the
@@ -120,6 +138,51 @@ export class Shell {
 
   protected closeMobile(): void {
     this.mobileOpen.set(false);
+  }
+
+  protected openPhoto(): void {
+    this.profileOpen.set(false);
+    this.photoError.set(undefined);
+    this.photoOpen.set(true);
+  }
+
+  /**
+   * Patches the session rather than refetching `/me`.
+   *
+   * The response already carries the new URL, and the sidebar avatar reads
+   * straight off the store — so the photo changes the moment the request
+   * returns, with no second round trip and no flash of the old one.
+   */
+  protected async uploadPhoto(file: File): Promise<void> {
+    const me = this.session.user();
+    if (!me) return;
+
+    this.photoBusy.set(true);
+    this.photoError.set(undefined);
+    try {
+      const { avatarUrl } = await this.api.uploadAvatar(me.id, file);
+      this.session.patch({ avatarUrl });
+    } catch (error) {
+      this.photoError.set(errorMessage(error));
+    } finally {
+      this.photoBusy.set(false);
+    }
+  }
+
+  protected async removePhoto(): Promise<void> {
+    const me = this.session.user();
+    if (!me) return;
+
+    this.photoBusy.set(true);
+    this.photoError.set(undefined);
+    try {
+      await this.api.removeAvatar(me.id);
+      this.session.patch({ avatarUrl: null });
+    } catch (error) {
+      this.photoError.set(errorMessage(error));
+    } finally {
+      this.photoBusy.set(false);
+    }
   }
 
   protected async signOut(): Promise<void> {

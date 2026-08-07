@@ -77,6 +77,16 @@ export class SessionStore {
     this.pending = null;
   }
 
+  /**
+   * Applies a change the user just made to their own profile.
+   *
+   * A no-op when signed out, so a late response after a sign-out cannot put a
+   * half-populated user back into the store.
+   */
+  patch(changes: Partial<User>): void {
+    this._user.update((current) => (current ? { ...current, ...changes } : current));
+  }
+
   /** Signs out server-side, then clears local state regardless of the outcome. */
   async signOut(): Promise<void> {
     try {
