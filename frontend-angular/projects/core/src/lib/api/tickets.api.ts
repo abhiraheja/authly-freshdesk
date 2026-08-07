@@ -148,6 +148,14 @@ export interface TicketSummary {
   priority: string;
   channel: string;
   category: Category | null;
+  /**
+   * The department the ticket is routed to — a team in the schema, "Dept" in
+   * the UI. Null on customer and guest surfaces, where the API withholds it:
+   * which internal team owns a ticket is routing detail, like the tags and the
+   * SLA beside it.
+   */
+  teamId: string | null;
+  teamName: string | null;
   requester: UserSummary | null;
   guestName: string | null;
   guestEmail: string | null;
@@ -170,8 +178,7 @@ export interface TicketDetail extends Omit<TicketSummary, 'commentCount'> {
   description: string;
   watchers: Watcher[];
   problemId: string | null;
-  teamId: string | null;
-  teamName: string | null;
+  // teamId / teamName come from TicketSummary — the list needs them too.
 
   /**
    * Why the ticket was resolved or closed, and by whom. Null while it is open,

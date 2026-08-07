@@ -1177,6 +1177,37 @@ Retiring a status keeps it on tickets that already carry it and removes it from
 pickers. Deleting is refused while any ticket holds the value — a ticket showing
 a value with no name reads as corrupt data, not as history.
 
+**Both writes that clear transitions load them and `RemoveRange`, rather than
+`ExecuteDelete`.** Two reasons, and each on its own is enough:
+
+- `ExecuteDelete` commits its own transaction. In `SetTransitionsAsync` a
+  failure while inserting the replacements would leave the workspace with **zero**
+  rules — and an empty table means *allow everything*, so a workflow save that
+  died halfway would silently unlock every transition it was meant to restrict.
+  In `DeleteAsync` it would leave the status alive with its rules gone:
+  unreachable, for no reason visible on any screen.
+- It deletes behind the change tracker. Any transition already materialised in
+  the same scope stays in memory pointing at a row that is gone, and removing
+  the status then fails as a severed required relationship. Request-scoped
+  contexts hide this today; a background job or a second call in one request
+  would not.
+
+The table holds at most one row per status pair, so reading it back costs
+nothing next to being wrong. The `ExecuteUpdate` calls in `UpdateAsync` stay —
+one is a genuine bulk write across every affected ticket, and the other clears
+`is_default` on a scalar nothing reads back in the same scope.
+
+**Admin screens.** `/admin/settings/statuses` — two tabs, one component each.
+The catalogue groups by category with the behaviour of each spelled out on the
+section header, because "which one pauses the SLA?" is the question an admin has
+before they file anything. The workflow tab is a matrix: rows are the current
+status (plus an *Any status* row for `from_status_id IS NULL`), columns are the
+destination. A cell the *Any* row already covers renders ticked and disabled —
+it is allowed either way, and letting it be cleared there would do nothing.
+Transitions involving a **retired** status are not drawn but are carried through
+the save untouched; dropping them would quietly empty the workflow of any status
+brought back later.
+
 ### List filtering, sorting and facets
 
 `GET /api/tickets` and `GET /api/tickets/facets` take **the same query object**.
@@ -1198,6 +1229,13 @@ Two rules that are not decoration:
 - **`priority` sorts by the configured `ticket_options.sort_order`**, via a
   correlated subquery, not alphabetically. A value whose option row was deleted
   sorts last: an orphan is not urgent.
+
+The summary DTO carries **both** `teamId`/`teamName` (the department the ticket
+is routed to) and `category`. They are different dimensions — who owns it versus
+what it is about — and the list shows a column for each. One column labelled
+"Dept" rendering the *category* is what made a ticket routed to IT Support read
+as "Test". Like tags and the SLA beside them, the team fields are agent-facing
+and come back null on customer and guest surfaces.
 - **`due` puts nulls last in both directions.** No SLA is neither the most nor
   the least urgent.
 

@@ -17,7 +17,7 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 3. [Access & identity](#3-access--identity)
    - 3.1 Passwordless login · 3.2 Members & roles · 3.3 SSO (OIDC/SAML) · 3.4 Domains & login routing
 4. [Ticketing](#4-ticketing)
-   - 4.1 Tickets & the agent workspace · 4.2 Categories · 4.3 Customer portal · 4.4 Guest submission
+   - 4.1 Tickets & the agent workspace · 4.2 Statuses & workflow · 4.3 Categories · 4.4 Customer portal · 4.5 Guest submission
 5. [Agent productivity](#5-agent-productivity)
    - 5.1 Canned responses · 5.2 Tags · 5.3 Teams & routing · 5.4 Problems
 6. [SLA policies](#6-sla-policies)
@@ -149,9 +149,15 @@ lookups — deployment concern.)
 ### 4.1 Tickets & the agent workspace
 
 **What it is.** The heart of Trackly. A ticket has a **subject/description**, a
-**status** (open → pending → resolved → closed), a **priority** (low / medium /
-high / urgent), an optional **category**, an **assignee**, **watchers**, **tags**,
-**attachments**, and a threaded conversation.
+**status** (whatever your workspace has defined — see §4.2), a **priority**
+(low / medium / high / urgent), an optional **department** and **category**, an
+**assignee**, **watchers**, **tags**, **attachments**, and a threaded
+conversation.
+
+**Department and category are different things.** The department (a *team*,
+§5.3) is who the ticket is routed to — IT Support, Facilities. The category
+(§4.3) is what it is about — Billing, Hardware. The ticket list shows both, in
+their own columns.
 **Where:** agents work in **Tickets** (a three-pane workspace: list · conversation
 · details).
 
@@ -187,7 +193,71 @@ Two things about it are worth knowing before you use it:
   open and pending tickets (team routing applies where configured, §5.3). You
   cannot pick one at creation; reassign afterwards from the details pane.
 
-### 4.2 Categories
+### 4.2 Statuses & workflow
+
+**Where:** Admin → Statuses & workflow (`/admin/settings/statuses`). Admin only.
+
+**What it is.** The states a ticket can be in, and which moves between them are
+allowed. Trackly ships five and you invent the rest.
+
+**The five categories are fixed; the statuses under them are yours.** Want
+`Todo → Estimated → In review → Done`? Create exactly those, and file each one
+under a category so the rest of the product still knows what it means.
+
+**Everything in Trackly reads the CATEGORY, never the name.** This is the one
+thing to understand before you add anything:
+
+| Category | What it does to a ticket |
+|---|---|
+| **Open** | Counts as open. SLA clocks run. A new ticket starts here. |
+| **Pending** | Counts as open, but **SLA clocks pause** — when the ticket leaves, the waiting time is added back onto both deadlines. |
+| **Active** | Counts as open. SLA clocks run. For work somebody has actually picked up. |
+| **Resolved** | Ends the ticket. Clocks stop, a resolution note is **required** (§22), and the customer gets the resolution email plus the CSAT survey (§16). |
+| **Closed** | Ends the ticket. Clocks stop and a resolution note is required, but **no survey** is sent. |
+
+So a status called "Waiting on customer" only pauses the SLA if you file it
+under **Pending**. Filing it under Open makes a ticket that quietly breaches
+while you wait on somebody else.
+
+**Set up.**
+- **Add** — type a name in the box at the foot of a category and press Add. The
+  stored value is derived from the name (`Testing Required` → `testing-required`)
+  and never changes afterwards, so renaming is always safe.
+- **Reorder** — the arrows. The order here is the order agents see in the picker,
+  and it decides which status Trackly picks when it has to act on its own (a
+  problem resolving all its tickets, an automation rule saying "close it"): the
+  first active status in that category.
+- **Default** — where new tickets start. Exactly one, always.
+- **Hide** — retires a status. It disappears from every picker, but tickets
+  already in it keep their label. **Prefer this to deleting.**
+- **Delete** — only offered for a status you created that no ticket is using.
+  Built-in statuses cannot be deleted at all. This is deliberate: a ticket
+  holding a value with no status behind it renders as a raw slug, and the
+  database looks corrupt when the truth is that somebody tidied up.
+
+**Workflow (second tab).** A grid — rows are where the ticket is now, columns
+are where it may go. Tick a cell to allow that move.
+
+- The first row is **Any status**, which allows a move from wherever the ticket
+  happens to be. Every status starts with this, so a workspace that never opens
+  this screen behaves as Trackly always has.
+- A cell already covered by the Any row shows ticked and greyed — it is allowed
+  either way, and clearing it here would do nothing.
+- Staying put is always allowed, so the diagonal is a dash.
+- **An empty grid means everything is allowed, not nothing.** That rule exists so
+  no workspace can lock every ticket in place. Tick at least one cell to take
+  real control.
+- The screen warns you if a status has become unreachable — easy to build, looks
+  fine, and the only symptom is an agent finding an option missing weeks later.
+- **Save replaces the whole workflow** in one go. Nothing is half-applied.
+
+**Where it is enforced.** On the ticket screen, and on `PATCH /api/tickets/{id}`
+behind it — an agent is told "this ticket cannot move straight to X". Automation
+rules and problem bulk-resolve set a status directly and are **not** checked
+against the workflow: those are your own rules acting, not somebody
+freehand-editing a ticket.
+
+### 4.3 Categories
 
 **What it is.** An organising dimension for tickets (e.g. Billing, Technical).
 Categories are per-workspace and used for filtering, automation, and reporting.
@@ -197,7 +267,7 @@ Admins create them via the API (`POST /api/categories`) or they arrive with demo
 data; automation can also route by category (§7). _(There is no dedicated
 category-management screen yet — this is a known gap.)_
 
-### 4.3 Customer portal
+### 4.4 Customer portal
 
 **What it is.** A signed-in space where your customers see **their own** tickets
 and replies, branded as your workspace.
@@ -206,7 +276,7 @@ and replies, branded as your workspace.
 **Set up.** Nothing beyond branding (§10). Customers reach it after signing in
 (magic link) or from links in notification emails.
 
-### 4.4 Guest submission
+### 4.5 Guest submission
 
 **What it is.** Anyone can raise a ticket without an account via a branded submit
 form; they verify with a one-time code and get a private **tracking link** to
@@ -502,7 +572,8 @@ Canned.
 |---|---|
 | **Insights** | Analytics · Announcements |
 | **People** | Members · Teams |
-| **Workflow** | SLA policies · Automation · AI copilot |
+| **Workflow** | Statuses & workflow · SLA policies · Automation · AI copilot |
+| **Ticket view** | Ticket layout (§23) |
 | **Channels** | Messaging (connectors) · Widget · Email |
 | **Workspace** | Branding · SSO · Domains |
 

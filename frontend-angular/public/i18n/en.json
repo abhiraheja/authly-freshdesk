@@ -202,7 +202,8 @@
       "assignee": "Assignee",
       "sla": "SLA",
       "updated": "Updated",
-      "category": "Dept",
+      "department": "Dept",
+      "category": "Category",
       "actions": "Actions"
     },
     "empty": {

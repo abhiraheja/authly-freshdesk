@@ -19,6 +19,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<TicketWatcher> TicketWatchers => Set<TicketWatcher>();
     public DbSet<TicketTimeEntry> TicketTimeEntries => Set<TicketTimeEntry>();
     public DbSet<TicketLink> TicketLinks => Set<TicketLink>();
+    public DbSet<TicketActivity> TicketActivities => Set<TicketActivity>();
     public DbSet<TicketStatus> TicketStatuses => Set<TicketStatus>();
     public DbSet<TicketStatusTransition> TicketStatusTransitions => Set<TicketStatusTransition>();
     public DbSet<Notification> Notifications => Set<Notification>();
@@ -241,6 +242,21 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             // SetNull: the link is about the work, not about who filed it, so it
             // outlives the agent's account.
             e.HasOne(x => x.CreatedBy).WithMany().HasForeignKey(x => x.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TicketActivity>(e =>
+        {
+            e.ToTable("ticket_activities");
+            // The only query the feed makes: one ticket, oldest first. Nothing
+            // filters or searches it, so one composite index is the whole story.
+            e.HasIndex(a => new { a.TicketId, a.CreatedAt });
+            e.HasOne(a => a.Ticket).WithMany().HasForeignKey(a => a.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // SetNull, not Cascade: the log is a record of what happened to the
+            // ticket. Deactivating or removing an agent must not quietly erase
+            // the changes they made — the row survives and reads as "system".
+            e.HasOne(a => a.Actor).WithMany().HasForeignKey(a => a.ActorId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
 

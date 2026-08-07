@@ -239,6 +239,10 @@ function orUndefined(values: string[]): string[] | undefined {
                   </button>
                 </th>
                 <th scope="col">{{ 'tickets.columns.requester' | transloco }}</th>
+                <!-- Department and category are different things and both belong
+                     here. One column showed the category under a "Dept" heading,
+                     which is how a ticket routed to IT Support read as "Test". -->
+                <th scope="col" class="hidden xl:table-cell">{{ 'tickets.columns.department' | transloco }}</th>
                 <th scope="col" class="hidden lg:table-cell">{{ 'tickets.columns.category' | transloco }}</th>
                 <th scope="col" [attr.aria-sort]="ariaSort('priority')">
                   <button type="button" class="th-sort" (click)="sortBy('priority')">
@@ -282,12 +286,13 @@ function orUndefined(values: string[]): string[] | undefined {
                      the data lands. -->
                 @for (row of skeletonRows; track row) {
                   <tr class="row-blank">
-                    <!-- Spelled out rather than looped: the three responsive
+                    <!-- Spelled out rather than looped: the four responsive
                          columns have to disappear here exactly as they do in the
-                         header, or a narrow viewport gets 9 skeleton cells under
+                         header, or a narrow viewport gets 10 skeleton cells under
                          6 headings and every column shifts left. -->
                     <td><span tkSkeleton class="h-4 w-full max-w-[220px]"></span></td>
                     <td><span tkSkeleton class="h-4 w-full max-w-[140px]"></span></td>
+                    <td class="hidden xl:table-cell"><span tkSkeleton class="h-4 w-20"></span></td>
                     <td class="hidden lg:table-cell"><span tkSkeleton class="h-4 w-20"></span></td>
                     <td><span tkSkeleton class="h-5 w-16 rounded-full"></span></td>
                     <td><span tkSkeleton class="h-5 w-20 rounded-full"></span></td>
@@ -332,6 +337,9 @@ function orUndefined(values: string[]): string[] | undefined {
                         />
                         <span class="truncate">{{ requesterOf(ticket) }}</span>
                       </span>
+                    </td>
+                    <td class="hidden text-muted-foreground xl:table-cell">
+                      {{ ticket.teamName ?? '—' }}
                     </td>
                     <td class="hidden text-muted-foreground lg:table-cell">
                       {{ ticket.category?.name ?? '—' }}
@@ -386,12 +394,12 @@ function orUndefined(values: string[]): string[] | undefined {
                     </td>
                   </tr>
                 } @empty {
-                  <!-- colspan MUST equal the header count (9). Too low and the
+                  <!-- colspan MUST equal the header count (10). Too low and the
                        leftover columns render as bare white cells beside the
                        empty state — which is exactly what a stale 7 looked
                        like. Responsively-hidden columns still count. -->
                   <tr class="row-blank">
-                    <td colspan="9" class="p-0">
+                    <td colspan="10" class="p-0">
                       @if (hasFilters()) {
                         <tk-empty-state
                           icon="filter"

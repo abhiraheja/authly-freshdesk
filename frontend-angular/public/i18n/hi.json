@@ -202,7 +202,8 @@
       "assignee": "सौंपा गया",
       "sla": "SLA",
       "updated": "अपडेट",
-      "category": "विभाग",
+      "department": "विभाग",
+      "category": "श्रेणी",
       "actions": "कार्रवाई"
     },
     "empty": {

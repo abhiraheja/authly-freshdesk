@@ -331,9 +331,20 @@ public class TicketStatusService(TracklyDbContext db)
                 throw new ArgumentException("Unknown source status.");
         }
 
-        await db.TicketStatusTransitions
+        // Loaded and removed through the change tracker rather than with
+        // ExecuteDelete. ExecuteDelete commits on its own, so a failure while
+        // adding the replacements would leave the workspace with NO rules — and
+        // an empty workflow means "allow everything", so a save that failed
+        // halfway would quietly unlock every transition it was meant to
+        // restrict. It also deletes behind the tracker's back, stranding rules
+        // this scope has already loaded as references to rows that are gone.
+        //
+        // The whole table is at most one row per status pair, so reading it back
+        // costs nothing next to being wrong.
+        var existing = await db.TicketStatusTransitions
             .Where(t => t.WorkspaceId == workspaceId)
-            .ExecuteDeleteAsync(ct);
+            .ToListAsync(ct);
+        db.TicketStatusTransitions.RemoveRange(existing);
 
         foreach (var input in wanted.DistinctBy(i => (i.FromStatusId, i.ToStatusId)))
         {

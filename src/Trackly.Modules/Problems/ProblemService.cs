@@ -43,6 +43,8 @@ public class ProblemService(
                     .Select(x => x.Name).FirstOrDefault() ?? t.Status,
                 t.Priority, t.Channel,
                 CategoryDto.From(t.Category),
+                // Agent-only surface already, so no gate is needed here.
+                t.TeamId, t.Team != null ? t.Team.Name : null,
                 UserSummaryDto.From(t.Requester),
                 t.GuestName, t.GuestEmail,
                 UserSummaryDto.From(t.Assignee),

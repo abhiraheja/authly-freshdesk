@@ -112,6 +112,27 @@ public class TicketsController(TicketService tickets, AttachmentService attachme
         return removed ? NoContent() : NotFound();
     }
 
+    // ---- Activity ----
+
+    /// <summary>
+    /// Everything that has happened to this ticket, oldest first.
+    ///
+    /// **Agent/admin only, and not negotiable.** The feed records that a private
+    /// note was written and who a ticket was routed to — internal facts, even
+    /// though it never carries the words of a note (invariant 5). A customer
+    /// reading their own ticket has no business in it.
+    /// </summary>
+    [HttpGet("{id:guid}/activity")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> Activity(Guid id, CancellationToken ct)
+    {
+        // Null, not an empty list, when the ticket is not visible: an id from
+        // another workspace has to 404 rather than come back as "this ticket has
+        // no history", which is a different and misleading answer.
+        var feed = await tickets.ActivityAsync(User.GetActor(), id, ct);
+        return feed is null ? NotFound() : Ok(feed);
+    }
+
     // ---- Related work ----
     //
     // Agent/admin: these are engineering references (stories, PRs, docs), on the

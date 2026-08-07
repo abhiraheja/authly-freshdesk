@@ -1609,6 +1609,13 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDefaultValue("open")
                         .HasColumnName("status");
 
+                    b.Property<string>("StatusCategory")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("open")
+                        .HasColumnName("status_category");
+
                     b.Property<string>("Subject")
                         .IsRequired()
                         .HasColumnType("text")
@@ -1755,6 +1762,54 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_notifications_user_id_read_at");
 
                     b.ToTable("notifications", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FromLabel")
+                        .HasColumnType("text")
+                        .HasColumnName("from_label");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<string>("ToLabel")
+                        .HasColumnType("text")
+                        .HasColumnName("to_label");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_activities");
+
+                    b.HasIndex("ActorId")
+                        .HasDatabaseName("ix_ticket_activities_actor_id");
+
+                    b.HasIndex("TicketId", "CreatedAt")
+                        .HasDatabaseName("ix_ticket_activities_ticket_id_created_at");
+
+                    b.ToTable("ticket_activities", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketLink", b =>
@@ -3063,6 +3118,26 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("User");
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketActivity", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_ticket_activities_users_actor_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_activities_tickets_ticket_id");
+
+                    b.Navigation("Actor");
+
+                    b.Navigation("Ticket");
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketLink", b =>

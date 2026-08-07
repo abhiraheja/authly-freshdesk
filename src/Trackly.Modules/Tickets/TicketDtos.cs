@@ -39,6 +39,13 @@ public record TicketSummaryDto(
     string Priority,
     string Channel,
     CategoryDto? Category,
+    /// <summary>
+    /// The department the ticket is routed to — a <c>Team</c> in the schema.
+    /// Agent-facing: which internal team owns a ticket is routing detail, so it
+    /// is withheld from customer and guest surfaces like tags and the SLA are.
+    /// </summary>
+    Guid? TeamId,
+    string? TeamName,
     UserSummaryDto? Requester,
     string? GuestName,
     string? GuestEmail,

@@ -11,7 +11,7 @@ namespace Trackly.Modules.Tickets;
 public class TicketService(
     TracklyDbContext db, NotificationService notifications, SlaService sla, AutomationService automation,
     CsatService csat, TagService tags, TicketOptionService options, NotificationFeed feed,
-    TicketStatusService statuses)
+    TicketStatusService statuses, ActivityLog activity)
 {
     // ---- Queries ------------------------------------------------------------
 
@@ -117,6 +117,8 @@ public class TicketService(
                     .FirstOrDefault() ?? t.Status,
                 t.Priority, t.Channel,
                 CategoryDto.From(t.Category),
+                actor.IsAgentOrAdmin ? t.TeamId : null,
+                actor.IsAgentOrAdmin ? (t.Team != null ? t.Team.Name : null) : null,
                 UserSummaryDto.From(t.Requester),
                 t.GuestName, t.GuestEmail,
                 UserSummaryDto.From(t.Assignee),
@@ -471,6 +473,13 @@ public class TicketService(
         // Automation may change priority/team/tags before SLA is computed.
         await automation.RunOnCreateAsync(ticket, ct);
         await sla.ApplyOnCreateAsync(ticket, ct);
+
+        // Queued after automation so the opening entry describes the ticket as
+        // it actually came out, not as it was posted. Same SaveChanges as the
+        // ticket itself — the log commits with what it describes or not at all.
+        activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
+            TicketActivityType.Created, ticket.Subject);
+
         await db.SaveChangesAsync(ct);
         await notifications.OnTicketCreatedAsync(ticket.Id, ct);
         return (await GetAsync(actor, ticket.Id, ct))!;
@@ -543,7 +552,14 @@ public class TicketService(
         if (!actor.IsAgentOrAdmin)
             throw new UnauthorizedAccessException();
 
+        // Category, Team and Assignee are included for the activity log: it
+        // records the labels as they read at the time, and once a field has been
+        // reassigned below there is no way back to what it used to say. Three
+        // joins on a single-row lookup, once per save.
         var ticket = await db.Tickets
+            .Include(t => t.Category)
+            .Include(t => t.Team)
+            .Include(t => t.Assignee)
             .SingleOrDefaultAsync(t => t.WorkspaceId == actor.WorkspaceId && t.Id == ticketId, ct);
         if (ticket is null)
             return null;
@@ -553,11 +569,19 @@ public class TicketService(
         var previousAssignee = ticket.AssigneeId;
         var previousPriority = ticket.Priority;
 
+        // Read now, before anything below overwrites the navigation.
+        var wasCategory = ticket.Category?.Name;
+        var wasTeam = ticket.Team?.Name;
+        var wasAssignee = DisplayName(ticket.Assignee);
+        var wasSubject = ticket.Subject;
+
         if (request.Subject is not null)
         {
             if (string.IsNullOrWhiteSpace(request.Subject))
                 throw new ArgumentException("Subject cannot be empty.");
             ticket.Subject = request.Subject.Trim();
+            activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
+                TicketActivityType.Subject, wasSubject, ticket.Subject);
         }
 
         if (request.Status is not null)
@@ -614,6 +638,26 @@ public class TicketService(
                     _ => null,
                 };
 
+                // The status move itself, always — it is the entry people scan
+                // the log for. The old status is resolved rather than remembered
+                // because a retired one still has to render its name here.
+                var previousName = (await statuses.ResolveAsync(actor.WorkspaceId, previousStatus, ct))?.Name
+                                   ?? previousStatus;
+                activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
+                    TicketActivityType.Status, previousName, target.Name);
+
+                // Plus a second entry for crossing the line into or out of
+                // "finished". Two rows for one change is deliberate: "resolved"
+                // and "reopened" are the events a manager scans for, and making
+                // them findable would otherwise mean knowing which of the
+                // workspace's status names happen to be terminal ones.
+                if (wasOpen && isEnding)
+                    activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
+                        TicketActivityType.Resolved, ticket.ResolutionNote);
+                else if (!wasOpen && !isEnding)
+                    activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
+                        TicketActivityType.Reopened, target.Name);
+
                 // Reopened: the resolution it had no longer describes it. The
                 // internal comment written below stays, so the history survives
                 // even though the field does not.
@@ -635,6 +679,11 @@ public class TicketService(
             if (!allowed.Contains(request.Priority))
                 throw new ArgumentException("Invalid priority.");
             ticket.Priority = request.Priority;
+            // The raw value, not a label: priorities are a fixed vocabulary the
+            // client already translates, so storing "urgent" keeps the entry
+            // readable in whichever language the log is opened in.
+            activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
+                TicketActivityType.Priority, previousPriority, ticket.Priority);
         }
 
         if (request.ClearRequester)
@@ -657,27 +706,37 @@ public class TicketService(
         if (request.ClearCategory)
         {
             ticket.CategoryId = null;
+            ticket.Category = null;
+            activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
+                TicketActivityType.Category, wasCategory, null);
         }
         else if (request.CategoryId is not null)
         {
-            var exists = await db.Categories.AnyAsync(
+            var chosen = await db.Categories.SingleOrDefaultAsync(
                 c => c.WorkspaceId == actor.WorkspaceId && c.Id == request.CategoryId, ct);
-            if (!exists)
+            if (chosen is null)
                 throw new ArgumentException("Unknown category.");
             ticket.CategoryId = request.CategoryId;
+            activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
+                TicketActivityType.Category, wasCategory, chosen.Name);
         }
 
         if (request.ClearTeam)
         {
             ticket.TeamId = null;
+            ticket.Team = null;
+            activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
+                TicketActivityType.Team, wasTeam, null);
         }
         else if (request.TeamId is not null && request.TeamId != ticket.TeamId)
         {
-            var teamExists = await db.Teams.AnyAsync(
+            var team = await db.Teams.SingleOrDefaultAsync(
                 t => t.WorkspaceId == actor.WorkspaceId && t.Id == request.TeamId, ct);
-            if (!teamExists)
+            if (team is null)
                 throw new ArgumentException("Unknown team.");
             ticket.TeamId = request.TeamId;
+            activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
+                TicketActivityType.Team, wasTeam, team.Name);
 
             // Route: round-robin within the team (an explicit assignee below still wins).
             var teamAssignee = await PickRoundRobinAssigneeAsync(actor.WorkspaceId, request.TeamId, ct);
@@ -711,6 +770,19 @@ public class TicketService(
                 AssignedTo = request.AssigneeId.Value,
                 AssignedBy = actor.UserId,
             });
+        }
+
+        // Logged once, here, against the value the ticket ENDED UP with rather
+        // than inside each branch above. Choosing a department round-robins an
+        // assignee, and an explicit assignee in the same save overrides it — two
+        // entries for one save would describe a state the ticket never had.
+        if (ticket.AssigneeId != previousAssignee)
+        {
+            var nowAssigned = ticket.AssigneeId is { } id
+                ? DisplayName(await db.Users.SingleOrDefaultAsync(u => u.Id == id, ct))
+                : null;
+            activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
+                TicketActivityType.Assignee, wasAssignee, nowAssigned);
         }
 
         // The resolution, written into the thread as an internal note.
@@ -758,6 +830,10 @@ public class TicketService(
                 Minutes = minutes,
                 Note = request.ResolutionNote?.Trim(),
             });
+            // The number only. The log says how much was booked and by whom; the
+            // Time spent card is where the note and the breakdown live.
+            activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
+                TicketActivityType.TimeLogged, minutes.ToString());
         }
 
         // SLA: recompute on priority change, pause/resume on status change.
@@ -929,6 +1005,17 @@ public class TicketService(
     private static string? Trim(string? value) =>
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
+    /// <summary>
+    /// How a person is written into the activity log. Name, or the email when
+    /// there is no name — never an id, which tells the reader nothing.
+    ///
+    /// Captured at the time of the change on purpose: the log records what
+    /// happened, and an entry that silently follows a later rename is describing
+    /// something other than the event it is a record of.
+    /// </summary>
+    private static string? DisplayName(User? user) =>
+        user is null ? null : Trim(user.Name) ?? user.Email;
+
     private static TimeEntryDto ToTimeEntry(TicketTimeEntry e) =>
         new(e.Id, UserSummaryDto.From(e.User)!, e.Minutes, e.Note, e.SpentAt, e.CreatedAt);
 
@@ -958,6 +1045,23 @@ public class TicketService(
 
     // ---- Related work ---------------------------------------------------------
     //
+    /// <summary>
+    /// The ticket's audit trail, or null when the caller cannot see the ticket.
+    ///
+    /// Routed through here rather than straight to <see cref="ActivityLog"/> so
+    /// the visibility check is the same one every other read on this ticket
+    /// goes through — one place that decides who can see what.
+    /// </summary>
+    public async Task<IReadOnlyList<TicketActivityDto>?> ActivityAsync(
+        Actor actor, Guid ticketId, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin)
+            throw new UnauthorizedAccessException();
+        if (!await TicketExistsAsync(actor, ticketId, ct))
+            return null;
+        return await activity.ForTicketAsync(actor.WorkspaceId, ticketId, ct);
+    }
+
     // Agent-facing, like time and private notes: these are engineering
     // references, and a customer has no business reading the PR that fixed their
     // ticket (invariant 5).
@@ -1011,6 +1115,11 @@ public class TicketService(
             CreatedById = actor.UserId,
         };
         db.TicketLinks.Add(link);
+        // The title if there is one, otherwise the URL — the log has to say
+        // WHICH link was added, and a row reading only "added a link" sends the
+        // reader to the card to work it out.
+        activity.Happened(actor.WorkspaceId, ticketId, actor.UserId,
+            TicketActivityType.LinkAdded, link.Title ?? link.Url);
         await db.SaveChangesAsync(ct);
 
         await db.Entry(link).Reference(l => l.CreatedBy).LoadAsync(ct);
@@ -1025,10 +1134,20 @@ public class TicketService(
         // Any agent may remove any link: a wrong reference on a ticket everyone
         // reads is worse than the small chance of one being taken off in error,
         // and unlike a time entry it is not a record of anyone's work.
-        var removed = await db.TicketLinks
-            .Where(l => l.Id == linkId && l.TicketId == ticketId && l.WorkspaceId == actor.WorkspaceId)
-            .ExecuteDeleteAsync(ct);
-        return removed > 0;
+        //
+        // Loaded first so the activity entry can name what went. Removing it
+        // through the tracker keeps the delete and the log in one transaction —
+        // ExecuteDelete would commit on its own and could leave the link gone
+        // with nothing in the history saying who took it.
+        var link = await db.TicketLinks.SingleOrDefaultAsync(
+            l => l.Id == linkId && l.TicketId == ticketId && l.WorkspaceId == actor.WorkspaceId, ct);
+        if (link is null) return false;
+
+        db.TicketLinks.Remove(link);
+        activity.Happened(actor.WorkspaceId, ticketId, actor.UserId,
+            TicketActivityType.LinkRemoved, link.Title ?? link.Url);
+        await db.SaveChangesAsync(ct);
+        return true;
     }
 
     /// <summary>
@@ -1070,10 +1189,10 @@ public class TicketService(
         if (!ticketExists)
             return false;
 
-        var isWatchable = await db.Users.AnyAsync(u =>
+        var watcher = await db.Users.SingleOrDefaultAsync(u =>
             u.WorkspaceId == actor.WorkspaceId && u.Id == agentId && u.IsActive &&
             (u.Role == TracklyRoles.Agent || u.Role == TracklyRoles.Admin), ct);
-        if (!isWatchable)
+        if (watcher is null)
             throw new ArgumentException("Watcher must be an active agent or admin in this workspace.");
 
         var already = await db.TicketWatchers.AnyAsync(
@@ -1086,6 +1205,8 @@ public class TicketService(
                 AgentId = agentId,
                 AddedBy = actor.UserId,
             });
+            activity.Happened(actor.WorkspaceId, ticketId, actor.UserId,
+                TicketActivityType.WatcherAdded, DisplayName(watcher));
             await db.SaveChangesAsync(ct);
         }
         return true;
@@ -1101,9 +1222,18 @@ public class TicketService(
         if (!ticketExists)
             return false;
 
-        await db.TicketWatchers
-            .Where(w => w.TicketId == ticketId && w.AgentId == agentId)
-            .ExecuteDeleteAsync(ct);
+        // Through the tracker, so the removal and its log entry share one
+        // transaction and the entry can still name who stopped watching.
+        var watching = await db.TicketWatchers
+            .Include(w => w.Agent)
+            .SingleOrDefaultAsync(w => w.TicketId == ticketId && w.AgentId == agentId, ct);
+        if (watching is not null)
+        {
+            db.TicketWatchers.Remove(watching);
+            activity.Happened(actor.WorkspaceId, ticketId, actor.UserId,
+                TicketActivityType.WatcherRemoved, DisplayName(watching.Agent));
+            await db.SaveChangesAsync(ct);
+        }
         return true;
     }
 
@@ -1227,6 +1357,18 @@ public class TicketService(
         if (mentioned.Count > 0)
             feed.Queue(actor.WorkspaceId, mentioned, NotificationType.Mention,
                 actor.UserId, ticket.Id, preview: preview);
+
+        // The activity entry says a reply or a note happened, and nothing more.
+        //
+        // **No preview.** The feed is agent-facing but a private note is not —
+        // it is readable only by whoever wrote it (invariant 5), and copying its
+        // text into a row every agent can read would defeat the whole point of
+        // the setting. The thread already holds the words for anyone allowed to
+        // see them; this only records that something was said and when.
+        activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
+            visibility == CommentVisibility.Public
+                ? TicketActivityType.Replied
+                : TicketActivityType.Noted);
 
         // Watchers hear about everything on the ticket, except a note nobody but
         // its author can read. Anyone already told they were mentioned is not
