@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Trackly.Core.Entities;
 
 namespace Trackly.Infrastructure.Data;
@@ -62,6 +64,25 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.HasIndex(u => new { u.WorkspaceId, u.Email }).IsUnique();
             e.Property(u => u.Role).HasDefaultValue(TracklyRoles.Customer);
             e.Property(u => u.IsActive).HasDefaultValue(true);
+
+            // jsonb, not a child table: these are read and written whole, always
+            // with their user, and never queried across users. A table would buy
+            // joins nobody needs and lose the "just save the dictionary" write.
+            //
+            // The comparer is not optional. Without one EF compares Dictionary by
+            // REFERENCE, so editing an existing customer's fields in place looks
+            // unchanged and the save silently does nothing.
+            e.Property(u => u.CustomFields)
+                .HasColumnName("custom_fields")
+                .HasColumnType("jsonb")
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, (JsonSerializerOptions?)null)
+                         ?? new Dictionary<string, string>(),
+                    new ValueComparer<Dictionary<string, string>>(
+                        (a, b) => a != null && b != null && a.Count == b.Count && !a.Except(b).Any(),
+                        v => v.Aggregate(0, (hash, kv) => HashCode.Combine(hash, kv.Key, kv.Value)),
+                        v => new Dictionary<string, string>(v)));
             e.HasOne(u => u.Workspace)
                 .WithMany(w => w.Users)
                 .HasForeignKey(u => u.WorkspaceId)
@@ -112,9 +133,16 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
 
         modelBuilder.Entity<Ticket>(e =>
         {
-            e.ToTable("tickets", t =>
-                t.HasCheckConstraint("requester_or_guest",
-                    "requester_id IS NOT NULL OR guest_email IS NOT NULL"));
+            // There used to be a `requester_or_guest` CHECK here. It was dropped
+            // because the invariant stopped being true: an agent can raise a
+            // ticket before knowing who it is for — a phone call to log, an
+            // internal request — and links the customer afterwards. Forcing a
+            // requester at insert meant the agent themselves, which made every
+            // internally-raised ticket look like their own support request.
+            //
+            // Nothing depended on the guarantee: every customer-facing send in
+            // NotificationService already bails on a null email.
+            e.ToTable("tickets");
             e.Property(t => t.Status).HasDefaultValue(TicketStatus.Open);
             e.Property(t => t.Priority).HasDefaultValue(TicketPriority.Medium);
             e.Property(t => t.Channel).HasDefaultValue(TicketChannel.Web);

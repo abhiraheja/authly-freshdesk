@@ -4,3 +4,5 @@
 
 export * from './lib/tickets.routes';
 export * from './lib/ticket-list';
+export * from './lib/customer-detail';
+export * from './lib/customer-form';

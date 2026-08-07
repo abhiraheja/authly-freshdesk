@@ -1560,10 +1560,7 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.HasIndex("WorkspaceId", "Status")
                         .HasDatabaseName("ix_tickets_workspace_id_status");
 
-                    b.ToTable("tickets", null, t =>
-                        {
-                            t.HasCheckConstraint("requester_or_guest", "requester_id IS NOT NULL OR guest_email IS NOT NULL");
-                        });
+                    b.ToTable("tickets");
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketAssignment", b =>
@@ -1723,6 +1720,19 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
+
+                    b.Property<string>("Company")
+                        .HasColumnType("text")
+                        .HasColumnName("company");
+
+                    b.Property<string>("CustomFields")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("custom_fields");
+
+                    b.Property<string>("Location")
+                        .HasColumnType("text")
+                        .HasColumnName("location");
 
                     b.Property<string>("Email")
                         .HasColumnType("text")

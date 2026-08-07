@@ -43,6 +43,125 @@ public class UsersController(TracklyDbContext db) : ControllerBase
         return Ok(list);
     }
 
+    public record CustomerRequest(
+        string? Email,
+        string? Name,
+        string? Phone,
+        string? Company,
+        string? Location,
+        Dictionary<string, string>? CustomFields);
+
+    // Adds a customer to the workspace so an agent can attach a ticket to a real
+    // person — the phone call, the walk-in, the guest submission nobody has a
+    // record for yet.
+    //
+    // Get-or-create, not create-or-409: from the agent's side "add this customer"
+    // is one intention, and an email that already exists is the SAME person, not
+    // a conflict they have to go and resolve. A duplicate row would be the worse
+    // outcome — two histories for one customer.
+    //
+    // No password is set because Trackly has none: the customer signs in with a
+    // magic link whenever they first come to the portal.
+    [HttpPost]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> Create([FromBody] CustomerRequest request, CancellationToken ct)
+    {
+        var email = request.Email?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+            return BadRequest(new { error = "A valid email address is required." });
+
+        var workspaceId = User.GetWorkspaceId();
+        var existing = await db.Users
+            .SingleOrDefaultAsync(u => u.WorkspaceId == workspaceId && u.Email == email, ct);
+        if (existing is not null)
+        {
+            // Same person, so fill in anything the agent supplied that we did not
+            // already have. Overwriting what is on file would let a hurried "add
+            // customer" wipe details someone else took the time to record.
+            Fill(existing, request);
+            await db.SaveChangesAsync(ct);
+            return Ok(Dto(existing));
+        }
+
+        var user = new Trackly.Core.Entities.User
+        {
+            WorkspaceId = workspaceId,
+            Email = email,
+            Role = TracklyRoles.Customer,
+        };
+        Fill(user, request);
+        db.Users.Add(user);
+        await db.SaveChangesAsync(ct);
+        return StatusCode(StatusCodes.Status201Created, Dto(user));
+    }
+
+    // Full profile edit, agent/admin. Separate from PATCH below, which is the
+    // admin-only role/active endpoint — an agent may correct a customer's phone
+    // number without being allowed to make them an admin.
+    [HttpPut("{id:guid}/profile")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> UpdateProfile(Guid id, [FromBody] CustomerRequest request, CancellationToken ct)
+    {
+        var user = await db.Users.SingleOrDefaultAsync(
+            u => u.WorkspaceId == User.GetWorkspaceId() && u.Id == id, ct);
+        if (user is null) return NotFound();
+
+        // Here a null field DOES clear, unlike create: this is an edit form and
+        // the agent is looking at the current values as they submit.
+        user.Name = Clean(request.Name);
+        user.Phone = Clean(request.Phone);
+        user.Company = Clean(request.Company);
+        user.Location = Clean(request.Location);
+        if (request.CustomFields is not null)
+        {
+            user.CustomFields = request.CustomFields
+                .Where(kv => !string.IsNullOrWhiteSpace(kv.Key) && !string.IsNullOrWhiteSpace(kv.Value))
+                .ToDictionary(kv => kv.Key.Trim(), kv => kv.Value.Trim());
+        }
+        user.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return Ok(Dto(user));
+    }
+
+    // One customer, with the ticket counts the profile screen shows.
+    [HttpGet("{id:guid}")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> Get(Guid id, CancellationToken ct)
+    {
+        var workspaceId = User.GetWorkspaceId();
+        var user = await db.Users.SingleOrDefaultAsync(u => u.WorkspaceId == workspaceId && u.Id == id, ct);
+        if (user is null) return NotFound();
+
+        var tickets = db.Tickets.Where(t => t.WorkspaceId == workspaceId && t.RequesterId == id);
+        return Ok(new
+        {
+            user.Id, user.Name, user.Email, user.Phone, user.Company, user.Location,
+            user.Role, user.IsActive, user.CreatedAt, user.CustomFields,
+            TotalTickets = await tickets.CountAsync(ct),
+            OpenTickets = await tickets.CountAsync(t => t.Status == TicketStatus.Open, ct),
+        });
+    }
+
+    private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+    private static void Fill(Trackly.Core.Entities.User user, CustomerRequest request)
+    {
+        user.Name ??= Clean(request.Name);
+        user.Phone ??= Clean(request.Phone);
+        user.Company ??= Clean(request.Company);
+        user.Location ??= Clean(request.Location);
+        foreach (var (key, value) in request.CustomFields ?? [])
+        {
+            if (string.IsNullOrWhiteSpace(key) || string.IsNullOrWhiteSpace(value)) continue;
+            user.CustomFields[key.Trim()] = value.Trim();
+        }
+    }
+
+    private static object Dto(Trackly.Core.Entities.User u) => new
+    {
+        u.Id, u.Name, u.Email, u.Phone, u.Company, u.Location, u.Role, u.CustomFields,
+    };
+
     public record UpdateUserRequest(string? Role, bool? IsActive);
 
     // Admin user management: change role, deactivate/reactivate. Deactivation

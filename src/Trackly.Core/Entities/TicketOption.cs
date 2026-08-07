@@ -50,5 +50,11 @@ public static class TicketOptionKind
 {
     public const string Priority = "priority";
     public const string Channel = "channel";
-    public static readonly string[] All = [Priority, Channel];
+
+    // Suggested key names for a customer's custom fields. Suggestions only —
+    // CustomerRequest never rejects a key that isn't listed, because an agent
+    // taking notes on a call must not be blocked by the configuration screen.
+    public const string CustomerField = "customer_field";
+
+    public static readonly string[] All = [Priority, Channel, CustomerField];
 }

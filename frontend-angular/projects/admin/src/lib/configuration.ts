@@ -1,12 +1,12 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, resource, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TicketsApi, errorMessage, type TicketOption } from '@trackly/core';
+import { TicketsApi, errorMessage, valueOr, type TicketOption } from '@trackly/core';
 import { Tabs, ToastService, type TabItem } from '@trackly/ui';
 import { ConfigList, type ConfigRow } from './config-list';
 
 /** Which of the four lists a row belongs to — each has its own endpoints. */
-type ConfigListKey = 'department' | 'category' | 'priority' | 'channel';
+type ConfigListKey = 'department' | 'category' | 'priority' | 'channel' | 'customer_field';
 
 /**
  * Admin → Configuration: the four vocabularies a ticket is filed against.
@@ -76,7 +76,7 @@ type ConfigListKey = 'department' | 'category' | 'priority' | 'channel';
               [heading]="'admin.config.priorities' | transloco"
               [description]="'admin.config.prioritiesHelp' | transloco"
               [addPlaceholder]="'admin.config.prioritiesAdd' | transloco"
-              [rows]="optionRows(priorities.value())"
+              [rows]="priorityRows()"
               [loading]="priorities.isLoading()"
               [error]="errorOf(priorities)"
               [busy]="busy()"
@@ -87,12 +87,29 @@ type ConfigListKey = 'department' | 'category' | 'priority' | 'channel';
               (remove)="remove('priority', $event)"
             />
           }
+          @case ('customer_field') {
+            <tk-config-list
+              [heading]="'admin.config.customerFields' | transloco"
+              [description]="'admin.config.customerFieldsHelp' | transloco"
+              [addPlaceholder]="'admin.config.customerFieldsAdd' | transloco"
+              [rows]="customerFieldRows()"
+              [loading]="customerFields.isLoading()"
+              [error]="errorOf(customerFields)"
+              [busy]="busy()"
+              (retry)="customerFields.reload()"
+              (add)="add('customer_field', $event)"
+              (rename)="rename('customer_field', $event.row, $event.label)"
+              (setActive)="setActive('customer_field', $event.row, $event.isActive)"
+              (remove)="remove('customer_field', $event)"
+            />
+          }
+
           @default {
             <tk-config-list
               [heading]="'admin.config.channels' | transloco"
               [description]="'admin.config.channelsHelp' | transloco"
               [addPlaceholder]="'admin.config.channelsAdd' | transloco"
-              [rows]="optionRows(channels.value())"
+              [rows]="channelRows()"
               [loading]="channels.isLoading()"
               [error]="errorOf(channels)"
               [busy]="busy()"
@@ -118,6 +135,7 @@ export class AdminConfiguration {
   // brought back, so it has to be able to see one.
   protected readonly priorities = resource({ loader: () => this.api.ticketOptions('priority', true) });
   protected readonly channels = resource({ loader: () => this.api.ticketOptions('channel', true) });
+  protected readonly customerFields = resource({ loader: () => this.api.ticketOptions('customer_field', true) });
 
   protected readonly busy = signal(false);
 
@@ -150,10 +168,11 @@ export class AdminConfiguration {
   protected readonly tabs = computed<TabItem[]>(() => {
     const t = (key: string) => this.transloco.translate('admin.config.' + key);
     return [
-      { id: 'department', label: t('departments'), icon: 'user-cog', count: this.departmentRows().length },
-      { id: 'category', label: t('categories'), icon: 'tag', count: this.categoryRows().length },
-      { id: 'priority', label: t('priorities'), icon: 'alert-triangle', count: this.priorities.value()?.length },
-      { id: 'channel', label: t('channels'), icon: 'message-circle', count: this.channels.value()?.length },
+      { id: 'department', label: t('departments'), icon: 'user-cog', count: this.departmentRows().length || undefined },
+      { id: 'category', label: t('categories'), icon: 'tag', count: this.categoryRows().length || undefined },
+      { id: 'priority', label: t('priorities'), icon: 'alert-triangle', count: this.priorityRows().length || undefined },
+      { id: 'channel', label: t('channels'), icon: 'message-circle', count: this.channelRows().length || undefined },
+      { id: 'customer_field', label: t('customerFields'), icon: 'user-round', count: this.customerFieldRows().length || undefined },
     ];
   });
 
@@ -166,8 +185,12 @@ export class AdminConfiguration {
     return !list.isLoading() && list.error() ? errorMessage(list.error()) : null;
   }
 
+  protected readonly priorityRows = computed(() => this.optionRows(valueOr(this.priorities, [])));
+  protected readonly channelRows = computed(() => this.optionRows(valueOr(this.channels, [])));
+  protected readonly customerFieldRows = computed(() => this.optionRows(valueOr(this.customerFields, [])));
+
   protected readonly departmentRows = computed<ConfigRow[]>(() =>
-    (this.teams.value() ?? []).map((team) => ({
+    valueOr(this.teams, []).map((team) => ({
       id: team.id,
       label: team.name,
       meta: team.members.length ? `${team.members.length}` : undefined,
@@ -178,7 +201,7 @@ export class AdminConfiguration {
   );
 
   protected readonly categoryRows = computed<ConfigRow[]>(() =>
-    (this.categories.value() ?? []).map((category) => ({
+    valueOr(this.categories, []).map((category) => ({
       id: category.id,
       label: category.name,
       color: category.color,
@@ -265,6 +288,8 @@ export class AdminConfiguration {
         return this.categories;
       case 'priority':
         return this.priorities;
+      case 'customer_field':
+        return this.customerFields;
       default:
         return this.channels;
     }

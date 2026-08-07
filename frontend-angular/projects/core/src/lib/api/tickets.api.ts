@@ -18,7 +18,26 @@ export interface TagUsage extends Tag {
   ticketCount: number;
 }
 
-export type TicketOptionKind = 'priority' | 'channel';
+/**
+ * What the model thinks, for the agent to accept or ignore.
+ *
+ * `rationale` is not decoration — a suggestion with no stated reason is one an
+ * agent can only take on faith, and these are applied to real customer tickets.
+ */
+export interface TriageSuggestion {
+  priority: string;
+  category: string | null;
+  tags: string[];
+  sentiment: string;
+  rationale: string;
+}
+
+/**
+ * A workspace vocabulary. Stored in `ticket_options` — the table predates
+ * `customer_field` and the name stayed; the shape (workspace, kind, value,
+ * label, order, active) fits all three unchanged.
+ */
+export type TicketOptionKind = 'priority' | 'channel' | 'customer_field';
 
 /**
  * One admin-configured choice for a fixed-vocabulary ticket field.
@@ -55,6 +74,38 @@ export interface UserSummary {
   name: string | null;
   email: string | null;
   role: string;
+}
+
+/**
+ * Everything a workspace keeps about a customer.
+ *
+ * `customFields` is deliberately open: support desks track different things
+ * (account number, plan, region), and a fixed schema would mean a migration
+ * every time one of them needed another. Configuration defines *suggested*
+ * keys; it never restricts what can be saved.
+ */
+export interface Customer extends UserSummary {
+  phone: string | null;
+  company: string | null;
+  location: string | null;
+  customFields: Record<string, string>;
+}
+
+/** Customer plus the counts the profile page shows. */
+export interface CustomerDetail extends Customer {
+  isActive: boolean;
+  createdAt: string;
+  totalTickets: number;
+  openTickets: number;
+}
+
+export interface CustomerBody {
+  email?: string;
+  name?: string;
+  phone?: string;
+  company?: string;
+  location?: string;
+  customFields?: Record<string, string>;
 }
 
 export interface TicketSummary {
@@ -128,6 +179,8 @@ export interface DashboardStats {
 
 export interface TicketListParams {
   status?: string;
+  /** Every ticket raised by one customer — the profile page's history. */
+  requesterId?: string;
   priority?: string;
   assigneeId?: string;
   search?: string;
@@ -150,6 +203,10 @@ export interface UpdateTicketBody {
   unassign?: boolean;
   teamId?: string;
   clearTeam?: boolean;
+  /** Re-points the ticket at a customer. */
+  requesterId?: string;
+  /** Detaches the customer, leaving none. */
+  clearRequester?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -219,6 +276,27 @@ export class TicketsApi {
 
   deleteCategory(id: string): Promise<void> {
     return this.api.delete<void>(`/api/categories/${id}`);
+  }
+
+  /**
+   * Adds a customer to the workspace. Get-or-create by email server-side, so
+   * calling it for someone who already exists returns them rather than failing —
+   * "add this customer" is one intention either way.
+   */
+  createCustomer(body: CustomerBody): Promise<Customer> {
+    return this.api.post<Customer>('/api/users', body);
+  }
+
+  customer(id: string): Promise<CustomerDetail> {
+    return this.api.get<CustomerDetail>(`/api/users/${id}`);
+  }
+
+  /**
+   * Full profile replace. Unlike create, an omitted field CLEARS — this backs an
+   * edit form where the agent can see what they are removing.
+   */
+  updateCustomer(id: string, body: CustomerBody): Promise<Customer> {
+    return this.api.put<Customer>(`/api/users/${id}/profile`, body);
   }
 
   /** Workspace members, for the requester picker. */
@@ -299,6 +377,20 @@ export class TicketsApi {
 
   attachmentUrl(id: string): string {
     return this.api.url(`/api/attachments/${id}`);
+  }
+
+  /**
+   * Whether the AI copilot is on for this workspace — a deployment key AND an
+   * admin toggle. Agent-facing probe, so the UI can hide the ✨ actions without
+   * exposing the admin settings endpoint.
+   */
+  aiAvailable(): Promise<{ available: boolean }> {
+    return this.api.get<{ available: boolean }>('/api/ai/available');
+  }
+
+  /** A suggestion for the agent to accept or ignore. Never auto-applied. */
+  triage(ticketId: string): Promise<TriageSuggestion> {
+    return this.api.post<TriageSuggestion>(`/api/tickets/${ticketId}/ai/triage`);
   }
 }
 

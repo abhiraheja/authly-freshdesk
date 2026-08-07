@@ -719,6 +719,15 @@ input[type='password']::-ms-clear {
 .table tbody tr:last-child td {
   border-bottom: none;
 }
+/* Right-aligned column. This CANNOT be a Tailwind `text-right`: styles.scss
+   loads after Tailwind, so `.table thead th { text-align: left }` wins the
+   specificity tie and only the <td> moves — leaving the value sitting to the
+   right of its own heading. Anything overriding a component class has to be a
+   component class. */
+.table th.col-right,
+.table td.col-right {
+  text-align: right;
+}
 .table tbody tr {
   transition: background-color var(--motion-fast) var(--motion-ease);
 }
@@ -894,6 +903,60 @@ tr:focus-within .row-actions {
 .menu-item.is-highlighted {
   background: rgb(var(--primary) / 0.1);
   color: rgb(var(--primary));
+}
+
+/* ---- Conversation ----
+   A file chip under a message. Its own class rather than utilities because it
+   appears in three places (ticket description, agent reply, customer reply) and
+   they must not drift apart. */
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  margin-top: 0.625rem;
+  padding: 0.375rem 0.625rem;
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--radius-chip);
+  background: rgb(var(--muted));
+  font-size: 0.75rem;
+  color: rgb(var(--muted-foreground));
+}
+.attachment-chip:hover {
+  border-color: rgb(var(--primary) / 0.4);
+  color: rgb(var(--primary));
+}
+
+/* Reply / Private note switch. Not `.tab` — these do not control a panel, they
+   change what the SAME control will do when submitted, so they read as a
+   segmented toggle rather than navigation. */
+.composer-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4375rem;
+  padding: 0.4375rem 0.75rem;
+  border-radius: var(--radius-chip);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: rgb(var(--muted-foreground));
+  cursor: pointer;
+  transition: all var(--motion-fast) var(--motion-ease);
+}
+.composer-tab:hover {
+  color: rgb(var(--foreground));
+}
+.composer-tab.is-active {
+  background: rgb(var(--primary) / 0.1);
+  color: rgb(var(--primary));
+}
+/* The private-note tab is amber even when idle: it is the destructive-adjacent
+   choice here, and the agent has to be able to tell at a glance which mode the
+   composer is in before they type something a customer shouldn't read. */
+.composer-tab-note {
+  color: rgb(var(--warning-ink));
+}
+.composer-tab-note.is-active {
+  background: rgb(var(--warning) / 0.14);
+  color: rgb(var(--warning-ink));
 }
 
 /* ---- Tabs ----
@@ -1198,4 +1261,21 @@ tr:focus-within .row-actions {
 /* The brand mark / AI copilot panel — fixed gradient in both schemes. */
 .brand-gradient {
   background: linear-gradient(135deg, rgb(79 70 229), rgb(167 139 250));
+}
+
+/* A file on the Attachments tab — a full row rather than the inline chip, since
+   here the list IS the content and needs a hit target, not a footnote. */
+.attachment-row {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.6875rem 0.875rem;
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--radius-control);
+  font-size: 0.875rem;
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+.attachment-row:hover {
+  border-color: rgb(var(--primary) / 0.45);
+  background: rgb(var(--primary) / 0.04);
 }

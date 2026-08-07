@@ -56,6 +56,11 @@ export const routes: Routes = [
         loadChildren: () => import('@trackly/tickets').then((m) => m.ticketsRoutes),
       },
       {
+        path: 'dashboard/customers/:id',
+        canActivate: [roleGuard('agent', 'admin')],
+        loadComponent: () => import('@trackly/tickets').then((m) => m.CustomerDetail),
+      },
+      {
         path: 'dashboard/chat',
         canActivate: [roleGuard('agent', 'admin')],
         loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),

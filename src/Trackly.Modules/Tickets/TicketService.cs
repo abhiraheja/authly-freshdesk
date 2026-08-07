@@ -129,12 +129,22 @@ public class TicketService(
             ? await tags.ResolveAsync(actor.WorkspaceId, request.Tags, ct)
             : [];
 
-        // Filing on a customer's behalf. Membership is re-checked here rather
-        // than trusted from the client, or any user id in the system could be
-        // attached to this workspace's ticket.
-        var requesterId = actor.UserId;
+        // Who the ticket is FOR, which is not the same question as who filed it.
+        //
+        // A customer using the portal is always their own requester. An agent is
+        // filing on someone else's behalf, so they get whoever they picked — and
+        // picking nobody leaves it genuinely empty rather than quietly naming the
+        // agent. Defaulting to the agent made every internally-raised ticket look
+        // like the agent's own support request, and made "add the customer later"
+        // impossible because the slot was already taken.
+        //
+        // RequesterId is nullable for exactly this reason: guest tickets have no
+        // user behind them either.
+        Guid? requesterId = actor.IsAgentOrAdmin ? null : actor.UserId;
         if (actor.IsAgentOrAdmin && request.RequesterId is { } onBehalfOf)
         {
+            // Membership is re-checked rather than trusted from the client, or
+            // any user id in the system could be attached to this workspace.
             var exists = await db.Users
                 .AnyAsync(u => u.Id == onBehalfOf && u.WorkspaceId == actor.WorkspaceId, ct);
             if (!exists) throw new ArgumentException("Unknown requester.");
@@ -298,6 +308,23 @@ public class TicketService(
             if (!allowed.Contains(request.Priority))
                 throw new ArgumentException("Invalid priority.");
             ticket.Priority = request.Priority;
+        }
+
+        if (request.ClearRequester)
+        {
+            ticket.RequesterId = null;
+        }
+        else if (request.RequesterId is { } newRequester)
+        {
+            var requesterExists = await db.Users
+                .AnyAsync(u => u.Id == newRequester && u.WorkspaceId == actor.WorkspaceId, ct);
+            if (!requesterExists) throw new ArgumentException("Unknown requester.");
+            ticket.RequesterId = newRequester;
+            // The guest fields were only ever a stand-in for a person Trackly
+            // didn't have on file. Once it has one they are stale, and leaving
+            // them means two answers to "who reported this".
+            ticket.GuestName = null;
+            ticket.GuestEmail = null;
         }
 
         if (request.ClearCategory)

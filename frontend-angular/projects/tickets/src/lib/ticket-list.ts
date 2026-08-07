@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, input, resource, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  resource,
+  signal,
+  untracked,
+} from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { toSignal } from '@angular/core/rxjs-interop';
@@ -101,9 +111,10 @@ const VIEW_STATUS: Record<string, string | undefined> = {
     </div>
 
     <!-- Filter bar. Every control writes to the URL, never to local state. -->
-    <tk-card dense class="mb-4">
-      <!-- One row: search grows, selects shrink to fit. -->
-      <div class="flex flex-wrap items-center gap-2">
+    <tk-card flush class="mb-4">
+      <!-- One row: search grows, selects shrink to fit. Padding lives here
+           rather than on the card, so the bar hugs its controls. -->
+      <div class="flex flex-wrap items-center gap-2 p-2.5">
         <div class="flex h-9 min-w-[220px] flex-1 items-center gap-2 rounded-xl bg-muted px-3">
           <tk-icon name="search" [size]="16" class="text-muted-foreground" />
           <input
@@ -173,8 +184,8 @@ const VIEW_STATUS: Record<string, string | undefined> = {
                 <th scope="col">{{ 'tickets.columns.status' | transloco }}</th>
                 <th scope="col">{{ 'tickets.columns.assignee' | transloco }}</th>
                 <th scope="col" class="hidden lg:table-cell">{{ 'tickets.columns.sla' | transloco }}</th>
-                <th scope="col" class="hidden md:table-cell text-right">{{ 'tickets.columns.updated' | transloco }}</th>
-                <th scope="col" class="text-right">{{ 'tickets.columns.actions' | transloco }}</th>
+                <th scope="col" class="hidden md:table-cell col-right">{{ 'tickets.columns.updated' | transloco }}</th>
+                <th scope="col" class="col-right">{{ 'tickets.columns.actions' | transloco }}</th>
               </tr>
             </thead>
             <tbody>
@@ -259,7 +270,7 @@ const VIEW_STATUS: Record<string, string | undefined> = {
                     </td>
                     <!-- Actions live in their own cell that swallows the click, so
                          hitting one never also opens the row. -->
-                    <td class="text-right" (click)="$event.stopPropagation()">
+                    <td class="col-right" (click)="$event.stopPropagation()">
                       <span class="row-actions inline-flex items-center gap-0.5">
                         <a
                           class="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-primary"
@@ -420,9 +431,16 @@ export class TicketList {
   constructor() {
     // Keep the search box in step when the URL changes from elsewhere (a sidebar
     // click, Back, a shared link) without fighting the user as they type.
+    //
+    // `untracked` is load-bearing. Reading search() as a dependency makes this
+    // effect re-run on every keystroke — and at that moment the URL is still
+    // one debounce behind, so it "corrects" the box back to the old value and
+    // the field wipes itself as you type. It must depend on q() alone.
     effect(() => {
       const fromUrl = this.q();
-      if (fromUrl !== this.search()) this.search.set(fromUrl);
+      untracked(() => {
+        if (fromUrl !== this.search()) this.search.set(fromUrl);
+      });
     });
   }
 
@@ -470,14 +488,18 @@ export class TicketList {
     }
   }
 
+  /**
+   * "Guest" and "no customer" are different states and must not share a label.
+   * A guest is a real person who submitted anonymously; an agent-raised ticket
+   * with nobody attached is waiting for someone to link a customer, and calling
+   * that "Guest" hides work that still needs doing.
+   */
   protected requesterOf(ticket: TicketSummary): string {
-    return (
-      ticket.requester?.name ??
-      ticket.requester?.email ??
-      ticket.guestName ??
-      ticket.guestEmail ??
-      this.transloco.translate('tickets.guest')
-    );
+    if (ticket.requester) return ticket.requester.name ?? ticket.requester.email ?? '';
+    if (ticket.guestName || ticket.guestEmail) {
+      return ticket.guestName ?? ticket.guestEmail ?? this.transloco.translate('tickets.guest');
+    }
+    return this.transloco.translate('tickets.noCustomer');
   }
 
   protected statusOf = (ticket: TicketSummary) => toneFor(STATUS_TONE, ticket.status);

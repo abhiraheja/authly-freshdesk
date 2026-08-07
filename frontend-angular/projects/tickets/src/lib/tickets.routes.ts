@@ -17,7 +17,6 @@ export const ticketsRoutes: Routes = [
   },
   {
     path: ':id',
-    loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
-    data: { titleKey: 'comingSoon.titles.ticket', from: 'frontend/src/pages/agent/AgentWorkspacePage.tsx' },
+    loadComponent: () => import('./ticket-detail').then((m) => m.TicketDetail),
   },
 ];

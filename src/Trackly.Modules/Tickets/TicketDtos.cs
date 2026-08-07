@@ -109,7 +109,13 @@ public record UpdateTicketRequest(
     Guid? AssigneeId = null,
     bool Unassign = false,
     Guid? TeamId = null,
-    bool ClearTeam = false);
+    bool ClearTeam = false,
+    // Re-points the ticket at a real customer — the usual case is a guest
+    // submission or a logged call an agent has now matched to a person.
+    Guid? RequesterId = null,
+    // Detaches the customer without putting another in their place: the ticket
+    // was linked to the wrong person and the right one isn't known yet.
+    bool ClearRequester = false);
 
 public record CreateCommentRequest(string Body, bool IsInternal);
 
