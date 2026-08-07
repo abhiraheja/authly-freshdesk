@@ -37,7 +37,26 @@ export interface TriageSuggestion {
  * `customer_field` and the name stayed; the shape (workspace, kind, value,
  * label, order, active) fits all three unchanged.
  */
-export type TicketOptionKind = 'priority' | 'channel' | 'customer_field';
+export type TicketOptionKind = 'priority' | 'channel' | 'customer_field' | 'ticket_panel';
+
+/**
+ * The cards the ticket view's right rail can draw.
+ *
+ * The keys belong to Trackly — the rail switches on them to choose a renderer —
+ * so a workspace reorders, relabels and hides them but never invents one. That
+ * is why every `ticket_panel` option comes back `isSystem`.
+ */
+export type TicketPanelKey =
+  | 'info'
+  | 'resolution'
+  | 'sla'
+  | 'ai'
+  | 'customer'
+  | 'properties'
+  | 'related'
+  | 'watchers'
+  | 'time'
+  | 'actions';
 
 /**
  * One admin-configured choice for a fixed-vocabulary ticket field.
@@ -176,6 +195,24 @@ export interface LogTimeBody {
   spentAt?: string;
 }
 
+/** What Trackly offers in the picker — the server accepts any string. */
+export type TicketLinkKind = 'related' | 'story' | 'pr' | 'doc';
+
+/**
+ * Work elsewhere that a ticket is about: a user story, a PR, a doc.
+ *
+ * Agent-facing. The API sends these to agents and admins only, so nothing here
+ * can leak onto a customer or guest surface (invariant 5).
+ */
+export interface TicketLink {
+  id: string;
+  url: string;
+  title: string | null;
+  kind: string;
+  createdBy: UserSummary | null;
+  createdAt: string;
+}
+
 export interface Attachment {
   id: string;
   commentId: string | null;
@@ -190,6 +227,16 @@ export interface Comment {
   author: UserSummary | null;
   guestEmail: string | null;
   body: string;
+  /**
+   * "html" (the rich composer, sanitised server-side) or "text" (everything
+   * else: email replies, guest replies, and every row written before the
+   * composer existed).
+   *
+   * **Branch on this, never sniff the body.** "&lt;3 that fix" is plain text
+   * that reads as markup, and guessing wrong shows a customer a broken tag
+   * instead of their own words.
+   */
+  bodyFormat: string;
   /**
    * Private note. The API filters these out for every non-agent caller — the
    * amber styling in the UI is a second signal for agents, never the control
@@ -387,7 +434,15 @@ export class TicketsApi {
     return this.api.get<Comment[]>(`/api/tickets/${ticketId}/comments`);
   }
 
-  addComment(ticketId: string, body: { body: string; isInternal: boolean }): Promise<Comment> {
+  /**
+   * `bodyFormat: 'html'` sends markup from the rich composer. The server
+   * sanitises it against a small allowlist before storing — the composer is the
+   * convenience, the server is the control.
+   */
+  addComment(
+    ticketId: string,
+    body: { body: string; isInternal: boolean; bodyFormat?: 'text' | 'html' },
+  ): Promise<Comment> {
     return this.api.post<Comment>(`/api/tickets/${ticketId}/comments`, body);
   }
 
@@ -432,6 +487,24 @@ export class TicketsApi {
 
   deleteTime(ticketId: string, entryId: string): Promise<void> {
     return this.api.delete<void>(`/api/tickets/${ticketId}/time/${entryId}`);
+  }
+
+  // ── Related work ──────────────────────────────────────────────────────────
+
+  ticketLinks(ticketId: string): Promise<TicketLink[]> {
+    return this.api.get<TicketLink[]>(`/api/tickets/${ticketId}/links`);
+  }
+
+  /** `url` must be a full http(s) URL — the server rejects anything else. */
+  addTicketLink(
+    ticketId: string,
+    body: { url: string; title?: string; kind?: string },
+  ): Promise<TicketLink> {
+    return this.api.post<TicketLink>(`/api/tickets/${ticketId}/links`, body);
+  }
+
+  deleteTicketLink(ticketId: string, linkId: string): Promise<void> {
+    return this.api.delete<void>(`/api/tickets/${ticketId}/links/${linkId}`);
   }
 
   uploadAttachment(

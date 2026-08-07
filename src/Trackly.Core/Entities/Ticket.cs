@@ -64,6 +64,7 @@ public class Ticket
     public ICollection<TicketWatcher> Watchers { get; set; } = new List<TicketWatcher>();
     public ICollection<TicketTag> TicketTags { get; set; } = new List<TicketTag>();
     public ICollection<TicketTimeEntry> TimeEntries { get; set; } = new List<TicketTimeEntry>();
+    public ICollection<TicketLink> Links { get; set; } = new List<TicketLink>();
 }
 
 public static class TicketStatus

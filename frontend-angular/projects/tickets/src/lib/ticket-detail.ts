@@ -34,22 +34,23 @@ import {
   Badge,
   Button,
   Card,
+  Editor,
   FilePicker,
   Icon,
-  InputDirective,
+  RichTextView,
   Select,
   SelectOption,
   SkeletonDirective,
   Spinner,
   Tabs,
   ToastService,
+  isEmptyHtml,
   type AttachmentItem,
   type IconName,
   type TabItem,
 } from '@trackly/ui';
 import { TicketDetailPanel } from './ticket-detail-panel';
 import { ResolveDialog, type ResolvePayload } from './resolve-dialog';
-import { TicketTimeCard } from './ticket-time-card';
 
 /** Channel → icon, matching the ticket list so the same source reads the same. */
 const CHANNEL_ICON: Record<string, IconName> = {
@@ -92,9 +93,10 @@ const CHANNEL_ICON: Record<string, IconName> = {
     Badge,
     Button,
     Card,
+    Editor,
     FilePicker,
     Icon,
-    InputDirective,
+    RichTextView,
     Select,
     SelectOption,
     SkeletonDirective,
@@ -102,7 +104,6 @@ const CHANNEL_ICON: Record<string, IconName> = {
     Tabs,
     ResolveDialog,
     TicketDetailPanel,
-    TicketTimeCard,
   ],
   template: `
     <a
@@ -204,6 +205,8 @@ const CHANNEL_ICON: Record<string, IconName> = {
                           <span class="font-semibold text-foreground">{{ requesterName() }}</span>
                           · {{ createdAt() }}
                         </p>
+                        <!-- The description stays plain text: it is written on
+                             the submit form, which customers use too. -->
                         <div class="rounded-2xl rounded-tl-sm border border-border bg-card p-4">
                           <p class="whitespace-pre-wrap text-body">{{ data.description }}</p>
                           <tk-attachment-list [items]="ticketAttachments()" />
@@ -235,9 +238,15 @@ const CHANNEL_ICON: Record<string, IconName> = {
                           · {{ at(comment) }}
                         </p>
                         <div class="rounded-2xl border p-4" [class]="bubbleClass(comment)">
-                          <p class="whitespace-pre-wrap text-body" [class.text-white]="isAgentReply(comment)">
-                            {{ comment.body }}
-                          </p>
+                          <!-- Branches on the stored format, never on what the
+                               body looks like: "<3 that fix" is text that reads
+                               as markup, and guessing wrong shows a customer a
+                               broken tag instead of their own words. -->
+                          <tk-rich-text
+                            [value]="comment.body"
+                            [format]="comment.bodyFormat"
+                            [dark]="isAgentReply(comment)"
+                          />
                           <tk-attachment-list
                             [items]="attachmentsOf(comment)"
                             [dark]="isAgentReply(comment)"
@@ -289,14 +298,14 @@ const CHANNEL_ICON: Record<string, IconName> = {
               </button>
             </div>
 
-            <textarea
-              tkInput
-              inset
-              rows="4"
-              [attr.aria-label]="composerPlaceholder()"
+            <tk-editor
+              [(value)]="body"
+              [rows]="4"
+              [labels]="editorLabels()"
+              [disabled]="sending()"
               [placeholder]="composerPlaceholder()"
-              [(ngModel)]="body"
-            ></textarea>
+              [ariaLabel]="composerPlaceholder()"
+            />
 
             @if (sendError(); as message) {
               <tk-alert tone="danger" class="mt-3">{{ message }}</tk-alert>
@@ -316,7 +325,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
                 [progress]="uploadProgress()"
                 [label]="'tickets.detail.attach' | transloco"
               />
-              <button tkButton class="shrink-0" [disabled]="!body().trim() || sending()" (click)="send()">
+              <button tkButton class="shrink-0" [disabled]="composerEmpty() || sending()" (click)="send()">
                 @if (sending()) {
                   <tk-spinner [size]="16" />
                 } @else {
@@ -328,24 +337,22 @@ const CHANNEL_ICON: Record<string, IconName> = {
           </tk-card>
         </div>
 
-        <!-- One grid item, two components: the grid has exactly two columns, so
-             a third child here would wrap onto a row of its own. The time card
-             stays in THIS template rather than inside the panel so the resolve
-             dialog can reach it to refresh after logging time. -->
-        <div class="space-y-4">
-          <tk-ticket-detail-panel
-            [ticket]="data"
-            [meId]="meId()"
-            (assignToMe)="assignSelf()"
-            (watchMe)="watchSelf()"
-            (escalate)="escalate()"
-            (change)="update($event)"
-            (tagsChange)="setTags($event)"
-            (watch)="addWatcher($event)"
-            (unwatch)="removeWatcher($event)"
-          />
-          <tk-ticket-time-card [ticketId]="id()" />
-        </div>
+        <!-- The whole rail is one component now, because the workspace decides
+             the order of the cards inside it — including Time spent and Related
+             work, which own their own data. The version input is how a write
+             here tells those two to re-read. -->
+        <tk-ticket-detail-panel
+          [ticket]="data"
+          [meId]="meId()"
+          [version]="railVersion()"
+          (assignToMe)="assignSelf()"
+          (watchMe)="watchSelf()"
+          (escalate)="escalate()"
+          (change)="update($event)"
+          (tagsChange)="setTags($event)"
+          (watch)="addWatcher($event)"
+          (unwatch)="removeWatcher($event)"
+        />
       </div>
 
       <tk-resolve-dialog
@@ -426,7 +433,12 @@ export class TicketDetail {
   protected readonly resolveTo = signal<'resolved' | 'closed'>('resolved');
   protected readonly resolveSaving = signal(false);
   protected readonly resolveError = signal<string | null>(null);
-  private readonly timeCard = viewChild(TicketTimeCard);
+
+  /**
+   * Bumped when a write here changed something a self-fetching rail card shows.
+   * Resolving does both: it logs the agent's minutes and files their link.
+   */
+  protected readonly railVersion = signal(0);
   protected readonly priorityTone = computed(() => toneFor(PRIORITY_TONE, this.ticket.value()?.priority));
   protected readonly channelIcon = computed(
     () => CHANNEL_ICON[this.ticket.value()?.channel?.toLowerCase() ?? ''] ?? 'globe',
@@ -516,6 +528,28 @@ export class TicketDetail {
       : 'Private note… (only agents and admins can see this)',
   );
 
+  /** The editor's own emptiness rule — see the note in `send()`. */
+  protected readonly composerEmpty = computed(() => isEmptyHtml(this.body()));
+
+  /**
+   * Toolbar wording for the editor.
+   *
+   * Passed in rather than resolved inside `@trackly/ui`: a component library
+   * that reaches for the app's translation service stops being usable on its
+   * own. Rebuilt when the language changes.
+   */
+  protected readonly editorLabels = computed<Record<string, string>>(() => {
+    this.lang();
+    const keys = [
+      'toolbar', 'bold', 'italic', 'underline', 'strikethrough', 'bulletList',
+      'numberedList', 'quote', 'inlineCode', 'codeBlock', 'language', 'link',
+      'linkUrl', 'unlink', 'clearFormatting', 'apply', 'cancel',
+    ];
+    return Object.fromEntries(
+      keys.map((key) => [`editor.${key}`, this.transloco.translate(`editor.${key}`)]),
+    );
+  });
+
   /** Tabs emit a plain string; narrow it here rather than widening the signal. */
   protected setThreadTab(tab: string): void {
     if (tab === 'conversation' || tab === 'notes' || tab === 'attachments') this.threadTab.set(tab);
@@ -561,12 +595,18 @@ export class TicketDetail {
    */
   protected async send(): Promise<void> {
     const body = this.body().trim();
-    if (!body || this.sending()) return;
+    // isEmptyHtml, not a length check: an emptied contenteditable still holds
+    // "<p><br></p>", which is truthy and is not a message.
+    if (isEmptyHtml(body) || this.sending()) return;
 
     this.sending.set(true);
     this.sendError.set(null);
     try {
-      const comment = await this.api.addComment(this.id(), { body, isInternal: this.mode() === 'note' });
+      const comment = await this.api.addComment(this.id(), {
+        body,
+        isInternal: this.mode() === 'note',
+        bodyFormat: 'html',
+      });
 
       // One at a time, so the bar tracks a single file and a slow connection
       // isn't split five ways. A failure warns per file and the rest continue.
@@ -662,10 +702,10 @@ export class TicketDetail {
       });
       this.resolveOpen.set(false);
       this.ticket.reload();
-      // The resolution is written into the thread as an internal note, and time
-      // logged here belongs in the card that lists it.
+      // The resolution is written into the thread as an internal note; the time
+      // belongs in the card that lists it, and the link in Related work.
       this.comments.reload();
-      this.timeCard()?.refresh();
+      this.railVersion.update((n) => n + 1);
     } catch (error) {
       // Stays open with what they typed still in it — retyping a paragraph
       // because a link was malformed is how people stop writing the note at all.

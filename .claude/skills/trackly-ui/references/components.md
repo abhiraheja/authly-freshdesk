@@ -18,7 +18,7 @@ All standalone, all `OnPush`, all signal-based. Add new controls under
 |---|---|---|
 | `Icon` | `tk-icon` | `name` (required), `size` (18), `strokeWidth` |
 | `Button` | `button[tkButton]`, `a[tkButton]` | `variant`, `size`, `iconOnly` |
-| `Card` | `tk-card` | `heading`, `subheading`, `dense`, `flush`, `interactive`; `[card-actions]`, `[card-footer]` slots |
+| `Card` | `tk-card` | `heading`, `subheading`, `dense`, `flush`, `interactive`, `collapsible`, `[(collapsed)]`; `[card-actions]`, `[card-footer]` slots |
 | `Badge` | `tk-badge` | `tone`, `dot` |
 | `Avatar` | `tk-avatar` | `name`, `imageUrl`, `size`, `round`, `fallback` |
 | `InputDirective` | `input[tkInput]`, `textarea[tkInput]`, `select[tkInput]` | `inputSize`, `inset` |
@@ -125,6 +125,32 @@ always a card with different children.
 
 `interactive` adds hover-lift and a pointer cursor — pair it with a click
 handler **and** a keyboard path, never just the click.
+
+### Collapsible cards
+
+`collapsible` turns the heading into a disclosure button. It needs a `heading`
+— that is the thing you click — and `[(collapsed)]` is two-way so the owner can
+remember the state.
+
+```html
+<tk-card
+  heading="SLA timer"
+  collapsible
+  [collapsed]="prefs.isCollapsed('ticket.sla')"
+  (collapsedChange)="prefs.setCollapsed('ticket.sla', $event)"
+>…</tk-card>
+```
+
+Two things to know:
+
+- **Collapsing hides the body with CSS, it does not remove it.** Projected
+  content belongs to the *parent*, so an `@if` inside the card would still build
+  every child and merely decline to show them — all of the cost and none of the
+  honesty. Do not "optimise" this into a conditional block.
+- **Collapse state is a personal preference**, not configuration. Put it in
+  `UiPrefsStore` (localStorage), never on the workspace. What the workspace
+  decides is which cards exist and in what order — that is admin configuration
+  and lives in `ticket_options`.
 
 ---
 

@@ -1,5 +1,15 @@
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { ChangeDetectionStrategy, Component, computed, inject, input, resource, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  inject,
+  input,
+  model,
+  resource,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
   SessionStore,
@@ -39,6 +49,10 @@ import {
 @Component({
   selector: 'tk-ticket-time-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // A custom element is inline by default, and `space-y` on the rail sets
+  // margin-top — which an inline box ignores. Without this the card sits flush
+  // against the one above it.
+  host: { class: 'block' },
   imports: [
     FormsModule,
     TranslocoPipe,
@@ -53,7 +67,11 @@ import {
     Spinner,
   ],
   template: `
-    <tk-card [heading]="'tickets.time.heading' | transloco">
+    <tk-card
+      [heading]="heading() || ('tickets.time.heading' | transloco)"
+      collapsible
+      [(collapsed)]="collapsed"
+    >
       <div card-actions>
         <span class="text-body font-extrabold">{{ totalLabel() }}</span>
       </div>
@@ -157,11 +175,39 @@ export class TicketTimeCard {
   private readonly transloco = inject(TranslocoService);
 
   readonly ticketId = input.required<string>();
+  readonly collapsed = model(false);
+  /** The rail's label for this card — a workspace may have renamed it. */
+  readonly heading = input('');
+
+  /**
+   * Bumped by the parent when time was logged through another route — resolving
+   * a ticket sends its minutes in the same request as the status change.
+   *
+   * An input rather than a public `refresh()` the parent reaches for with
+   * `viewChild`: the query has to have resolved by the moment the write returns
+   * for that to work, and when it has not the entry is silently missing until
+   * the next reload. A bound value cannot miss.
+   *
+   * It drives `reload()` from an effect rather than sitting in `params`, because
+   * changing params resets the resource to undefined — which would blank the
+   * list to a skeleton every time somebody resolves a ticket.
+   */
+  readonly version = input(0);
 
   protected readonly entries = resource({
     params: () => ({ id: this.ticketId() }),
     loader: ({ params }) => this.api.timeEntries(params.id),
   });
+
+  constructor() {
+    let seen = this.version();
+    effect(() => {
+      const current = this.version();
+      if (current === seen) return;
+      seen = current;
+      this.entries.reload();
+    });
+  }
 
   protected readonly composing = signal(false);
   protected readonly saving = signal(false);
@@ -184,11 +230,6 @@ export class TicketTimeCard {
   protected readonly canSave = computed(
     () => !this.saving() && (this.hours() ?? 0) * 60 + (this.minutes() ?? 0) > 0,
   );
-
-  /** For a parent that logged time through another route — the resolve dialog. */
-  refresh(): void {
-    this.entries.reload();
-  }
 
   protected duration(entry: TimeEntry): string {
     return formatDuration(entry.minutes);

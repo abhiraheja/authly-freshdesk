@@ -534,6 +534,13 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("body");
 
+                    b.Property<string>("BodyFormat")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("text")
+                        .HasColumnName("body_format");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -1638,6 +1645,61 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.ToTable("tickets");
                 });
 
+            modelBuilder.Entity("Trackly.Core.Entities.TicketLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("related")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("url");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_links");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_ticket_links_created_by_id");
+
+                    b.HasIndex("WorkspaceId")
+                        .HasDatabaseName("ix_ticket_links_workspace_id");
+
+                    b.HasIndex("TicketId", "Url")
+                        .IsUnique()
+                        .HasDatabaseName("ix_ticket_links_ticket_id_url");
+
+                    b.ToTable("ticket_links", (string)null);
+                });
+
             modelBuilder.Entity("Trackly.Core.Entities.TicketTimeEntry", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2736,6 +2798,35 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("Trackly.Core.Entities.TicketLink", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_ticket_links_users_created_by_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany("Links")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_links_tickets_ticket_id");
+
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_links_workspaces_workspace_id");
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("Ticket");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("Trackly.Core.Entities.TicketTimeEntry", b =>
                 {
                     b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
@@ -2971,6 +3062,8 @@ namespace Trackly.Infrastructure.Data.Migrations
             modelBuilder.Entity("Trackly.Core.Entities.Ticket", b =>
                 {
                     b.Navigation("Comments");
+
+                    b.Navigation("Links");
 
                     b.Navigation("TicketTags");
 

@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Trackly.Core.Entities;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
+using Trackly.Infrastructure.Text;
 using Trackly.Modules.Guest;
 
 namespace Trackly.Modules.Email;
@@ -71,6 +72,12 @@ public class NotificationService(
                 await db.SaveChangesAsync(ct);
             }
 
+            // Trackly's notifications are plain text, so a rich body has to be
+            // flattened. Sending the markup would show the customer the tags.
+            var body = comment.BodyFormat == CommentBodyFormat.Html
+                ? RichText.ToPlainText(comment.Body)
+                : comment.Body;
+
             if (authoredByAgent)
             {
                 if (!ctx.Settings.NotifyCustomerOnReply) return;
@@ -78,7 +85,7 @@ public class NotificationService(
                 if (email is null) return;
                 await SendAsync(ctx, email, name,
                     $"[{Ref(ticket)}] {ticket.Subject}",
-                    $"{comment.Body}\n\n---\n{(ctx.ReplyTo is not null ? "Reply to this email to respond." : PortalOrTrackingHint(ticket))}",
+                    $"{body}\n\n---\n{(ctx.ReplyTo is not null ? "Reply to this email to respond." : PortalOrTrackingHint(ticket))}",
                     ticketId, messageId, replyable: ctx.ReplyTo is not null);
             }
             else
@@ -87,7 +94,7 @@ public class NotificationService(
                 foreach (var (email, name) in await AgentRecipientsAsync(ticket, ct))
                     await SendAsync(ctx, email, name,
                         $"[{Ref(ticket)}] {ticket.Subject}",
-                        $"{Requester(ticket).Name ?? "The customer"} replied:\n\n{comment.Body}\n\n{AgentLink(ticket)}",
+                        $"{Requester(ticket).Name ?? "The customer"} replied:\n\n{body}\n\n{AgentLink(ticket)}",
                         ticketId, messageId, replyable: ctx.ReplyTo is not null);
             }
         }

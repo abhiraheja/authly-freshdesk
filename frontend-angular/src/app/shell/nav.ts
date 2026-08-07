@@ -70,6 +70,7 @@ export const NAV: readonly NavGroup[] = [
     adminOnly: true,
     items: [
       { labelKey: 'nav.items.configuration', icon: 'sliders-horizontal', route: '/admin/settings/configuration' },
+      { labelKey: 'nav.items.ticketLayout', icon: 'panel-left-close', route: '/admin/settings/ticket-layout' },
       { labelKey: 'nav.items.analytics', icon: 'bar-chart-3', route: '/admin/analytics' },
       { labelKey: 'nav.items.announcements', icon: 'megaphone', route: '/admin/announcements' },
       { labelKey: 'nav.items.members', icon: 'users', route: '/admin/users' },

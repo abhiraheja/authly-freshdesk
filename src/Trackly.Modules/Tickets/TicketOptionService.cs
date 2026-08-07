@@ -69,6 +69,12 @@ public class TicketOptionService(TracklyDbContext db)
         if (string.IsNullOrWhiteSpace(label))
             throw new ArgumentException("A label is required.");
 
+        // Panel keys are Trackly's — the rail switches on them to pick a
+        // renderer, so an invented one would be a row in the settings screen
+        // that draws nothing at all.
+        if (kind == TicketOptionKind.TicketPanel)
+            throw new ArgumentException("Ticket panels are built in. Reorder, rename or hide them instead.");
+
         await EnsureSeededAsync(workspaceId, kind, ct);
 
         // The value is derived from the label once, at creation. After that the
@@ -168,6 +174,10 @@ public class TicketOptionService(TracklyDbContext db)
     private async Task<bool> IsLastActiveAsync(Guid workspaceId, TicketOption option, CancellationToken ct)
     {
         if (option.Kind == TicketOptionKind.CustomerField) return false;
+        // A workspace that wants an empty rail is entitled to one. Every field
+        // behind a panel is nullable, so hiding them all changes what is drawn
+        // and nothing else.
+        if (option.Kind == TicketOptionKind.TicketPanel) return false;
 
         var anotherIsActive = await db.TicketOptions.AnyAsync(
             o => o.WorkspaceId == workspaceId && o.Kind == option.Kind && o.IsActive && o.Id != option.Id, ct);
@@ -176,6 +186,16 @@ public class TicketOptionService(TracklyDbContext db)
 
     private async Task EnsureSeededAsync(Guid workspaceId, string kind, CancellationToken ct)
     {
+        // Panels are topped up rather than seeded once. The keys belong to
+        // Trackly, so a card added in a later release has to appear in every
+        // existing workspace — the all-or-nothing check below would hide it from
+        // everyone who had already opened this screen once.
+        if (kind == TicketOptionKind.TicketPanel)
+        {
+            await TopUpPanelsAsync(workspaceId, ct);
+            return;
+        }
+
         if (await db.TicketOptions.AnyAsync(o => o.WorkspaceId == workspaceId && o.Kind == kind, ct))
             return;
 
@@ -187,6 +207,11 @@ public class TicketOptionService(TracklyDbContext db)
         {
             TicketOptionKind.Priority => DefaultPriorities,
             TicketOptionKind.Channel => DefaultChannels,
+            // The rail's cards. Trackly owns the keys — the renderer switches on
+            // them — so these are seeded as system rows: reorderable, hideable,
+            // relabelable, never deletable and never addable.
+            TicketOptionKind.TicketPanel =>
+                TicketPanels.Defaults.Select(p => (p.Value, p.Label, (string?)null)).ToArray(),
             // Customer fields have no built-ins on purpose: what a workspace
             // records about a customer is its own business, and a seeded guess
             // would put words in the admin's mouth.
@@ -205,6 +230,46 @@ public class TicketOptionService(TracklyDbContext db)
                 Label = label,
                 Color = color,
                 SortOrder = i,
+                IsSystem = true,
+            });
+        }
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Adds any panel key the workspace does not have yet, at the end of the
+    /// list and switched on. Existing rows are left exactly as the admin left
+    /// them — order, label and visibility included.
+    /// </summary>
+    private async Task TopUpPanelsAsync(Guid workspaceId, CancellationToken ct)
+    {
+        var have = await db.TicketOptions
+            .Where(o => o.WorkspaceId == workspaceId && o.Kind == TicketOptionKind.TicketPanel)
+            .Select(o => o.Value)
+            .ToListAsync(ct);
+        var known = have.ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        var missing = TicketPanels.Defaults.Where(p => !known.Contains(p.Value)).ToList();
+        if (missing.Count == 0) return;
+
+        // A first seed keeps the default order; a top-up appends, so a new card
+        // never pushes itself above what the admin arranged.
+        var nextOrder = have.Count == 0
+            ? 0
+            : (await db.TicketOptions
+                .Where(o => o.WorkspaceId == workspaceId && o.Kind == TicketOptionKind.TicketPanel)
+                .Select(o => (int?)o.SortOrder)
+                .MaxAsync(ct) ?? -1) + 1;
+
+        foreach (var (value, label) in missing)
+        {
+            db.TicketOptions.Add(new TicketOption
+            {
+                WorkspaceId = workspaceId,
+                Kind = TicketOptionKind.TicketPanel,
+                Value = value,
+                Label = label,
+                SortOrder = nextOrder++,
                 IsSystem = true,
             });
         }

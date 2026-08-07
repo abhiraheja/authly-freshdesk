@@ -1138,6 +1138,9 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | POST   | `/api/tickets/{id}/time` | AgentOrAdmin | Log minutes + what was done |
 | PUT    | `/api/tickets/{id}/time/{entryId}` | AgentOrAdmin | Own entry; admin may edit anyone's |
 | DELETE | `/api/tickets/{id}/time/{entryId}` | AgentOrAdmin | Same rule as PUT |
+| GET    | `/api/tickets/{id}/links` | AgentOrAdmin | Related work — stories, PRs, docs |
+| POST   | `/api/tickets/{id}/links` | AgentOrAdmin | Add one; url must be absolute http(s) |
+| DELETE | `/api/tickets/{id}/links/{linkId}` | AgentOrAdmin | Any agent may remove any link |
 | POST   | `/api/users/{id}/avatar` | Session | Own photo always; anyone else's needs agent/admin. 1 MB, PNG/JPEG/WebP |
 | DELETE | `/api/users/{id}/avatar` | Session | Same rule as POST |
 | GET    | `/api/users/{id}/avatar` | Session | Any member of the same workspace. Streamed, never redirected to a CDN |
@@ -1366,6 +1369,32 @@ CREATE TABLE ticket_time_entries (
 );
 CREATE INDEX ON ticket_time_entries (ticket_id, spent_at);
 CREATE INDEX ON ticket_time_entries (workspace_id, user_id);
+
+-- Related work: the stories, PRs and docs a ticket is about.
+--
+-- Separate from tickets.resolution_link, which is the link for the resolution
+-- the ticket CURRENTLY has and is cleared on reopen. These rows are the
+-- ticket's references and outlive any one resolution, so neither replaces the
+-- other. The resolve dialog copies its link in here so both lists agree.
+--
+-- Agent-facing: engineering references, on the same footing as a private note
+-- (invariant 5). Never projected onto a customer or guest surface.
+CREATE TABLE ticket_links (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    ticket_id     UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    url           TEXT NOT NULL,          -- absolute http(s), validated on write
+    title         TEXT,                   -- falls back to the URL when absent
+    kind          TEXT NOT NULL DEFAULT 'related',  -- related | story | pr | doc
+    -- SET NULL: the link is about the work, not about who filed it.
+    created_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at    TIMESTAMPTZ DEFAULT now()
+);
+-- Unique, so one URL cannot be added to a ticket twice. Its leading column also
+-- serves the card's read, which is why there is no separate ticket_id index.
+CREATE UNIQUE INDEX ON ticket_links (ticket_id, url);
+CREATE INDEX ON ticket_links (workspace_id);
+CREATE INDEX ON ticket_links (created_by_id);
 
 -- Comments / replies
 CREATE TABLE comments (

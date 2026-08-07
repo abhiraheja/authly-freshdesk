@@ -648,6 +648,53 @@ from as many people as worked on it.
   going overnight or never started, and the number ends up corrected by hand
   anyway.
 
+### Related work
+
+**Where:** the **Related work** card on the right of any ticket.
+
+The stories, pull requests and documents a ticket is about. Paste a full
+`https://…` URL and, if you like, a label saying what it points at. A ticket can
+carry as many as it needs — the story it came from, the PR that fixed it and the
+incident it was raised under are three different links, and one field could only
+hold one of them.
+
+- The link typed into the **resolve dialog** is filed here automatically, so
+  there is never a link in one place that the other list does not know about.
+- The same URL cannot be added twice; Trackly says so rather than listing it
+  again.
+- **Any agent can remove any link.** Unlike a time entry, a link is not a record
+  of someone's work — a wrong reference on a ticket everyone reads is the worse
+  problem.
+- **Agents only**, like the resolution note. Customers never see these.
+
+---
+
+## 23. Ticket layout
+
+**Where:** Admin → **Ticket layout**
+
+The ticket view has a side panel down its right-hand side: Ticket information,
+Resolution, SLA timer, Customer, Properties, Related work, Time spent, Watchers,
+Actions, AI insights. This screen decides **which of them appear, and in what
+order**.
+
+- **Reorder** with the up/down arrows. If your team lives out of the customer
+  record, put Customer at the top; if nobody looks at the SLA clock, push it to
+  the bottom.
+- **Hide** any card you do not want. Hiding changes what is *drawn* and nothing
+  else — every field behind a card is optional, so switching SLA off does not
+  remove an SLA, and switching it back on brings the whole card back exactly as
+  it was. Nothing is deleted and no ticket changes.
+- **Rename** any card. Once you rename one, Trackly stops translating it — the
+  words become yours in every language.
+- You cannot add or delete cards. The keys belong to Trackly because the page
+  needs to know what to draw for each one; a made-up entry would be a line on
+  this screen that renders nothing.
+
+Individual agents can also **collapse** any card by clicking its heading. That is
+personal and stored in their own browser — it does not change what anyone else
+sees, and it does not touch this screen.
+
 ---
 
 _Keep this guide updated when features change — it’s the admin-facing counterpart

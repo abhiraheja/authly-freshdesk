@@ -11,12 +11,14 @@ import {
   viewChild,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
   PRIORITY_TONE,
   STATUS_TONE,
   TicketsApi,
+  UiPrefsStore,
   formatDateTime,
   errorMessage,
   valueOr,
@@ -42,6 +44,42 @@ import {
   ToastService,
 } from '@trackly/ui';
 import { CustomerForm } from './customer-form';
+import { TicketLinksCard } from './ticket-links-card';
+import { TicketTimeCard } from './ticket-time-card';
+
+/** One card in the rail, as the workspace has arranged it. */
+interface RailPanel {
+  key: string;
+  label: string;
+}
+
+/**
+ * Panel key → the label Trackly seeds it with, and the i18n key for that label.
+ *
+ * Both, because the admin screen lets a workspace rename a card and this file
+ * has to tell "renamed" from "never touched". A label that still matches the
+ * seed is Trackly's own wording and gets translated; anything else is what the
+ * admin typed and is rendered exactly as typed. Without that check, seeding in
+ * English would quietly turn the whole rail English for every other locale.
+ *
+ * The order here is also the fallback order: a rail is not optional furniture —
+ * without it there is no way to reassign, no SLA and no route to the customer —
+ * so an options lookup that failed must not leave an empty column.
+ */
+const PANEL_DEFAULTS: readonly { key: string; label: string; labelKey: string }[] = [
+  { key: 'info', label: 'Ticket information', labelKey: 'tickets.detail.ticketInfo' },
+  { key: 'resolution', label: 'Resolution', labelKey: 'tickets.resolution.heading' },
+  { key: 'sla', label: 'SLA timer', labelKey: 'tickets.detail.slaTimer' },
+  { key: 'customer', label: 'Customer', labelKey: 'tickets.new.requester' },
+  { key: 'properties', label: 'Properties', labelKey: 'tickets.detail.properties' },
+  { key: 'related', label: 'Related work', labelKey: 'tickets.links.heading' },
+  { key: 'time', label: 'Time spent', labelKey: 'tickets.time.heading' },
+  { key: 'watchers', label: 'Watchers', labelKey: 'tickets.detail.watchers' },
+  { key: 'actions', label: 'Actions', labelKey: 'tickets.detail.actions' },
+  { key: 'ai', label: 'AI insights', labelKey: 'tickets.detail.aiInsights' },
+];
+
+const PANEL_BY_KEY = new Map(PANEL_DEFAULTS.map((panel) => [panel.key, panel]));
 
 /**
  * The right rail of the ticket view: everything about the ticket that isn't the
@@ -72,13 +110,24 @@ import { CustomerForm } from './customer-form';
     SelectOption,
     Spinner,
     TagInput,
+    TicketLinksCard,
+    TicketTimeCard,
   ],
   template: `
     <div class="space-y-4">
-      <!-- 1. Ticket information: the read-only answer to "what is this".
-           It leads because it is what an agent opening a ticket scans first;
-           the editable Properties card is a follow-up action, not a summary. -->
-      <tk-card [heading]="'tickets.detail.ticketInfo' | transloco">
+      @for (panel of panels(); track panel.key) {
+        @switch (panel.key) {
+          <!-- Ticket information: the read-only answer to "what is this". It
+               leads by default because it is what an agent opening a ticket
+               scans first; the editable Properties card is a follow-up action,
+               not a summary. An admin can move it. -->
+          @case ('info') {
+      <tk-card
+        [heading]="panel.label"
+        collapsible
+        [collapsed]="isCollapsed('info')"
+        (collapsedChange)="setCollapsed('info', $event)"
+      >
         <dl class="space-y-2.5 text-body">
           <div class="flex items-baseline justify-between gap-3">
             <dt class="text-muted-foreground">{{ 'tickets.columns.status' | transloco }}</dt>
@@ -125,17 +174,24 @@ import { CustomerForm } from './customer-form';
           </div>
         </dl>
       </tk-card>
+          }
 
-      <!-- The resolution, when there is one. Directly under the summary because
-           on a closed ticket "what was the fix?" is the first thing anyone
-           coming back to it wants, and reading the thread to find it is the
-           thing this feature exists to avoid.
+          <!-- The resolution, when there is one. Sits under the summary by
+               default because on a closed ticket "what was the fix?" is the
+               first thing anyone coming back to it wants, and reading the
+               thread to find it is what this feature exists to avoid.
 
-           Agent-facing: the API sends these fields as null to every non-agent
-           caller, so this card cannot render on a customer surface even if one
-           reused the panel (invariant 5). -->
+               Agent-facing: the API sends these fields as null to every
+               non-agent caller, so this card cannot render on a customer
+               surface even if one reused the panel (invariant 5). -->
+          @case ('resolution') {
       @if (ticket().resolutionNote; as resolution) {
-        <tk-card [heading]="'tickets.resolution.heading' | transloco">
+        <tk-card
+          [heading]="panel.label"
+          collapsible
+          [collapsed]="isCollapsed('resolution')"
+          (collapsedChange)="setCollapsed('resolution', $event)"
+        >
           <p class="whitespace-pre-wrap text-body">{{ resolution }}</p>
 
           @if (ticket().resolutionLink; as link) {
@@ -165,20 +221,27 @@ import { CustomerForm } from './customer-form';
           </p>
         </tk-card>
       }
+          }
 
-      <!-- 2. SLA. Always rendered, never hidden when there is no clock: an
-           absent card reads as "not built yet", and the useful information is
-           precisely that no policy covers this ticket. -->
-      <tk-card>
-        <div class="flex items-baseline justify-between gap-2">
-          <h3 class="card-title font-display">{{ 'tickets.detail.slaTimer' | transloco }}</h3>
-          @if (sla(); as state) {
+          <!-- SLA. Rendered even when there is no clock: an absent card reads
+               as "not built yet", and the useful information is precisely that
+               no policy covers this ticket. An admin who genuinely does not
+               want it can switch the panel off. -->
+          @case ('sla') {
+      <tk-card
+        [heading]="panel.label"
+        collapsible
+        [collapsed]="isCollapsed('sla')"
+        (collapsedChange)="setCollapsed('sla', $event)"
+      >
+        <div card-actions>
+          @if (sla()) {
             <span class="text-meta font-bold" [class]="slaTextClass()">{{ slaLabel() }}</span>
           }
         </div>
 
         @if (sla(); as state) {
-          <div class="mt-2 flex items-baseline gap-2">
+          <div class="flex items-baseline gap-2">
             <!-- tabular-nums so the digits do not jitter as the clock ticks. -->
             <span class="font-display text-display font-extrabold tabular-nums" [class]="slaTextClass()">
               {{ countdown() }}
@@ -192,17 +255,24 @@ import { CustomerForm } from './customer-form';
             <div class="h-full rounded-full transition-[width]" [class]="slaBarClass()" [style.width.%]="slaPercent()"></div>
           </div>
         } @else {
-          <p class="mt-2 text-body text-muted-foreground">{{ 'tickets.detail.noSla' | transloco }}</p>
+          <p class="text-body text-muted-foreground">{{ 'tickets.detail.noSla' | transloco }}</p>
           <a tkButton variant="outline" size="sm" class="mt-3 w-full" routerLink="/admin/settings/sla">
             {{ 'tickets.detail.slaConfigure' | transloco }}
           </a>
         }
       </tk-card>
+          }
 
-      <!-- 3. AI insights. Real when the workspace has the copilot on; otherwise
-           the card states plainly that it is off rather than showing invented
-           numbers an agent might act on. -->
-      <tk-card [heading]="'tickets.detail.aiInsights' | transloco">
+          <!-- AI insights. Real when the workspace has the copilot on;
+               otherwise the card states plainly that it is off rather than
+               showing invented numbers an agent might act on. -->
+          @case ('ai') {
+      <tk-card
+        [heading]="panel.label"
+        collapsible
+        [collapsed]="isCollapsed('ai')"
+        (collapsedChange)="setCollapsed('ai', $event)"
+      >
         @if (aiOn()) {
           @if (triage(); as t) {
             <dl class="space-y-2.5 text-body">
@@ -249,11 +319,18 @@ import { CustomerForm } from './customer-form';
           </a>
         }
       </tk-card>
+          }
 
-      <!-- 4. Customer. A guest ticket has an email but no person behind it, so
-           the card offers to make one — otherwise the ticket stays orphaned and
-           the next one from the same address starts from nothing again. -->
-      <tk-card [heading]="'tickets.new.requester' | transloco">
+          <!-- Customer. A guest ticket has an email but no person behind it, so
+               the card offers to make one — otherwise the ticket stays orphaned
+               and the next one from the same address starts from nothing. -->
+          @case ('customer') {
+      <tk-card
+        [heading]="panel.label"
+        collapsible
+        [collapsed]="isCollapsed('customer')"
+        (collapsedChange)="setCollapsed('customer', $event)"
+      >
         @if (ticket().requester; as person) {
           <div class="flex items-center gap-3">
             <tk-avatar [name]="customerName()" [imageUrl]="person.avatarUrl" [size]="40" />
@@ -295,72 +372,16 @@ import { CustomerForm } from './customer-form';
           </button>
         }
       </tk-card>
-
-      <tk-modal [(open)]="addingCustomer" [heading]="'tickets.detail.linkCustomer' | transloco">
-        <div class="space-y-4">
-          <p class="text-body text-muted-foreground">{{ 'tickets.detail.linkCustomerHelp' | transloco }}</p>
-
-          <!-- One field for both paths. Typing searches the people who already
-               exist; if nothing matches, the same text becomes the new
-               customer's email. Two separate "find" and "create" modes would
-               make the agent choose before they know which one applies. -->
-          <div>
-            <label tkLabel for="link-customer">{{ 'tickets.detail.customerSearch' | transloco }}</label>
-            <tk-combobox
-              inset
-              inputId="link-customer"
-              [(value)]="customerQuery"
-              [suggestions]="customerChoices()"
-              [placeholder]="'tickets.new.requesterPlaceholder' | transloco"
-              [toggleLabel]="'tickets.new.showSuggestions' | transloco"
-            />
-          </div>
-
-          <!-- Creating is an explicit mode, checked BEFORE any match. Deriving
-               it from "no match yet" raced the customer list: the list loads
-               async, so the form appeared while it was still empty and vanished
-               mid-typing the moment a match arrived. A mode the user turns on
-               stays on until they cancel. -->
-          @if (creating()) {
-            <tk-customer-form
-              #form
-              [email]="customerQuery()"
-              emailLocked
-              [suggestedKeys]="suggestedFieldKeys()"
-            />
-          } @else if (customers.isLoading()) {
-            <p class="flex items-center gap-2 text-meta text-muted-foreground">
-              <tk-spinner [size]="14" />
-              {{ 'common.loading' | transloco }}
-            </p>
-          } @else if (matchedCustomer(); as person) {
-            <p class="flex items-center gap-2 text-body">
-              <tk-icon name="check-circle" [size]="16" class="text-success" />
-              {{ 'tickets.detail.willLink' | transloco: { name: person.name || person.email } }}
-            </p>
-          } @else if (looksLikeEmail()) {
-            <button tkButton variant="outline" size="sm" class="w-full" (click)="creating.set(true)">
-              <tk-icon name="user-plus" [size]="15" />
-              {{ 'tickets.detail.createNew' | transloco: { email: customerQuery().trim() } }}
-            </button>
-          } @else if (customerQuery().trim()) {
-            <p class="text-meta text-muted-foreground">{{ 'tickets.detail.needEmail' | transloco }}</p>
           }
-        </div>
 
-        <div modal-footer>
-          <button tkButton variant="ghost" (click)="addingCustomer.set(false)">{{ 'common.cancel' | transloco }}</button>
-          <button tkButton [disabled]="!canLink() || savingCustomer()" (click)="saveCustomer()">
-            @if (savingCustomer()) {
-              <tk-spinner [size]="16" />
-            }
-            {{ (creating() ? 'tickets.detail.createAndLink' : 'tickets.detail.link') | transloco }}
-          </button>
-        </div>
-      </tk-modal>
-
-      <!-- 5. Actions -->
-      <tk-card [heading]="'tickets.detail.actions' | transloco">
+          <!-- Actions -->
+          @case ('actions') {
+      <tk-card
+        [heading]="panel.label"
+        collapsible
+        [collapsed]="isCollapsed('actions')"
+        (collapsedChange)="setCollapsed('actions', $event)"
+      >
         <div class="grid grid-cols-2 gap-2">
           <button tkButton variant="outline" size="sm" [disabled]="assignedToMe()" (click)="assignToMe.emit()">
             <tk-icon name="user-plus" [size]="15" />
@@ -382,11 +403,42 @@ import { CustomerForm } from './customer-form';
         <!-- Merge and Delete are absent on purpose: Trackly has no endpoint for
              either, and a button that cannot do its job is worse than none. -->
       </tk-card>
+          }
 
-      <!-- 6. Editing lives below the summary: changing a field is a deliberate
-           act, and putting the controls first made every read start with a
-           row of selects. -->
-      <tk-card [heading]="'tickets.detail.properties' | transloco">
+          <!-- Related work and Time spent own their data and their writes, so
+               they are components rather than markup. They sit in the same loop
+               as the rest — an admin ordering the rail should not find two cards
+               that refuse to move. -->
+          @case ('related') {
+            <tk-ticket-links-card
+              [ticketId]="ticket().id"
+              [heading]="panel.label"
+              [version]="version()"
+              [collapsed]="isCollapsed('related')"
+              (collapsedChange)="setCollapsed('related', $event)"
+            />
+          }
+
+          @case ('time') {
+            <tk-ticket-time-card
+              [ticketId]="ticket().id"
+              [heading]="panel.label"
+              [version]="version()"
+              [collapsed]="isCollapsed('time')"
+              (collapsedChange)="setCollapsed('time', $event)"
+            />
+          }
+
+          <!-- Properties. Editing lives below the summary by default: changing a
+               field is a deliberate act, and putting the controls first made
+               every read start with a row of selects. -->
+          @case ('properties') {
+      <tk-card
+        [heading]="panel.label"
+        collapsible
+        [collapsed]="isCollapsed('properties')"
+        (collapsedChange)="setCollapsed('properties', $event)"
+      >
         <div class="space-y-4">
           <div>
             <label tkLabel for="detail-assignee">{{ 'tickets.columns.assignee' | transloco }}</label>
@@ -466,8 +518,20 @@ import { CustomerForm } from './customer-form';
           </div>
         </div>
       </tk-card>
+          }
 
-      <tk-card [heading]="'tickets.detail.watchers' | transloco">
+          @case ('watchers') {
+      <tk-card
+        [heading]="panel.label"
+        collapsible
+        [collapsed]="isCollapsed('watchers')"
+        (collapsedChange)="setCollapsed('watchers', $event)"
+      >
+        <div card-actions>
+          @if (ticket().watchers.length) {
+            <span class="text-meta font-bold text-muted-foreground">{{ ticket().watchers.length }}</span>
+          }
+        </div>
         <div class="space-y-2">
           @for (watcher of ticket().watchers; track watcher.agent.id) {
             <div class="flex items-center gap-2.5">
@@ -508,6 +572,74 @@ import { CustomerForm } from './customer-form';
           </tk-select>
         </div>
       </tk-card>
+          }
+        }
+      }
+
+      <!-- Outside the loop: a dialog is not a panel, and hiding the Customer
+           card must not take away the only way to link one. -->
+      <tk-modal [(open)]="addingCustomer" [heading]="'tickets.detail.linkCustomer' | transloco">
+        <div class="space-y-4">
+          <p class="text-body text-muted-foreground">{{ 'tickets.detail.linkCustomerHelp' | transloco }}</p>
+
+          <!-- One field for both paths. Typing searches the people who already
+               exist; if nothing matches, the same text becomes the new
+               customer's email. Two separate "find" and "create" modes would
+               make the agent choose before they know which one applies. -->
+          <div>
+            <label tkLabel for="link-customer">{{ 'tickets.detail.customerSearch' | transloco }}</label>
+            <tk-combobox
+              inset
+              inputId="link-customer"
+              [(value)]="customerQuery"
+              [suggestions]="customerChoices()"
+              [placeholder]="'tickets.new.requesterPlaceholder' | transloco"
+              [toggleLabel]="'tickets.new.showSuggestions' | transloco"
+            />
+          </div>
+
+          <!-- Creating is an explicit mode, checked BEFORE any match. Deriving
+               it from "no match yet" raced the customer list: the list loads
+               async, so the form appeared while it was still empty and vanished
+               mid-typing the moment a match arrived. A mode the user turns on
+               stays on until they cancel. -->
+          @if (creating()) {
+            <tk-customer-form
+              #form
+              [email]="customerQuery()"
+              emailLocked
+              [suggestedKeys]="suggestedFieldKeys()"
+            />
+          } @else if (customers.isLoading()) {
+            <p class="flex items-center gap-2 text-meta text-muted-foreground">
+              <tk-spinner [size]="14" />
+              {{ 'common.loading' | transloco }}
+            </p>
+          } @else if (matchedCustomer(); as person) {
+            <p class="flex items-center gap-2 text-body">
+              <tk-icon name="check-circle" [size]="16" class="text-success" />
+              {{ 'tickets.detail.willLink' | transloco: { name: person.name || person.email } }}
+            </p>
+          } @else if (looksLikeEmail()) {
+            <button tkButton variant="outline" size="sm" class="w-full" (click)="creating.set(true)">
+              <tk-icon name="user-plus" [size]="15" />
+              {{ 'tickets.detail.createNew' | transloco: { email: customerQuery().trim() } }}
+            </button>
+          } @else if (customerQuery().trim()) {
+            <p class="text-meta text-muted-foreground">{{ 'tickets.detail.needEmail' | transloco }}</p>
+          }
+        </div>
+
+        <div modal-footer>
+          <button tkButton variant="ghost" (click)="addingCustomer.set(false)">{{ 'common.cancel' | transloco }}</button>
+          <button tkButton [disabled]="!canLink() || savingCustomer()" (click)="saveCustomer()">
+            @if (savingCustomer()) {
+              <tk-spinner [size]="16" />
+            }
+            {{ (creating() ? 'tickets.detail.createAndLink' : 'tickets.detail.link') | transloco }}
+          </button>
+        </div>
+      </tk-modal>
 
     </div>
   `,
@@ -527,6 +659,58 @@ export class TicketDetailPanel {
 
   /** The signed-in agent, for the "is this already mine" checks. */
   readonly meId = input<string | null>(null);
+
+  /**
+   * Bumped by the parent when a write elsewhere touched what a self-fetching
+   * card shows — resolving a ticket logs time and files a link. Passed down as
+   * an input rather than reached for with `viewChild`, so the refresh does not
+   * depend on the query having resolved at the moment the write returns.
+   */
+  readonly version = input(0);
+
+  private readonly prefs = inject(UiPrefsStore);
+  /** Re-resolves the TS-side panel labels when the language changes. */
+  private readonly lang = toSignal(inject(TranslocoService).langChanges$, { initialValue: '' });
+
+  /**
+   * The rail, as the workspace has arranged it: which cards, in what order.
+   *
+   * Read from the same `ticket_options` table as priorities and channels —
+   * `sortOrder` is the position and `isActive` is whether it is drawn at all.
+   * Hiding one only stops it being rendered; every field behind it is nullable
+   * and nothing about the ticket changes.
+   */
+  private readonly panelConfig = resource({ loader: () => this.api.ticketOptions('ticket_panel') });
+
+  protected readonly panels = computed<readonly RailPanel[]>(() => {
+    this.lang();
+    const configured = valueOr(this.panelConfig, []);
+    // Falling back rather than rendering nothing: an empty rail has no way to
+    // reassign, no SLA and no route to the customer, and a lookup that failed
+    // is not a decision the admin made.
+    const rows = configured.length
+      ? configured.map((option) => ({ key: option.value, label: option.label }))
+      : PANEL_DEFAULTS.map((panel) => ({ key: panel.key, label: panel.label }));
+
+    return rows.map(({ key, label }) => {
+      const seeded = PANEL_BY_KEY.get(key);
+      // Still Trackly's wording ⇒ translate it. Renamed ⇒ the admin's words win,
+      // untranslated, because that is the point of letting them rename it.
+      return {
+        key,
+        label: seeded && seeded.label === label ? this.transloco.translate(seeded.labelKey) : label,
+      };
+    });
+  });
+
+  /** Personal, not workspace configuration — see {@link UiPrefsStore}. */
+  protected isCollapsed(key: string): boolean {
+    return this.prefs.isCollapsed(`ticket.${key}`);
+  }
+
+  protected setCollapsed(key: string, collapsed: boolean): void {
+    this.prefs.setCollapsed(`ticket.${key}`, collapsed);
+  }
 
   private readonly agents = resource({ loader: () => this.api.agents() });
   private readonly categories = resource({ loader: () => this.api.categories() });

@@ -75,6 +75,17 @@ public record TicketDetailDto(
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
+/// <summary>Work elsewhere that this ticket is about. Agent-facing.</summary>
+public record TicketLinkDto(
+    Guid Id,
+    string Url,
+    string? Title,
+    string Kind,
+    UserSummaryDto? CreatedBy,
+    DateTime CreatedAt);
+
+public record AddTicketLinkRequest(string Url, string? Title, string? Kind);
+
 /// <summary>One sitting of work on a ticket.</summary>
 public record TimeEntryDto(
     Guid Id,
@@ -91,6 +102,12 @@ public record CommentDto(
     UserSummaryDto? Author,
     string? GuestEmail,
     string Body,
+    /// <summary>
+    /// "text" or "html". The client MUST branch on this rather than sniffing the
+    /// body: rendering plain text as markup turns a customer's "&lt;3" into a
+    /// broken tag, and rendering markup as text shows them the tags.
+    /// </summary>
+    string BodyFormat,
     bool IsInternal,
     string Source,
     IReadOnlyList<AttachmentDto> Attachments,
@@ -155,7 +172,12 @@ public record UpdateTicketRequest(
     // so a ticket can never end up resolved with its time entry lost in between.
     int? TimeSpentMinutes = null);
 
-public record CreateCommentRequest(string Body, bool IsInternal);
+/// <param name="BodyFormat">
+/// "html" for the rich composer, anything else (including absent) for plain
+/// text. HTML is sanitised server-side against a small allowlist before it is
+/// stored — the composer is the convenience, never the control.
+/// </param>
+public record CreateCommentRequest(string Body, bool IsInternal, string? BodyFormat = null);
 
 public record TicketListQuery(
     string? Status,

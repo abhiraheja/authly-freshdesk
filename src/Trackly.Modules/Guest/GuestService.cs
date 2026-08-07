@@ -229,7 +229,8 @@ public class GuestService(
                 // No avatar: this view is reached with a link token, not a
                 // session, so the photo endpoint would 401 and the agent would
                 // render as a broken image rather than their initials.
-                c.Id, UserSummaryDto.From(c.Author, withAvatar: false), c.GuestEmail, c.Body, false, c.Source,
+                c.Id, UserSummaryDto.From(c.Author, withAvatar: false), c.GuestEmail, c.Body, c.BodyFormat,
+                false, c.Source,
                 attachments.Where(a => a.CommentId == c.Id).Select(ToDto).ToList(),
                 c.CreatedAt)).ToList(),
             attachments.Where(a => a.CommentId == null).Select(ToDto).ToList(),
@@ -260,7 +261,12 @@ public class GuestService(
         // A guest reply is a customer-side reply → notify the assignee + watchers.
         await notifications.OnReplyAsync(ticket.Id, comment.Id, authoredByAgent: false, ct);
 
-        return new CommentDto(comment.Id, null, comment.GuestEmail, comment.Body, false, comment.Source, [], comment.CreatedAt);
+        // Plain text, always: a guest types into a textarea, and accepting markup
+        // from an unauthenticated caller would make the guest link the softest
+        // way into every agent's screen.
+        return new CommentDto(
+            comment.Id, null, comment.GuestEmail, comment.Body, comment.BodyFormat,
+            false, comment.Source, [], comment.CreatedAt);
     }
 
     // ---- Guest attachments ---------------------------------------------------------

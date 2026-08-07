@@ -416,6 +416,53 @@ h4,
   padding: 1rem;
 }
 
+/* Collapsible card. The heading becomes the disclosure control, so it takes the
+   whole width the actions leave and stays left-aligned like the <h3> it
+   replaces. */
+.card-toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  color: inherit;
+  /* Negative margin so the hover target is generous without the title drifting
+     away from where it sits on a card that does not collapse. */
+  margin: -0.25rem -0.5rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-chip);
+}
+.card-toggle:hover {
+  background: rgb(var(--accent));
+}
+.card-toggle-chevron {
+  flex-shrink: 0;
+  color: rgb(var(--muted-foreground));
+  transition: transform var(--motion-base) var(--motion-ease);
+}
+.card-toggle.is-collapsed .card-toggle-chevron {
+  transform: rotate(-90deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .card-toggle-chevron {
+    transition: none;
+  }
+}
+/* Hidden, not removed: the body is projected content the parent already built,
+   so `@if` in the card would cost the same and only look cheaper. */
+.card.is-collapsed > .card-body,
+.card.is-collapsed > .card-footer {
+  display: none;
+}
+.card.is-collapsed > .card-header {
+  border-bottom: 0;
+  padding-bottom: 1.25rem;
+}
+.card-dense.is-collapsed > .card-header {
+  padding-bottom: 1rem;
+}
+
 /* Clickable card — the one hover treatment in the system. */
 .card-interactive {
   cursor: pointer;
@@ -426,6 +473,234 @@ h4,
 .card-interactive:hover {
   box-shadow: var(--shadow-lift);
   transform: translateY(-2px);
+}
+
+/* ------------------------- Rich text editor ------------------------- */
+
+/* The composer reads as one control: toolbar, optional link bar and writing
+   area share a border and light up together on focus. */
+.editor {
+  border: 1px solid rgb(var(--input));
+  border-radius: var(--radius-control);
+  background: rgb(var(--card));
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    box-shadow var(--motion-fast) var(--motion-ease);
+}
+.editor.is-focused {
+  border-color: rgb(var(--ring));
+  box-shadow: 0 0 0 3px rgb(var(--ring) / 0.18);
+}
+.editor.is-disabled {
+  opacity: 0.6;
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  flex-wrap: wrap;
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid rgb(var(--border));
+}
+.editor-tool {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-chip);
+  color: rgb(var(--muted-foreground));
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    color var(--motion-fast) var(--motion-ease);
+}
+.editor-tool:hover:not(:disabled) {
+  background: rgb(var(--accent));
+  color: rgb(var(--foreground));
+}
+.editor-tool.is-active {
+  background: rgb(var(--accent));
+  color: rgb(var(--accent-foreground));
+}
+.editor-tool:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.editor-tool-divider {
+  width: 1px;
+  height: 1.125rem;
+  margin: 0 0.25rem;
+  background: rgb(var(--border));
+}
+.editor-language {
+  height: 1.75rem;
+  max-width: 8rem;
+  padding: 0 0.375rem;
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--radius-chip);
+  background: rgb(var(--card));
+  color: rgb(var(--muted-foreground));
+  font-size: 0.75rem;
+}
+
+.editor-linkbar {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  border-bottom: 1px solid rgb(var(--border));
+  background: rgb(var(--muted));
+}
+.editor-linkinput {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1.875rem;
+  padding: 0 0.5rem;
+  border: 1px solid rgb(var(--input));
+  border-radius: var(--radius-chip);
+  background: rgb(var(--card));
+  color: rgb(var(--foreground));
+  font-size: 0.8125rem;
+  outline: none;
+}
+.editor-linkinput:focus {
+  border-color: rgb(var(--ring));
+}
+.editor-linkaction {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: rgb(var(--primary));
+  padding: 0 0.375rem;
+}
+
+.editor-surface {
+  padding: 0.75rem;
+  font-size: 0.875rem;
+  color: rgb(var(--foreground));
+  outline: none;
+  overflow-y: auto;
+  max-height: 24rem;
+  /* Long URLs and stack traces must not push the composer wider than its
+     column — the ticket view has a fixed rail beside it. */
+  overflow-wrap: anywhere;
+}
+/* The placeholder is a pseudo-element because a contenteditable has no
+   `placeholder` attribute, and `:empty` does not match the `<br>` a browser
+   leaves behind — hence the class the component maintains. */
+.editor-surface.is-empty::before {
+  content: attr(data-placeholder);
+  color: rgb(var(--muted-foreground));
+  pointer-events: none;
+  display: block;
+}
+
+/* -------- Prose: shared by the editor surface and rendered bodies -------- */
+
+.editor-surface,
+.rich-text {
+  line-height: 1.6;
+}
+.editor-surface p,
+.rich-text p {
+  margin: 0 0 0.5rem;
+}
+.editor-surface > :last-child,
+.rich-text > :last-child {
+  margin-bottom: 0;
+}
+.editor-surface ul,
+.rich-text ul,
+.editor-surface ol,
+.rich-text ol {
+  margin: 0 0 0.5rem;
+  padding-left: 1.25rem;
+}
+.editor-surface ul,
+.rich-text ul {
+  list-style: disc;
+}
+.editor-surface ol,
+.rich-text ol {
+  list-style: decimal;
+}
+.editor-surface li,
+.rich-text li {
+  margin: 0.125rem 0;
+}
+.editor-surface h3,
+.rich-text h3 {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0.75rem 0 0.25rem;
+}
+.editor-surface h4,
+.rich-text h4 {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  margin: 0.625rem 0 0.25rem;
+}
+.editor-surface blockquote,
+.rich-text blockquote {
+  margin: 0 0 0.5rem;
+  padding-left: 0.75rem;
+  border-left: 3px solid rgb(var(--border));
+  color: rgb(var(--muted-foreground));
+}
+.editor-surface a,
+.rich-text a {
+  color: rgb(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.editor-surface code,
+.rich-text code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.8125em;
+  background: rgb(var(--muted));
+  padding: 0.0625rem 0.25rem;
+  border-radius: 6px;
+}
+.editor-surface pre,
+.rich-text pre {
+  margin: 0 0 0.5rem;
+  padding: 0.625rem 0.75rem;
+  background: rgb(var(--muted));
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--radius-chip);
+  overflow-x: auto;
+}
+/* The block owns the frame; the code inside it must not draw a second one. */
+.editor-surface pre code,
+.rich-text pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  white-space: pre;
+}
+.editor-surface hr,
+.rich-text hr {
+  margin: 0.75rem 0;
+  border: 0;
+  border-top: 1px solid rgb(var(--border));
+}
+
+/* An agent's public reply sits on the primary fill, so the prose inherits the
+   inverted colours instead of the page's. */
+.rich-text.on-dark {
+  color: #fff;
+}
+.rich-text.on-dark a {
+  color: #fff;
+}
+.rich-text.on-dark blockquote {
+  border-left-color: rgb(255 255 255 / 0.4);
+  color: rgb(255 255 255 / 0.85);
+}
+.rich-text.on-dark code,
+.rich-text.on-dark pre {
+  background: rgb(255 255 255 / 0.15);
+  border-color: rgb(255 255 255 / 0.2);
+  color: #fff;
 }
 
 /* ---------------------------- Badges ---------------------------- */

@@ -63,7 +63,8 @@
       "domains": "Domains",
       "myTickets": "My tickets",
       "newTicket": "New ticket",
-      "configuration": "Configuration"
+      "configuration": "Configuration",
+      "ticketLayout": "Ticket layout"
     }
   },
   "palette": {
@@ -292,7 +293,20 @@
       "createAndLink": "Create and link",
       "createNew": "Create a new customer for {{email}}"
     },
-    "noCustomer": "No customer"
+    "noCustomer": "No customer",
+    "links": {
+      "heading": "Related work",
+      "empty": "No linked work yet.",
+      "add": "Add link",
+      "url": "Link",
+      "label": "Label",
+      "labelPlaceholder": "What it points at",
+      "remove": "Remove link",
+      "confirmDelete": {
+        "heading": "Remove this link?",
+        "message": "{{link}} will no longer be listed on this ticket."
+      }
+    }
   },
   "status": {
     "open": "Open",
@@ -454,6 +468,22 @@
       "testFailed": "Storage test failed",
       "switchWarning": "Existing attachments stay where they are",
       "switchWarningBody": "Files already uploaded remain in {{provider}} and are still served from there — but only while its credentials are kept below. Clearing them makes those attachments unreadable."
+    },
+    "layout": {
+      "title": "Ticket layout",
+      "subtitle": "The cards in the ticket view's side panel: which are shown, and in what order.",
+      "loadFailed": "Couldn't load the layout",
+      "hint": "Hiding a card only stops it being drawn. Nothing on the ticket changes, and switching it back on brings everything with it.",
+      "shown": "Shown",
+      "hidden": "Hidden",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "show": "Show",
+      "hide": "Hide",
+      "rename": "Rename",
+      "renameLabel": "New name",
+      "saved": "Ticket layout saved",
+      "reset": "Reset to defaults"
     }
   },
   "customers": {
@@ -482,5 +512,24 @@
     "fields": "Customer fields",
     "fieldsHelp": "Suggested field names for customer details. Agents can still add their own.",
     "fieldsAdd": "New field name"
+  },
+  "editor": {
+    "toolbar": "Formatting",
+    "bold": "Bold",
+    "italic": "Italic",
+    "underline": "Underline",
+    "strikethrough": "Strikethrough",
+    "bulletList": "Bullet list",
+    "numberedList": "Numbered list",
+    "quote": "Quote",
+    "inlineCode": "Inline code",
+    "codeBlock": "Code block",
+    "language": "Code language",
+    "link": "Link",
+    "linkUrl": "Link URL",
+    "unlink": "Remove link",
+    "clearFormatting": "Clear formatting",
+    "apply": "Apply",
+    "cancel": "Cancel"
   }
 }

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Trackly.Core.Entities;
 using Trackly.Infrastructure.Data;
+using Trackly.Infrastructure.Text;
 using Trackly.Modules.Csat;
 using Trackly.Modules.Email;
 
@@ -443,6 +444,12 @@ public class TicketService(
                 Body = body,
                 IsInternal = true,
             });
+
+            // The link the agent typed also belongs in Related work, so the card
+            // holds every reference for the ticket rather than one list plus a
+            // stray field that only the resolution card knows about.
+            if (ticket.ResolutionLink is { Length: > 0 } resolutionLink)
+                await MirrorResolutionLinkAsync(ticket, actor, resolutionLink, ct);
         }
 
         // Time logged as part of resolving. Same transaction as the status
@@ -612,6 +619,108 @@ public class TicketService(
     private static TimeEntryDto ToTimeEntry(TicketTimeEntry e) =>
         new(e.Id, UserSummaryDto.From(e.User)!, e.Minutes, e.Note, e.SpentAt, e.CreatedAt);
 
+    // ---- Related work ---------------------------------------------------------
+    //
+    // Agent-facing, like time and private notes: these are engineering
+    // references, and a customer has no business reading the PR that fixed their
+    // ticket (invariant 5).
+
+    public async Task<IReadOnlyList<TicketLinkDto>?> LinksAsync(
+        Actor actor, Guid ticketId, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin)
+            throw new UnauthorizedAccessException();
+        if (!await TicketExistsAsync(actor, ticketId, ct))
+            return null;
+
+        var links = await db.TicketLinks
+            .Where(l => l.WorkspaceId == actor.WorkspaceId && l.TicketId == ticketId)
+            .Include(l => l.CreatedBy)
+            .OrderBy(l => l.CreatedAt)
+            .ToListAsync(ct);
+
+        return links.Select(ToLink).ToList();
+    }
+
+    public async Task<TicketLinkDto?> AddLinkAsync(
+        Actor actor, Guid ticketId, AddTicketLinkRequest request, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin)
+            throw new UnauthorizedAccessException();
+
+        var url = CleanLink(request.Url)
+                  ?? throw new ArgumentException("A link is required.");
+        if (!await TicketExistsAsync(actor, ticketId, ct))
+            return null;
+
+        // The unique index would catch this too, but a 409 from the database
+        // reads as a server fault; the agent just needs to be told it is already
+        // in the list.
+        var existing = await db.TicketLinks
+            .Include(l => l.CreatedBy)
+            .SingleOrDefaultAsync(l => l.TicketId == ticketId && l.Url == url, ct);
+        if (existing is not null)
+            throw new ArgumentException("That link is already on this ticket.");
+
+        var link = new TicketLink
+        {
+            WorkspaceId = actor.WorkspaceId,
+            TicketId = ticketId,
+            Url = url,
+            Title = Trim(request.Title) is { Length: > 0 } title
+                ? (title.Length > MaxLinkTitleLength ? title[..MaxLinkTitleLength] : title)
+                : null,
+            Kind = Trim(request.Kind)?.ToLowerInvariant() ?? TicketLinkKind.Related,
+            CreatedById = actor.UserId,
+        };
+        db.TicketLinks.Add(link);
+        await db.SaveChangesAsync(ct);
+
+        await db.Entry(link).Reference(l => l.CreatedBy).LoadAsync(ct);
+        return ToLink(link);
+    }
+
+    public async Task<bool> DeleteLinkAsync(Actor actor, Guid ticketId, Guid linkId, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin)
+            throw new UnauthorizedAccessException();
+
+        // Any agent may remove any link: a wrong reference on a ticket everyone
+        // reads is worse than the small chance of one being taken off in error,
+        // and unlike a time entry it is not a record of anyone's work.
+        var removed = await db.TicketLinks
+            .Where(l => l.Id == linkId && l.TicketId == ticketId && l.WorkspaceId == actor.WorkspaceId)
+            .ExecuteDeleteAsync(ct);
+        return removed > 0;
+    }
+
+    /// <summary>
+    /// Files the resolve dialog's single link into the related-work list.
+    ///
+    /// Best-effort on purpose: a duplicate URL, or a link the agent already added
+    /// by hand, must not fail the resolution itself. The ticket column is set
+    /// either way — this only makes the link visible in the card next to the rest.
+    /// </summary>
+    private async Task MirrorResolutionLinkAsync(Ticket ticket, Actor actor, string url, CancellationToken ct)
+    {
+        var already = await db.TicketLinks.AnyAsync(l => l.TicketId == ticket.Id && l.Url == url, ct);
+        if (already) return;
+
+        db.TicketLinks.Add(new TicketLink
+        {
+            WorkspaceId = actor.WorkspaceId,
+            TicketId = ticket.Id,
+            Url = url,
+            Kind = TicketLinkKind.UserStory,
+            CreatedById = actor.UserId,
+        });
+    }
+
+    private const int MaxLinkTitleLength = 200;
+
+    private static TicketLinkDto ToLink(TicketLink l) =>
+        new(l.Id, l.Url, l.Title, l.Kind, UserSummaryDto.From(l.CreatedBy), l.CreatedAt);
+
     // ---- Watchers -------------------------------------------------------------
 
     public async Task<bool> AddWatcherAsync(Actor actor, Guid ticketId, Guid agentId, CancellationToken ct)
@@ -689,6 +798,7 @@ public class TicketService(
             UserSummaryDto.From(c.Author),
             c.GuestEmail,
             c.Body,
+            c.BodyFormat,
             c.IsInternal,
             c.Source,
             attachments
@@ -704,6 +814,15 @@ public class TicketService(
         if (string.IsNullOrWhiteSpace(request.Body))
             throw new ArgumentException("Comment body is required.");
 
+        // Sanitised here rather than trusted from the composer. The body arrives
+        // as an HTTP field, so anything that can post JSON can put anything in
+        // it, and it leaves for three surfaces with three different escaping
+        // rules (email, the guest view, the model). One gate, on write.
+        var wantsHtml = request.BodyFormat == CommentBodyFormat.Html;
+        var body = wantsHtml ? RichText.SanitizeHtml(request.Body) : request.Body.Trim();
+        if (string.IsNullOrWhiteSpace(body))
+            throw new ArgumentException("Comment body is required.");
+
         var ticket = await VisibleTickets(actor).SingleOrDefaultAsync(t => t.Id == ticketId, ct);
         if (ticket is null)
             return null;
@@ -712,7 +831,8 @@ public class TicketService(
         {
             TicketId = ticket.Id,
             AuthorId = actor.UserId,
-            Body = request.Body.Trim(),
+            Body = body,
+            BodyFormat = wantsHtml ? CommentBodyFormat.Html : CommentBodyFormat.Text,
             // Customers can never create private notes — is_internal is forced off.
             IsInternal = actor.IsAgentOrAdmin && request.IsInternal,
         };
@@ -730,7 +850,7 @@ public class TicketService(
 
         var author = await db.Users.SingleAsync(u => u.Id == actor.UserId, ct);
         return new CommentDto(
-            comment.Id, UserSummaryDto.From(author), null, comment.Body,
+            comment.Id, UserSummaryDto.From(author), null, comment.Body, comment.BodyFormat,
             comment.IsInternal, comment.Source, [], comment.CreatedAt);
     }
 

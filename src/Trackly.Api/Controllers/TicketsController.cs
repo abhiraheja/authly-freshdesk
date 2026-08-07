@@ -102,6 +102,33 @@ public class TicketsController(TicketService tickets, AttachmentService attachme
         return removed ? NoContent() : NotFound();
     }
 
+    // ---- Related work ----
+    //
+    // Agent/admin: these are engineering references (stories, PRs, docs), on the
+    // same footing as a private note.
+
+    [HttpGet("{id:guid}/links")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> ListLinks(Guid id, CancellationToken ct)
+    {
+        var links = await tickets.LinksAsync(User.GetActor(), id, ct);
+        return links is null ? NotFound() : Ok(links);
+    }
+
+    [HttpPost("{id:guid}/links")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> AddLink(
+        Guid id, [FromBody] AddTicketLinkRequest request, CancellationToken ct)
+    {
+        var link = await tickets.AddLinkAsync(User.GetActor(), id, request, ct);
+        return link is null ? NotFound() : StatusCode(StatusCodes.Status201Created, link);
+    }
+
+    [HttpDelete("{id:guid}/links/{linkId:guid}")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> DeleteLink(Guid id, Guid linkId, CancellationToken ct)
+        => await tickets.DeleteLinkAsync(User.GetActor(), id, linkId, ct) ? NoContent() : NotFound();
+
     // ---- Watchers ----
 
     [HttpPut("{id:guid}/watchers/{agentId:guid}")]

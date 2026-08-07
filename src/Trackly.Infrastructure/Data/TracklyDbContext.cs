@@ -18,6 +18,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<TicketAssignment> TicketAssignments => Set<TicketAssignment>();
     public DbSet<TicketWatcher> TicketWatchers => Set<TicketWatcher>();
     public DbSet<TicketTimeEntry> TicketTimeEntries => Set<TicketTimeEntry>();
+    public DbSet<TicketLink> TicketLinks => Set<TicketLink>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<WorkspaceBranding> WorkspaceBrandings => Set<WorkspaceBranding>();
     public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
@@ -189,11 +190,30 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
                 .OnDelete(DeleteBehavior.Restrict);
         });
 
+        modelBuilder.Entity<TicketLink>(e =>
+        {
+            e.ToTable("ticket_links");
+            e.Property(x => x.Kind).HasDefaultValue(TicketLinkKind.Related);
+            // Unique per ticket: the same URL added twice is a mistake every
+            // time, and it is far easier to stop it here than to explain two
+            // identical rows in the card afterwards.
+            e.HasIndex(x => new { x.TicketId, x.Url }).IsUnique();
+            e.HasOne(x => x.Workspace).WithMany().HasForeignKey(x => x.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Ticket).WithMany(t => t.Links).HasForeignKey(x => x.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // SetNull: the link is about the work, not about who filed it, so it
+            // outlives the agent's account.
+            e.HasOne(x => x.CreatedBy).WithMany().HasForeignKey(x => x.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
         modelBuilder.Entity<Comment>(e =>
         {
             e.ToTable("comments");
             e.Property(c => c.IsInternal).HasDefaultValue(false);
             e.Property(c => c.Source).HasDefaultValue(CommentSource.Web);
+            e.Property(c => c.BodyFormat).HasDefaultValue(CommentBodyFormat.Text);
             e.HasIndex(c => new { c.TicketId, c.CreatedAt });
             e.HasIndex(c => c.EmailMessageId); // inbound threading fallback lookups
             e.HasOne(c => c.Ticket).WithMany(t => t.Comments).HasForeignKey(c => c.TicketId)
