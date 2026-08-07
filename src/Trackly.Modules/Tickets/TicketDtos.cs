@@ -126,5 +126,9 @@ public record TicketListQuery(
     string? Search,
     string? Tag,
     Guid? TeamId,
+    // Every ticket raised by one customer — the customer profile's history.
+    // Agent/admin only, like the other cross-workspace filters: a customer
+    // reading someone else's id here would be reading their tickets.
+    Guid? RequesterId,
     int Page = 1,
     int PageSize = 25);

@@ -35,12 +35,25 @@ export function toApiError(response: HttpErrorResponse): ApiError {
   }
 
   const body = response.error as ErrorEnvelope | string | null;
-  if (typeof body === 'string' && body.trim()) {
-    return new ApiError(response.status, body.trim());
-  }
+
+  // A Trackly envelope always wins — it is the only message written for a human.
   if (body && typeof body === 'object' && typeof body.error === 'string' && body.error.trim()) {
     return new ApiError(response.status, body.error.trim());
   }
+
+  // Nothing behind the gateway. In production that is a real 502/503/504; in
+  // development it is far more often the API simply not running, since the dev
+  // proxy answers for it and so the request never reports status 0. Saying
+  // "request failed" there sends people hunting through their own code for a
+  // bug that is just a stopped process.
+  if (response.status >= 502 && response.status <= 504) {
+    return new ApiError(response.status, 'Could not reach the API. Is the server running?');
+  }
+
+  if (typeof body === 'string' && body.trim() && !body.trimStart().startsWith('<')) {
+    return new ApiError(response.status, body.trim());
+  }
+
   return new ApiError(response.status, `Request failed (${response.status})`);
 }
 

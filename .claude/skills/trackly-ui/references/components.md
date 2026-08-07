@@ -184,6 +184,27 @@ this.toast.info('Draft saved', { label: 'Undo', run: () => this.restore() });
 `<tk-toaster />` is rendered **once**, in the shell. Never per page, or a toast
 fired during a navigation dies with the outgoing route.
 
+### Check `value()` before `isLoading()`
+
+`isLoading()` is **also true during a reload**, and a reload keeps the previous
+value. So this order is wrong:
+
+```html
+@if (r.error()) { … } @else if (r.isLoading()) { …skeleton… } @else if (r.value(); as v) { … }
+```
+
+Every `r.reload()` swaps the screen for a skeleton, which **destroys the whole
+subtree** — scroll position, focus, and any component state inside it, including
+an open dialog someone was halfway through filling in. It looks like the dialog
+closing by itself.
+
+Put the value first; the skeleton is for the first load, which is exactly "no
+value yet":
+
+```html
+@if (r.value(); as v) { …content… } @else if (r.error()) { …retry… } @else { …skeleton… }
+```
+
 ### Empty states — the three kinds
 
 | Cause | Heading | Action |

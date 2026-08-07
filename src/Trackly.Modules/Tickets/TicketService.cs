@@ -37,6 +37,8 @@ public class TicketService(
             tickets = tickets.Where(t => t.TicketTags.Any(tt => tt.Tag.Name == query.Tag));
         if (query.TeamId is not null && actor.IsAgentOrAdmin)
             tickets = tickets.Where(t => t.TeamId == query.TeamId);
+        if (query.RequesterId is not null && actor.IsAgentOrAdmin)
+            tickets = tickets.Where(t => t.RequesterId == query.RequesterId);
         if (!string.IsNullOrWhiteSpace(query.Search))
             tickets = tickets.Where(t => EF.Functions.ILike(t.Subject, $"%{query.Search}%"));
 

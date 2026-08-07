@@ -61,19 +61,9 @@ import { CustomerForm } from './customer-form';
       {{ 'tickets.title' | transloco }}
     </a>
 
-    @if (customer.error()) {
-      <tk-alert tone="danger" [heading]="'customers.loadFailed' | transloco">
-        {{ errorText() }}
-        <button type="button" class="ml-1 font-semibold underline" (click)="customer.reload()">
-          {{ 'common.retry' | transloco }}
-        </button>
-      </tk-alert>
-    } @else if (customer.isLoading()) {
-      <div class="space-y-4">
-        <span tkSkeleton class="h-7 w-64"></span>
-        <span tkSkeleton class="h-40 w-full"></span>
-      </div>
-    } @else if (customer.value(); as person) {
+    <!-- Value first: see the note in ticket-detail. A reload must not swap the
+         page for a skeleton and take the open edit dialog with it. -->
+    @if (customer.value(); as person) {
       <div class="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
         <div class="space-y-4">
           <tk-card>
@@ -211,6 +201,18 @@ import { CustomerForm } from './customer-form';
           </button>
         </div>
       </tk-modal>
+    } @else if (customer.error()) {
+      <tk-alert tone="danger" [heading]="'customers.loadFailed' | transloco">
+        {{ errorText() }}
+        <button type="button" class="ml-1 font-semibold underline" (click)="customer.reload()">
+          {{ 'common.retry' | transloco }}
+        </button>
+      </tk-alert>
+    } @else {
+      <div class="space-y-4">
+        <span tkSkeleton class="h-7 w-64"></span>
+        <span tkSkeleton class="h-40 w-full"></span>
+      </div>
     }
   `,
 })

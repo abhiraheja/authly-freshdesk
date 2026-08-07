@@ -100,20 +100,13 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
       {{ 'tickets.title' | transloco }}
     </a>
 
-    @if (ticket.error()) {
-      <tk-alert tone="danger" [heading]="'tickets.detail.loadFailed' | transloco">
-        {{ errorText() }}
-        <button type="button" class="ml-1 font-semibold underline" (click)="ticket.reload()">
-          {{ 'common.retry' | transloco }}
-        </button>
-      </tk-alert>
-    } @else if (ticket.isLoading()) {
-      <div class="space-y-4">
-        <span tkSkeleton class="h-7 w-2/3"></span>
-        <span tkSkeleton class="h-4 w-40"></span>
-        <span tkSkeleton class="h-40 w-full"></span>
-      </div>
-    } @else if (ticket.value(); as data) {
+    <!-- Value FIRST, skeleton last. isLoading() is also true during a
+         reload, so checking it first swaps the whole screen for a skeleton
+         every time a property changes — which destroys this subtree and every
+         piece of state inside it, including an open dialog the agent was
+         halfway through filling in. The skeleton is for the first load only,
+         which is exactly "there is no value yet". -->
+    @if (ticket.value(); as data) {
       <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div class="min-w-0 space-y-4">
           <!-- Header: identity chips first, then the subject. The chips answer
@@ -344,6 +337,19 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
           (watch)="addWatcher($event)"
           (unwatch)="removeWatcher($event)"
         />
+      </div>
+    } @else if (ticket.error()) {
+      <tk-alert tone="danger" [heading]="'tickets.detail.loadFailed' | transloco">
+        {{ errorText() }}
+        <button type="button" class="ml-1 font-semibold underline" (click)="ticket.reload()">
+          {{ 'common.retry' | transloco }}
+        </button>
+      </tk-alert>
+    } @else {
+      <div class="space-y-4">
+        <span tkSkeleton class="h-7 w-2/3"></span>
+        <span tkSkeleton class="h-4 w-40"></span>
+        <span tkSkeleton class="h-40 w-full"></span>
       </div>
     }
   `,
