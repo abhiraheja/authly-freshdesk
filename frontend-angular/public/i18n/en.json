@@ -291,6 +291,7 @@
     "uploadingFile": "Uploading {{name}}…",
     "changePhoto": "Change photo",
     "removePhoto": "Remove photo",
+    "openOriginal": "Open original",
     "rejected": {
       "empty": "{{name}} is empty.",
       "tooLarge": "{{name}} is larger than {{limit}}.",

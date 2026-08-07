@@ -18,7 +18,6 @@ import {
   SessionStore,
   TicketsApi,
   errorMessage,
-  formatBytes,
   formatDateTime,
   timeAgo,
   toneFor,
@@ -28,6 +27,7 @@ import {
 } from '@trackly/core';
 import {
   Alert,
+  AttachmentList,
   Avatar,
   Badge,
   Button,
@@ -41,6 +41,7 @@ import {
   Spinner,
   Tabs,
   ToastService,
+  type AttachmentItem,
   type IconName,
   type TabItem,
 } from '@trackly/ui';
@@ -82,6 +83,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
     TranslocoPipe,
     RouterLink,
     Alert,
+    AttachmentList,
     Avatar,
     Badge,
     Button,
@@ -173,13 +175,9 @@ const CHANNEL_ICON: Record<string, IconName> = {
             <div id="thread-panel" role="tabpanel" class="space-y-3 p-4">
               @switch (threadTab()) {
                 @case ('attachments') {
-                  @for (file of allAttachments(); track file.id) {
-                    <a class="attachment-row" [href]="url(file)" target="_blank" rel="noopener">
-                      <tk-icon name="paperclip" [size]="16" class="shrink-0 text-muted-foreground" />
-                      <span class="min-w-0 flex-1 truncate font-semibold">{{ file.fileName }}</span>
-                      <span class="shrink-0 text-meta text-muted-foreground">{{ size(file) }}</span>
-                    </a>
-                  } @empty {
+                  @if (allAttachments().length) {
+                    <tk-attachment-list layout="rows" class="space-y-3" [items]="allAttachments()" />
+                  } @else {
                     <p class="py-6 text-center text-body text-muted-foreground">
                       {{ 'tickets.detail.noAttachments' | transloco }}
                     </p>
@@ -202,12 +200,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
                         </p>
                         <div class="rounded-2xl rounded-tl-sm border border-border bg-card p-4">
                           <p class="whitespace-pre-wrap text-body">{{ data.description }}</p>
-                          @for (file of ticketAttachments(); track file.id) {
-                            <a class="attachment-chip" [href]="url(file)" target="_blank" rel="noopener">
-                              <tk-icon name="paperclip" [size]="14" />
-                              {{ file.fileName }} · {{ size(file) }}
-                            </a>
-                          }
+                          <tk-attachment-list [items]="ticketAttachments()" />
                         </div>
                       </div>
                     </article>
@@ -239,12 +232,10 @@ const CHANNEL_ICON: Record<string, IconName> = {
                           <p class="whitespace-pre-wrap text-body" [class.text-white]="isAgentReply(comment)">
                             {{ comment.body }}
                           </p>
-                          @for (file of comment.attachments; track file.id) {
-                            <a class="attachment-chip" [href]="url(file)" target="_blank" rel="noopener">
-                              <tk-icon name="paperclip" [size]="14" />
-                              {{ file.fileName }} · {{ size(file) }}
-                            </a>
-                          }
+                          <tk-attachment-list
+                            [items]="attachmentsOf(comment)"
+                            [dark]="isAgentReply(comment)"
+                          />
                         </div>
                       </div>
                     </article>
@@ -414,7 +405,7 @@ export class TicketDetail {
     return all;
   });
 
-  protected readonly allAttachments = computed(() => this.attachments.value() ?? []);
+  protected readonly allAttachments = computed(() => this.toItems(this.attachments.value() ?? []));
 
   protected readonly threadTabs = computed<TabItem[]>(() => {
     this.lang();
@@ -432,8 +423,38 @@ export class TicketDetail {
 
   /** Only files hung off the ticket itself; a comment renders its own. */
   protected readonly ticketAttachments = computed(() =>
-    (this.attachments.value() ?? []).filter((file) => file.commentId === null),
+    this.toItems((this.attachments.value() ?? []).filter((file) => file.commentId === null)),
   );
+
+  /**
+   * Built once per comment load, not per call.
+   *
+   * A method returning a fresh array would hand the list a new reference on
+   * every change-detection pass, and a signal input treats that as a change —
+   * so the thumbnails would be re-evaluated continuously while anything else on
+   * the page ticked.
+   */
+  private readonly commentAttachments = computed(() => {
+    const byComment = new Map<string, AttachmentItem[]>();
+    for (const comment of this.comments.value() ?? [])
+      byComment.set(comment.id, this.toItems(comment.attachments));
+    return byComment;
+  });
+
+  protected attachmentsOf(comment: Comment): AttachmentItem[] {
+    return this.commentAttachments().get(comment.id) ?? [];
+  }
+
+  /** The API shape plus the URL, which only this feature knows how to build. */
+  private toItems(files: readonly Attachment[]): AttachmentItem[] {
+    return files.map((file) => ({
+      id: file.id,
+      fileName: file.fileName,
+      contentType: file.contentType,
+      sizeBytes: file.sizeBytes,
+      url: this.api.attachmentUrl(file.id),
+    }));
+  }
 
   protected readonly requesterName = computed(() => {
     const t = this.ticket.value();
@@ -483,14 +504,6 @@ export class TicketDetail {
     return this.isAgentReply(comment)
       ? 'rounded-tr-sm border-transparent bg-primary'
       : 'rounded-tl-sm border-border bg-card';
-  }
-
-  protected url(file: Attachment): string {
-    return this.api.attachmentUrl(file.id);
-  }
-
-  protected size(file: Attachment): string {
-    return formatBytes(file.sizeBytes);
   }
 
   /**

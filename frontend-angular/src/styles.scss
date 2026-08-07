@@ -160,6 +160,47 @@ tk-root {
   display: block;
 }
 
+/* Angular leaves <router-outlet> in the DOM as an anchor and inserts the routed
+   component as its next SIBLING — so the element is always empty, but it is
+   still `display: inline` and still contributes a line box. That one line of
+   leading sits directly above the 100dvh shell, which is exactly the handful of
+   pixels that puts a second, whole-page scrollbar beside the main pane's own.
+   Hiding the anchor cannot hide the route: the route is not inside it. */
+router-outlet {
+  display: none;
+}
+
+/* Same fix, one level down — it moved out from under `tk-root` when the shell
+   became a *routed* component, so `tk-shell` is now the inline element wrapped
+   around the 100vh layout. Owning the height here (and clipping) means the
+   document itself can never scroll, which is what a second, whole-page
+   scrollbar next to the main pane's own scrollbar actually is. */
+tk-shell {
+  display: block;
+  /* dvh, not vh: on mobile browsers `100vh` is the height with the toolbar
+     retracted, so a vh-sized shell is taller than what you can see. */
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* And the document itself does not scroll behind it.
+ *
+ * The rules above make the shell exactly one viewport tall, but that only holds
+ * while nothing else contributes height — and a viewport unit does not subtract
+ * a horizontal scrollbar, so a single wide child anywhere inside is enough to
+ * push `100dvh` past what you can actually see and hand the document a scrollbar
+ * of its own. Inside the shell the ONLY scrolling pane is <main>, so saying so
+ * here settles it for good instead of one overflow at a time.
+ *
+ * Scoped with :has() rather than set globally: login, the guest ticket view and
+ * the customer submit form render outside the shell and are ordinary pages that
+ * must keep scrolling normally. */
+html:has(tk-shell),
+html:has(tk-shell) body {
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   background-color: rgb(var(--background));
   color: rgb(var(--foreground));
@@ -1660,4 +1701,132 @@ tr:focus-within .row-actions {
 .attachment-row:hover {
   border-color: rgb(var(--primary) / 0.45);
   background: rgb(var(--primary) / 0.04);
+}
+/* An image row opens in the viewer rather than navigating, so it says so. */
+.attachment-row.is-image {
+  cursor: zoom-in;
+}
+/* Square crop, so a panorama and a portrait line their rows up the same. */
+.attachment-row-thumb {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  object-fit: cover;
+  border-radius: 0.5rem;
+  border: 1px solid rgb(var(--border));
+  background: rgb(var(--muted));
+}
+
+/* Image attachments under a message. Shown, not named — a filename says nothing
+   about a screenshot, and screenshots are most of what a support desk gets. */
+.attachment-previews {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.625rem;
+}
+.attachment-preview {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  border: 1px solid rgb(var(--border));
+  /* Always light: the thumbnail sits on the agent's coloured bubble as often as
+     on a white card, and a tinted mat behind a transparent PNG looks like part
+     of the picture. */
+  background: #fff;
+  cursor: zoom-in;
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+.attachment-preview:hover {
+  border-color: rgb(var(--primary) / 0.5);
+}
+.attachment-preview:focus-visible {
+  outline: 2px solid rgb(var(--ring) / 0.55);
+  outline-offset: 2px;
+}
+.attachment-preview img {
+  display: block;
+  /* Contain, not cover: a cropped screenshot can hide the very error message it
+     was sent to show. Capped so one image can't push the reply off-screen. */
+  max-width: min(20rem, 100%);
+  max-height: 14rem;
+  object-fit: contain;
+}
+.attachment-preview-caption {
+  display: block;
+  padding: 0.3125rem 0.5rem;
+  border-top: 1px solid rgb(var(--border));
+  font-size: 0.6875rem;
+  line-height: 1.3;
+  color: rgb(71 85 105);
+  text-align: left;
+  word-break: break-all;
+}
+
+/* Chips inherit their colour from the page, which disappears on a coloured
+   bubble — so there they get their own light treatment. */
+.attachment-chip-on-dark {
+  border-color: rgb(255 255 255 / 0.35);
+  background: rgb(255 255 255 / 0.16);
+  color: #fff;
+}
+.attachment-chip-on-dark:hover {
+  border-color: rgb(255 255 255 / 0.7);
+  background: rgb(255 255 255 / 0.26);
+  color: #fff;
+}
+
+/* Full-size image viewer. */
+.lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1.5rem;
+  background: rgb(0 0 0 / 0.82);
+  animation: tk-fade-in var(--motion-base) var(--motion-ease);
+}
+@keyframes tk-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+.lightbox-image {
+  max-width: 100%;
+  /* Leaves room for the bar below, so a tall image never hides its own controls. */
+  max-height: calc(100vh - 8rem);
+  object-fit: contain;
+  border-radius: var(--radius-control);
+  background: #fff;
+  cursor: default;
+}
+.lightbox-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: 100%;
+  padding: 0.5rem 0.5rem 0.5rem 0.875rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 0.12);
+  font-size: 0.8125rem;
+  color: #fff;
+}
+.lightbox-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+  padding: 0.3125rem 0.6875rem;
+  border-radius: 999px;
+  font-weight: 600;
+  color: #fff;
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.lightbox-action:hover {
+  background: rgb(255 255 255 / 0.2);
 }

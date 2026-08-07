@@ -32,6 +32,7 @@ All standalone, all `OnPush`, all signal-based. Add new controls under
 | `RadioGroup` / `Radio` | `tk-radio-group` / `tk-radio` | `[(value)]`, `ariaLabel`, `disabled`; option: `value`, `label`, `hint` |
 | `FilePicker` | `tk-file-picker` | `[(files)]`, `variant` (`dropzone`\|`inline`), `accept`, `maxBytes`, `multiple`, `disabled`, `label`, `hint`, `progress`, `error`, `(rejected)` |
 | `AvatarUpload` | `tk-avatar-upload` | `name`, `imageUrl`, `size`, `accept`, `maxBytes`, `uploading`, `disabled`, `error`, `(selected)`, `(removed)` |
+| `AttachmentList` | `tk-attachment-list` | `items` (`AttachmentItem[]`), `layout` (`chips`\|`rows`), `dark` — images render as thumbnails with a lightbox |
 | `Tabs` | `tk-tabs` | `items`, `[(active)]` — presentational; caller renders the panel |
 | `SkeletonDirective` | `[tkSkeleton]` | size it with utilities |
 | `Spinner` | `tk-spinner` | `size` |
@@ -232,6 +233,22 @@ local `URL.createObjectURL` preview until `uploading` goes false, so the new
 photo lands immediately. The parent does the upload and patches its own state
 from the response — reloading a resource instead would leave the old photo on
 screen for the length of the round trip.
+
+### Show an image attachment, don't name it
+
+`tk-attachment-list` renders anything that decodes as an image as a thumbnail
+that opens full size; everything else stays a chip. A filename tells you nothing
+about a screenshot, and screenshots are most of what a support desk receives.
+
+Two details that are easy to get wrong and are already handled: the content type
+is trusted **first but not only** — files arriving by email or a messaging
+connector routinely carry `application/octet-stream`, so the extension is the
+fallback — and a thumbnail that fails to load demotes that file to a chip,
+because the broken-image glyph is worse than no preview.
+
+Map the API type at the call site (`AttachmentItem` carries a `url`); the design
+system does not know how to turn an attachment id into a session route or a
+guest route with a token.
 
 ---
 

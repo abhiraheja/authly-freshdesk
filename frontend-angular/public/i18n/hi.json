@@ -291,6 +291,7 @@
     "uploadingFile": "{{name}} अपलोड हो रही है…",
     "changePhoto": "फ़ोटो बदलें",
     "removePhoto": "फ़ोटो हटाएँ",
+    "openOriginal": "मूल फ़ाइल खोलें",
     "rejected": {
       "empty": "{{name}} खाली है।",
       "tooLarge": "{{name}} {{limit}} से बड़ी है।",

@@ -23,6 +23,7 @@ export * from './lib/forms/radio';
 export * from './lib/forms/tag-input';
 export * from './lib/upload/file-picker';
 export * from './lib/upload/avatar-upload';
+export * from './lib/upload/attachment-list';
 export * from './lib/feedback/feedback';
 export * from './lib/toast/toast';
 export * from './lib/overlay/modal';
