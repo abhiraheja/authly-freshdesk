@@ -19,6 +19,8 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<TicketWatcher> TicketWatchers => Set<TicketWatcher>();
     public DbSet<TicketTimeEntry> TicketTimeEntries => Set<TicketTimeEntry>();
     public DbSet<TicketLink> TicketLinks => Set<TicketLink>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<CommentMention> CommentMentions => Set<CommentMention>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
     public DbSet<WorkspaceBranding> WorkspaceBrandings => Set<WorkspaceBranding>();
     public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
@@ -208,12 +210,48 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
                 .OnDelete(DeleteBehavior.SetNull);
         });
 
+        modelBuilder.Entity<Notification>(e =>
+        {
+            e.ToTable("notifications");
+            // The bell's only query: mine, newest first, unread on top. One
+            // index carries the filter and the sort together.
+            e.HasIndex(n => new { n.UserId, n.CreatedAt });
+            e.HasIndex(n => new { n.UserId, n.ReadAt });
+            e.HasOne(n => n.Workspace).WithMany().HasForeignKey(n => n.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(n => n.User).WithMany().HasForeignKey(n => n.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // The ticket going away takes its notifications with it — a bell row
+            // that leads to a 404 is worse than no row.
+            e.HasOne(n => n.Ticket).WithMany().HasForeignKey(n => n.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(n => n.Actor).WithMany().HasForeignKey(n => n.ActorId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<CommentMention>(e =>
+        {
+            e.ToTable("comment_mentions");
+            e.HasKey(m => new { m.CommentId, m.UserId });
+            // "Tickets where I was mentioned" — the nav item and its count.
+            e.HasIndex(m => new { m.UserId, m.TicketId });
+            e.HasOne(m => m.Comment).WithMany(c => c.Mentions).HasForeignKey(m => m.CommentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(m => m.User).WithMany().HasForeignKey(m => m.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // NoAction: the comment's own cascade already removes these rows, and
+            // a second path from tickets makes PostgreSQL refuse the schema.
+            e.HasOne(m => m.Ticket).WithMany().HasForeignKey(m => m.TicketId)
+                .OnDelete(DeleteBehavior.NoAction);
+        });
+
         modelBuilder.Entity<Comment>(e =>
         {
             e.ToTable("comments");
             e.Property(c => c.IsInternal).HasDefaultValue(false);
             e.Property(c => c.Source).HasDefaultValue(CommentSource.Web);
             e.Property(c => c.BodyFormat).HasDefaultValue(CommentBodyFormat.Text);
+            e.Property(c => c.Visibility).HasDefaultValue(CommentVisibility.Public);
             e.HasIndex(c => new { c.TicketId, c.CreatedAt });
             e.HasIndex(c => c.EmailMessageId); // inbound threading fallback lookups
             e.HasOne(c => c.Ticket).WithMany(t => t.Comments).HasForeignKey(c => c.TicketId)

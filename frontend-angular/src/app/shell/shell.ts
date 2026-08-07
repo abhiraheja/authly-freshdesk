@@ -1,13 +1,14 @@
 import { TranslocoPipe } from '@jsverse/transloco';
-import { ChangeDetectionStrategy, Component, computed, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, resource, signal } from '@angular/core';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, type Event as RouterEvent } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
 import { SessionStore, TicketsApi, errorMessage } from '@trackly/core';
 import { ThemeService } from '@trackly/core';
-import { Avatar, AvatarUpload, Button, ConfirmHost, Dropdown, Icon, Kbd, Modal, Toaster } from '@trackly/ui';
+import { Avatar, AvatarUpload, Button, ConfirmHost, Icon, Kbd, Modal, Toaster } from '@trackly/ui';
 import { CommandPalette } from './command-palette';
+import { NotificationBell } from './notification-bell';
 import { NAV, PORTAL_NAV, type NavGroup, type NavItem } from './nav';
 
 /**
@@ -32,12 +33,12 @@ import { NAV, PORTAL_NAV, type NavGroup, type NavItem } from './nav';
     AvatarUpload,
     Button,
     ConfirmHost,
-    Dropdown,
     Icon,
     Kbd,
     Modal,
     Toaster,
     CommandPalette,
+    NotificationBell,
   ],
   host: { '(document:keydown)': 'onKeydown($event)' },
   templateUrl: './shell.html',
@@ -77,11 +78,27 @@ export class Shell {
   );
 
   /**
-   * Live counts for the saved-view rows. Wired to `/api/dashboard/stats` by the
-   * dashboard feature; until those fields exist server-side the rows simply
-   * render without a count rather than showing a fabricated zero.
+   * Live counts for the saved-view rows.
+   *
+   * Reloaded on every navigation rather than polled: the numbers only move when
+   * somebody acts on a ticket, and by the time you have navigated you are
+   * looking at a fresh page anyway. A timer would be spending requests to keep a
+   * sidebar number honest between two clicks.
+   *
+   * Customers never load it — `/api/dashboard/stats` is agent-only, and the
+   * portal rail has no counts on it.
    */
-  protected readonly counts = signal<Readonly<Record<string, number>>>({});
+  private readonly stats = resource({
+    params: () => ({ url: this.url(), customer: this.session.isCustomer() }),
+    loader: ({ params }) =>
+      params.customer
+        ? Promise.resolve(null)
+        : this.api.stats().catch(() => null),
+  });
+
+  protected readonly counts = computed<Readonly<Record<string, number>>>(
+    () => (this.stats.value() as unknown as Record<string, number> | null) ?? {},
+  );
 
   protected readonly groups = computed<readonly NavGroup[]>(() => {
     if (this.session.isCustomer()) return PORTAL_NAV;

@@ -22,6 +22,8 @@ import {
   slaState,
   timeAgo,
   toneFor,
+  type TicketListParams,
+  type TicketSort,
   type TicketSummary,
 } from '@trackly/core';
 import {
@@ -30,6 +32,7 @@ import {
   Badge,
   Button,
   Card,
+  Drawer,
   EmptyState,
   Icon,
   Pagination,
@@ -41,6 +44,12 @@ import {
   type IconName,
 } from '@trackly/ui';
 import { ResolveDialog, type ResolvePayload } from './resolve-dialog';
+import {
+  TicketFacetsRail,
+  UNASSIGNED_FACET,
+  type FacetKey,
+  type FacetToggle,
+} from './ticket-facets';
 
 const PAGE_SIZE = 20;
 
@@ -71,6 +80,22 @@ const VIEW_STATUS: Record<string, string | undefined> = {
   closed: 'closed',
 };
 
+/** Sortable columns. Anything else in the URL falls back to `updated`. */
+const SORTS: readonly TicketSort[] = ['updated', 'created', 'priority', 'status', 'subject', 'due'];
+
+/** `"open,pending"` → `['open', 'pending']`, and `''` → `[]`. */
+function split(value: string): string[] {
+  return value ? value.split(',').filter(Boolean) : [];
+}
+
+/**
+ * An empty array is not an empty filter — it is "no filter", and sending it as
+ * `[]` would serialise to nothing useful anyway. Undefined says so plainly.
+ */
+function orUndefined(values: string[]): string[] | undefined {
+  return values.length ? values : undefined;
+}
+
 /**
  * Ticket index — the "Index" page shape: header → filter bar → table →
  * pagination.
@@ -93,6 +118,7 @@ const VIEW_STATUS: Record<string, string | undefined> = {
     Badge,
     Button,
     Card,
+    Drawer,
     EmptyState,
     Icon,
     Pagination,
@@ -101,6 +127,7 @@ const VIEW_STATUS: Record<string, string | undefined> = {
     SelectOption,
     SkeletonDirective,
     TableDirective,
+    TicketFacetsRail,
   ],
   template: `
     <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -144,6 +171,8 @@ const VIEW_STATUS: Record<string, string | undefined> = {
           <tk-option value="resolved" [label]="'status.resolved' | transloco" />
           <tk-option value="closed" [label]="'status.closed' | transloco" />
           <tk-option value="mine" [label]="'tickets.assignedToMe' | transloco" />
+          <tk-option value="mentioned" [label]="'nav.items.mentioned' | transloco" />
+          <tk-option value="watching" [label]="'nav.items.watching' | transloco" />
         </tk-select>
 
         <tk-select
@@ -159,6 +188,18 @@ const VIEW_STATUS: Record<string, string | undefined> = {
           <tk-option value="medium" [label]="'priority.medium' | transloco" />
           <tk-option value="low" [label]="'priority.low' | transloco" />
         </tk-select>
+
+        <!-- Filters live behind this button, at every width. They were a
+             permanent left rail first; on a real workspace that spent a third
+             of the screen on a control used a few times a day, while the table
+             — the thing people are actually reading — got squeezed. -->
+        <button tkButton variant="outline" size="sm" (click)="openFilters()">
+          <tk-icon name="filter" [size]="15" />
+          {{ 'tickets.filters.heading' | transloco }}
+          @if (facetCount(); as n) {
+            <span class="rounded-full bg-primary px-1.5 text-meta font-bold text-primary-foreground">{{ n }}</span>
+          }
+        </button>
 
         @if (hasFilters()) {
           <button tkButton variant="ghost" size="sm" (click)="clearFilters()">{{ 'tickets.clear' | transloco }}</button>
@@ -178,15 +219,52 @@ const VIEW_STATUS: Record<string, string | undefined> = {
         <div class="overflow-x-auto">
           <table tkTable hover class="min-w-[900px]">
             <thead>
+              <!-- Sortable headers carry aria-sort so a screen reader knows
+                   which column is ordering the table and which way. -->
               <tr>
-                <th scope="col">{{ 'tickets.columns.ticket' | transloco }}</th>
+                <th scope="col" [attr.aria-sort]="ariaSort('subject')">
+                  <button type="button" class="th-sort" (click)="sortBy('subject')">
+                    {{ 'tickets.columns.ticket' | transloco }}
+                    @if (sort() === 'subject') {
+                      <tk-icon name="chevron-down" [size]="13" class="th-sort-icon" [class.is-asc]="!descending()" />
+                    }
+                  </button>
+                </th>
                 <th scope="col">{{ 'tickets.columns.requester' | transloco }}</th>
                 <th scope="col" class="hidden lg:table-cell">{{ 'tickets.columns.category' | transloco }}</th>
-                <th scope="col">{{ 'tickets.columns.priority' | transloco }}</th>
-                <th scope="col">{{ 'tickets.columns.status' | transloco }}</th>
+                <th scope="col" [attr.aria-sort]="ariaSort('priority')">
+                  <button type="button" class="th-sort" (click)="sortBy('priority')">
+                    {{ 'tickets.columns.priority' | transloco }}
+                    @if (sort() === 'priority') {
+                      <tk-icon name="chevron-down" [size]="13" class="th-sort-icon" [class.is-asc]="!descending()" />
+                    }
+                  </button>
+                </th>
+                <th scope="col" [attr.aria-sort]="ariaSort('status')">
+                  <button type="button" class="th-sort" (click)="sortBy('status')">
+                    {{ 'tickets.columns.status' | transloco }}
+                    @if (sort() === 'status') {
+                      <tk-icon name="chevron-down" [size]="13" class="th-sort-icon" [class.is-asc]="!descending()" />
+                    }
+                  </button>
+                </th>
                 <th scope="col">{{ 'tickets.columns.assignee' | transloco }}</th>
-                <th scope="col" class="hidden lg:table-cell">{{ 'tickets.columns.sla' | transloco }}</th>
-                <th scope="col" class="hidden md:table-cell col-right">{{ 'tickets.columns.updated' | transloco }}</th>
+                <th scope="col" class="hidden lg:table-cell" [attr.aria-sort]="ariaSort('due')">
+                  <button type="button" class="th-sort" (click)="sortBy('due')">
+                    {{ 'tickets.columns.sla' | transloco }}
+                    @if (sort() === 'due') {
+                      <tk-icon name="chevron-down" [size]="13" class="th-sort-icon" [class.is-asc]="!descending()" />
+                    }
+                  </button>
+                </th>
+                <th scope="col" class="hidden md:table-cell col-right" [attr.aria-sort]="ariaSort('updated')">
+                  <button type="button" class="th-sort" (click)="sortBy('updated')">
+                    {{ 'tickets.columns.updated' | transloco }}
+                    @if (sort() === 'updated') {
+                      <tk-icon name="chevron-down" [size]="13" class="th-sort-icon" [class.is-asc]="!descending()" />
+                    }
+                  </button>
+                </th>
                 <th scope="col" class="col-right">{{ 'tickets.columns.actions' | transloco }}</th>
               </tr>
             </thead>
@@ -345,6 +423,16 @@ const VIEW_STATUS: Record<string, string | undefined> = {
       </tk-card>
     }
 
+    <tk-drawer [(open)]="filtersOpen" [heading]="'tickets.filters.heading' | transloco">
+      <tk-ticket-facets
+        [facets]="facets.value()"
+        [loading]="facets.isLoading()"
+        [selected]="selectedFacets()"
+        (toggled)="onFacet($event)"
+        (clear)="clearFilters()"
+      />
+    </tk-drawer>
+
     <!-- The row action opens the same dialog the detail screen uses: the API
          requires a resolution note either way, so a one-click resolve from here
          would just be a 400 with extra steps. The subject is passed because in
@@ -387,6 +475,36 @@ export class TicketList {
   readonly q = input('', { transform: fromQuery });
   readonly page = input('', { transform: fromQuery });
 
+  /**
+   * The facet selections, comma-separated in the URL.
+   *
+   * Short names because seven of them share the query string with the existing
+   * params, and `?st=open,pending&as=none` stays a link somebody can read.
+   * Repeated params (`?st=open&st=pending`) would be more conventional but the
+   * router's own `queryParams` merge does not express "replace this list", so
+   * one string per group is both shorter and easier to write correctly.
+   */
+  readonly st = input('', { transform: fromQuery });
+  readonly pr = input('', { transform: fromQuery });
+  readonly ch = input('', { transform: fromQuery });
+  readonly tm = input('', { transform: fromQuery });
+  readonly cat = input('', { transform: fromQuery });
+  readonly as = input('', { transform: fromQuery });
+  readonly tg = input('', { transform: fromQuery });
+
+  readonly sortParam = input('', { alias: 'sort', transform: fromQuery });
+  readonly dir = input('', { transform: fromQuery });
+
+  protected readonly filtersOpen = signal(false);
+
+  protected readonly sort = computed<TicketSort>(() => {
+    const value = this.sortParam();
+    return SORTS.includes(value as TicketSort) ? (value as TicketSort) : 'updated';
+  });
+
+  /** Descending unless the URL says otherwise — newest-first is what a queue means. */
+  protected readonly descending = computed(() => this.dir() !== 'asc');
+
   protected readonly pageSize = PAGE_SIZE;
   protected readonly skeletonRows = Array.from({ length: 8 }, (_, i) => i);
 
@@ -396,36 +514,128 @@ export class TicketList {
 
   protected readonly pageNumber = computed(() => Math.max(1, Number(this.page()) || 1));
 
+  /**
+   * Everything the server needs, assembled once.
+   *
+   * Shared by the list and the facet counts so the two can never describe
+   * different filter states — which is the failure that makes a facet rail
+   * untrustworthy: counts that do not add up to the rows underneath them.
+   */
+  private readonly filters = computed(() => {
+    const assignees = split(this.as());
+    const view = this.view();
+    // The sidebar's saved views and the rail's status group are two doors to the
+    // same filter. The rail wins when it has anything in it, because it is the
+    // one the user just touched.
+    const statuses = split(this.st());
+    const viewStatus = VIEW_STATUS[view];
+
+    return {
+      status: statuses.length ? statuses : viewStatus ? [viewStatus] : undefined,
+      priority: split(this.pr()).length ? split(this.pr()) : this.priority() || undefined,
+      channel: orUndefined(split(this.ch())),
+      teamId: orUndefined(split(this.tm())),
+      categoryId: orUndefined(split(this.cat())),
+      tag: orUndefined(split(this.tg())),
+      // "Nobody" has no id, so it travels as its own flag rather than as a
+      // magic assignee value the server would have to know about.
+      assigneeId: orUndefined(assignees.filter((id) => id !== UNASSIGNED_FACET)),
+      unassigned: assignees.includes(UNASSIGNED_FACET) || undefined,
+      mentioned: view === 'mentioned' || undefined,
+      watching: view === 'watching' || undefined,
+      search: this.q() || undefined,
+    } satisfies TicketListParams;
+  });
+
   protected readonly tickets = resource({
     params: () => ({
-      view: this.view(),
-      priority: this.priority(),
-      search: this.q(),
-      page: this.pageNumber(),
-      // A view of "mine" needs the signed-in id, so it belongs in the key.
+      filters: this.filters(),
+      mine: this.view() === 'mine',
       me: this.session.user()?.id ?? '',
+      sort: this.sort(),
+      desc: this.descending(),
+      page: this.pageNumber(),
     }),
     loader: ({ params }) =>
       this.api.list({
-        status: VIEW_STATUS[params.view],
-        assigneeId: params.view === 'mine' ? params.me : undefined,
-        priority: params.priority || undefined,
-        search: params.search || undefined,
+        ...params.filters,
+        // "Assigned to me" is the sidebar's shorthand, and it only means
+        // anything once the session has resolved.
+        assigneeId: params.mine ? params.me : params.filters.assigneeId,
+        sort: params.sort,
+        desc: params.desc,
         page: params.page,
         pageSize: PAGE_SIZE,
       }),
+  });
+
+  /**
+   * Counts for the filter panel.
+   *
+   * A second request rather than a field on the list response: it is a
+   * different shape of query — seven grouped counts, each excluding its own
+   * filter — and paging the list must not recompute them.
+   *
+   * **Only fetched once the panel has been opened.** Seven GROUP BYs on every
+   * visit to the ticket list, for a panel most visits never open, is a real cost
+   * for nothing. Once opened it stays live, so changing a filter updates the
+   * counts underneath the tick that changed them.
+   */
+  private readonly facetsWanted = signal(false);
+
+  protected readonly facets = resource({
+    params: () => ({
+      wanted: this.facetsWanted(),
+      filters: this.filters(),
+      mine: this.view() === 'mine',
+      me: this.session.user()?.id ?? '',
+    }),
+    loader: ({ params }) =>
+      params.wanted
+        ? this.api.facets({
+            ...params.filters,
+            assigneeId: params.mine ? params.me : params.filters.assigneeId,
+          })
+        : Promise.resolve(undefined),
+  });
+
+  protected openFilters(): void {
+    this.facetsWanted.set(true);
+    this.filtersOpen.set(true);
+  }
+
+  protected readonly selectedFacets = computed<Partial<Record<FacetKey, readonly string[]>>>(() => ({
+    status: split(this.st()),
+    priority: split(this.pr()),
+    channel: split(this.ch()),
+    team: split(this.tm()),
+    category: split(this.cat()),
+    assignee: split(this.as()),
+    tag: split(this.tg()),
+  }));
+
+  /** How many facet values are ticked — the badge on the mobile Filters button. */
+  protected readonly facetCount = computed(() => {
+    const total = Object.values(this.selectedFacets()).reduce((sum, v) => sum + (v?.length ?? 0), 0);
+    return total || null;
   });
 
   protected readonly rows = computed(() => this.tickets.value()?.items ?? []);
   protected readonly total = computed(() => this.tickets.value()?.total ?? 0);
   protected readonly errorText = computed(() => errorMessage(this.tickets.error()));
 
-  protected readonly hasFilters = computed(() => !!(this.view() || this.priority() || this.q()));
+  protected readonly hasFilters = computed(
+    () => !!(this.view() || this.priority() || this.q() || this.facetCount()),
+  );
 
   protected readonly headingKey = computed(() => {
     switch (this.view()) {
       case 'mine':
         return 'tickets.assignedToMe';
+      case 'mentioned':
+        return 'nav.items.mentioned';
+      case 'watching':
+        return 'nav.items.watching';
       case '':
         return 'tickets.title';
       default:
@@ -476,6 +686,86 @@ export class TicketList {
     // Debounced, and `replaceUrl` so a search doesn't bury the previous page in
     // history one character at a time.
     this.searchTimer = setTimeout(() => this.setParam('q', value, true), 300);
+  }
+
+  /** Which URL param each facet group writes to. */
+  private static readonly FACET_PARAM: Record<FacetKey, string> = {
+    status: 'st',
+    priority: 'pr',
+    channel: 'ch',
+    team: 'tm',
+    category: 'cat',
+    assignee: 'as',
+    tag: 'tg',
+  };
+
+  private facetValues(key: FacetKey): string[] {
+    return split(this.rawFacet(key));
+  }
+
+  private rawFacet(key: FacetKey): string {
+    switch (key) {
+      case 'status':
+        return this.st();
+      case 'priority':
+        return this.pr();
+      case 'channel':
+        return this.ch();
+      case 'team':
+        return this.tm();
+      case 'category':
+        return this.cat();
+      case 'assignee':
+        return this.as();
+      default:
+        return this.tg();
+    }
+  }
+
+  /**
+   * Ticks or unticks one value.
+   *
+   * Picking a status also clears a status-shaped saved view, because the two
+   * mean the same thing and leaving both set would show a filter the rail
+   * cannot represent — "Open" in the sidebar and "Pending" in the rail, with the
+   * results obeying neither obviously.
+   */
+  protected onFacet({ key, value }: FacetToggle): void {
+    const current = this.facetValues(key);
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value];
+
+    const params: Record<string, string | null> = {
+      [TicketList.FACET_PARAM[key]]: next.length ? next.join(',') : null,
+      page: null,
+    };
+    if (key === 'status' && VIEW_STATUS[this.view()]) params['view'] = null;
+
+    void this.router.navigate([], { queryParams: params, queryParamsHandling: 'merge' });
+  }
+
+  /**
+   * Clicking the active column flips the direction; clicking another switches to
+   * it, starting descending — the useful end of every column here (newest,
+   * most urgent, soonest due).
+   */
+  protected sortBy(column: TicketSort): void {
+    const active = this.sort() === column;
+    const desc = active ? !this.descending() : true;
+    void this.router.navigate([], {
+      queryParams: {
+        sort: column === 'updated' && desc ? null : column,
+        dir: desc ? null : 'asc',
+        page: null,
+      },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  protected ariaSort(column: TicketSort): 'ascending' | 'descending' | 'none' {
+    if (this.sort() !== column) return 'none';
+    return this.descending() ? 'descending' : 'ascending';
   }
 
   protected setParam(key: string, value: string | number, replaceUrl = false): void {

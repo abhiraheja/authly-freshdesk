@@ -238,11 +238,18 @@ export interface Comment {
    */
   bodyFormat: string;
   /**
-   * Private note. The API filters these out for every non-agent caller — the
-   * amber styling in the UI is a second signal for agents, never the control
-   * (invariant 5).
+   * Coarse "the customer must not see this" flag. Still what every
+   * customer-facing filter tests (invariant 5).
    */
   isInternal: boolean;
+  /**
+   * The finer three: `public` (the customer sees it), `internal` (every agent
+   * does), `private` (only the author — the API does not send anyone else's).
+   *
+   * Style by this; gate by nothing here. The API already decided what you are
+   * allowed to receive.
+   */
+  visibility: string;
   source: string;
   attachments: Attachment[];
   createdAt: string;
@@ -257,15 +264,72 @@ export interface DashboardStats {
   unassigned: number;
   assignedToMe: number;
   openProblems: number;
+  /** Distinct tickets where the signed-in agent was named in a comment. */
+  mentioningMe: number;
+  /** Tickets the signed-in agent watches. */
+  watchedByMe: number;
 }
 
+/** What the list can be sorted by. `updated` is the default. */
+export type TicketSort = 'updated' | 'created' | 'priority' | 'status' | 'subject' | 'due';
+
+/** The assignee facet's bucket for "nobody" — sent back as `unassigned=true`. */
+export const UNASSIGNED_FACET = 'none';
+
+export interface FacetBucket {
+  value: string;
+  label: string;
+  count: number;
+}
+
+/**
+ * Counts behind the filter rail.
+ *
+ * Each group is counted with every filter applied **except its own** — so
+ * picking "Open" still shows how many Pending there are, and the selection can
+ * be widened rather than only narrowed.
+ */
+export interface TicketFacets {
+  status: FacetBucket[];
+  priority: FacetBucket[];
+  channel: FacetBucket[];
+  team: FacetBucket[];
+  category: FacetBucket[];
+  assignee: FacetBucket[];
+  tag: FacetBucket[];
+}
+
+/**
+ * Every list filter.
+ *
+ * The array fields serialise as repeated params (`?status=open&status=pending`),
+ * which is what lets the rail express "either of these" — something a single
+ * value per field cannot say.
+ */
 export interface TicketListParams {
-  status?: string;
+  status?: string | string[];
   /** Every ticket raised by one customer — the profile page's history. */
   requesterId?: string;
-  priority?: string;
-  assigneeId?: string;
+  priority?: string | string[];
+  assigneeId?: string | string[];
+  /** Nobody is on it. Its own flag, because "no assignee" has no id. */
+  unassigned?: boolean;
+  channel?: string | string[];
+  categoryId?: string | string[];
+  teamId?: string | string[];
+  tag?: string | string[];
   search?: string;
+  sort?: TicketSort;
+  /** Newest/largest first. Defaults to true server-side. */
+  desc?: boolean;
+  /**
+   * Tickets where the signed-in agent was named in a comment. Deliberately a
+   * flag and not an id — "whose mentions?" is not a question a client gets to
+   * answer, so there is no shape of request that could ask it.
+   */
+  mentioned?: boolean;
+  /** Tickets the signed-in agent watches. Same reasoning as `mentioned`. */
+  watching?: boolean;
   page?: number;
   pageSize?: number;
 }
@@ -312,6 +376,15 @@ export class TicketsApi {
 
   list(params: TicketListParams = {}): Promise<Paged<TicketSummary>> {
     return this.api.get<Paged<TicketSummary>>('/api/tickets', params as QueryParams);
+  }
+
+  /**
+   * Counts for the filter rail. Takes the **same** params as `list` on purpose:
+   * one filter state, two endpoints. Two shapes would drift, and the symptom is
+   * facet counts that do not add up to the rows underneath them.
+   */
+  facets(params: TicketListParams = {}): Promise<TicketFacets> {
+    return this.api.get<TicketFacets>('/api/tickets/facets', params as QueryParams);
   }
 
   get(id: string): Promise<TicketDetail> {
@@ -441,7 +514,12 @@ export class TicketsApi {
    */
   addComment(
     ticketId: string,
-    body: { body: string; isInternal: boolean; bodyFormat?: 'text' | 'html' },
+    body: {
+      body: string;
+      isInternal: boolean;
+      bodyFormat?: 'text' | 'html';
+      visibility?: 'public' | 'internal' | 'private';
+    },
   ): Promise<Comment> {
     return this.api.post<Comment>(`/api/tickets/${ticketId}/comments`, body);
   }

@@ -177,20 +177,7 @@
           <span class="hidden sm:inline">{{ 'nav.newTicket' | transloco }}</span>
         </a>
 
-        <tk-dropdown align="end">
-          <button tkButton variant="ghost" iconOnly dropdown-trigger [attr.aria-label]="'nav.notifications' | transloco" class="relative">
-            <tk-icon name="bell" [size]="20" />
-            <span class="absolute right-1.5 top-1.5 size-2 rounded-full bg-danger ring-2 ring-background"></span>
-          </button>
-          <div dropdown-menu>
-            <div class="w-80">
-              <p class="menu-label">{{ 'nav.notifications' | transloco }}</p>
-              <p class="px-2.5 py-6 text-center text-body text-muted-foreground">
-                {{ 'nav.allCaughtUp' | transloco }}
-              </p>
-            </div>
-          </div>
-        </tk-dropdown>
+        <tk-notification-bell />
 
         <button
           tkButton

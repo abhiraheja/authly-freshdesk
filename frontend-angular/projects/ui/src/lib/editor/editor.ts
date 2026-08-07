@@ -14,7 +14,16 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Icon } from '../icon/icon';
-import { CODE_LANGUAGES, isEmptyHtml, sanitizeHtml, textToHtml } from './rich-text';
+import { CODE_LANGUAGES, MENTION_CLASS, isEmptyHtml, sanitizeHtml, textToHtml } from './rich-text';
+
+/** Someone the composer can name. Supplied by the host — the editor knows no API. */
+export interface MentionCandidate {
+  readonly id: string;
+  readonly name: string;
+  /** Disambiguates two people with the same name. Shown under it. */
+  readonly detail?: string;
+  readonly avatarUrl?: string | null;
+}
 
 /** One toolbar button. `command` is the execCommand name; `state` is what to light up. */
 interface Mark {
@@ -224,6 +233,35 @@ const MARKS: readonly Mark[] = [
         </div>
       }
 
+      <!-- The mention picker. A list under the toolbar rather than a popover
+           anchored to the caret: getting a floating box to follow a caret
+           through a scrolling contenteditable is a lot of machinery for a list
+           of six names, and a fixed position never lands off-screen. -->
+      @if (mentionOpen()) {
+        <ul class="editor-mentions" role="listbox" [attr.aria-label]="label('editor.mention')">
+          @for (person of mentionMatches(); track person.id; let index = $index) {
+            <li>
+              <button
+                type="button"
+                class="editor-mention-option"
+                role="option"
+                [class.is-active]="index === mentionIndex()"
+                [attr.aria-selected]="index === mentionIndex()"
+                (mousedown)="hold($event)"
+                (click)="pickMention(person)"
+              >
+                <span class="min-w-0 flex-1 truncate">{{ person.name }}</span>
+                @if (person.detail) {
+                  <span class="editor-mention-detail">{{ person.detail }}</span>
+                }
+              </button>
+            </li>
+          } @empty {
+            <li class="editor-mention-empty">{{ label('editor.noMatches') }}</li>
+          }
+        </ul>
+      }
+
       <!-- aria-multiline + role=textbox so it announces as a text field rather
            than as a group of paragraphs. -->
       <div
@@ -261,6 +299,13 @@ export class Editor {
    */
   readonly labels = input<Record<string, string>>({});
 
+  /**
+   * Who typing `@` can name. Empty disables mentions entirely — which is how a
+   * composer that must not notify anyone (a note only its author will read)
+   * turns the feature off, rather than by hiding a button that still works.
+   */
+  readonly mentionable = input<readonly MentionCandidate[]>([]);
+
   protected readonly marks = MARKS;
   protected readonly languages = CODE_LANGUAGES;
 
@@ -274,6 +319,32 @@ export class Editor {
 
   protected readonly linkOpen = signal(false);
   protected readonly linkUrl = signal('');
+
+  /** What has been typed after the `@`, or null when no mention is in progress. */
+  private readonly mentionQuery = signal<string | null>(null);
+  protected readonly mentionIndex = signal(0);
+
+  protected readonly mentionOpen = computed(
+    () => this.mentionQuery() !== null && this.mentionable().length > 0,
+  );
+
+  /**
+   * Six at most. A mention picker is a shortcut, not a directory — if the right
+   * person is not in the first few, typing another letter is faster than reading
+   * a list of forty.
+   */
+  protected readonly mentionMatches = computed<readonly MentionCandidate[]>(() => {
+    const query = (this.mentionQuery() ?? '').toLowerCase();
+    const people = this.mentionable();
+    if (!query) return people.slice(0, 6);
+    return people
+      .filter(
+        (person) =>
+          person.name.toLowerCase().includes(query) ||
+          (person.detail ?? '').toLowerCase().includes(query),
+      )
+      .slice(0, 6);
+  });
 
   protected readonly empty = computed(() => isEmptyHtml(this.value()));
   protected readonly minHeightRem = computed(() => Math.max(2, this.rows()) * 1.5);
@@ -291,6 +362,20 @@ export class Editor {
   private savedRange: Range | null = null;
 
   constructor() {
+    // Enter should produce <p>, not Chrome's default <div>. The prose styles are
+    // written for paragraphs, so without this every new line loses its spacing —
+    // and the body that reaches the server is a pile of divs rather than
+    // something that reads the same in an email client.
+    //
+    // It is a document-level setting and setting it repeatedly is harmless; it
+    // throws in browsers that do not know the command, which is not a reason to
+    // fail loading the composer.
+    try {
+      document.execCommand('defaultParagraphSeparator', false, 'p');
+    } catch {
+      /* the default separator stays whatever the browser prefers */
+    }
+
     effect(() => {
       const incoming = this.value();
       const element = this.surface()?.nativeElement;
@@ -309,7 +394,13 @@ export class Editor {
     // Selection changes are a document-level event: there is no element event
     // that fires when the caret moves with an arrow key. Filtered to our own
     // surface so two editors on one page do not fight over the toolbar state.
-    const onSelectionChange = () => this.refreshState();
+    const onSelectionChange = () => {
+      this.refreshState();
+      // Also here, not only on input: moving the caret back into a half-typed
+      // name with an arrow key or a click is exactly when the list is wanted
+      // again, and neither of those fires an input event.
+      this.trackMention();
+    };
     document.addEventListener('selectionchange', onSelectionChange);
     inject(DestroyRef).onDestroy(() =>
       document.removeEventListener('selectionchange', onSelectionChange),
@@ -364,11 +455,91 @@ export class Editor {
     const html = element.innerHTML;
     this.lastEmitted = html;
     this.value.set(html);
+    this.trackMention();
+  }
+
+  // ---- Mentions ------------------------------------------------------------
+  //
+  // Driven off the text immediately before the caret rather than off keystrokes.
+  // Keystroke tracking gets it wrong the moment somebody uses an arrow key, a
+  // backspace or a click to move back into a half-typed name — which is exactly
+  // when they want the list again.
+
+  private trackMention(): void {
+    if (this.mentionable().length === 0) {
+      this.mentionQuery.set(null);
+      return;
+    }
+
+    const selection = window.getSelection();
+    const node = selection?.anchorNode;
+    if (!node || node.nodeType !== Node.TEXT_NODE || !this.ownsSelection()) {
+      this.mentionQuery.set(null);
+      return;
+    }
+
+    const before = (node.textContent ?? '').slice(0, selection!.anchorOffset);
+    // `@` at a word boundary, then anything that is not whitespace. Requiring a
+    // boundary is what stops an email address turning into a picker.
+    const match = /(?:^|[\s( ])@([^\s@]{0,30})$/.exec(before);
+    if (!match) {
+      this.mentionQuery.set(null);
+      return;
+    }
+
+    this.mentionQuery.set(match[1]);
+    this.mentionIndex.set(0);
+  }
+
+  private closeMention(): void {
+    this.mentionQuery.set(null);
+  }
+
+  /**
+   * Replaces the typed `@query` with a chip.
+   *
+   * The chip is `contenteditable="false"` so it deletes as one unit — a name
+   * that can be backspaced letter by letter into `<span>Pri</span>` would still
+   * carry the user id and would still notify Priya.
+   */
+  protected pickMention(person: MentionCandidate): void {
+    const query = this.mentionQuery();
+    if (query === null) return;
+
+    const selection = window.getSelection();
+    const node = selection?.anchorNode;
+    if (!node || node.nodeType !== Node.TEXT_NODE) return;
+
+    // Select back over "@query" so insertHTML replaces it.
+    const end = selection!.anchorOffset;
+    const start = end - query.length - 1;
+    if (start < 0) return;
+    const range = document.createRange();
+    range.setStart(node, start);
+    range.setEnd(node, end);
+    selection!.removeAllRanges();
+    selection!.addRange(range);
+
+    const holder = document.createElement('div');
+    const chip = document.createElement('span');
+    chip.className = MENTION_CLASS;
+    chip.setAttribute('data-user-id', person.id);
+    chip.setAttribute('contenteditable', 'false');
+    chip.textContent = `@${person.name}`;
+    holder.appendChild(chip);
+
+    this.closeMention();
+    // The trailing space is what lets the next word be typed without landing
+    // inside the chip.
+    this.exec('insertHTML', `${holder.innerHTML}&nbsp;`);
   }
 
   protected onBlur(): void {
     this.focused.set(false);
+    // pull() first — it re-evaluates the mention state, so closing before it
+    // would just reopen the picker on the way out.
     this.pull();
+    this.closeMention();
   }
 
   /**
@@ -405,6 +576,34 @@ export class Editor {
 
   protected onKeydown(event: KeyboardEvent): void {
     if (this.disabled()) return;
+
+    // The picker owns the arrows and Enter while it is open, so choosing a name
+    // with the keyboard does not also insert a newline behind it.
+    if (this.mentionOpen()) {
+      const matches = this.mentionMatches();
+      switch (event.key) {
+        case 'ArrowDown':
+          event.preventDefault();
+          this.mentionIndex.update((i) => (matches.length ? (i + 1) % matches.length : 0));
+          return;
+        case 'ArrowUp':
+          event.preventDefault();
+          this.mentionIndex.update((i) => (matches.length ? (i - 1 + matches.length) % matches.length : 0));
+          return;
+        case 'Enter':
+        case 'Tab': {
+          const chosen = matches[this.mentionIndex()];
+          if (!chosen) break;
+          event.preventDefault();
+          this.pickMention(chosen);
+          return;
+        }
+        case 'Escape':
+          event.preventDefault();
+          this.closeMention();
+          return;
+      }
+    }
 
     // Enter inside a code block adds a line, it does not leave the block. The
     // way out is the toolbar button or the paragraph the block was inserted with.
@@ -633,4 +832,6 @@ const FALLBACK_LABELS: Record<string, string> = {
   'editor.clearFormatting': 'Clear formatting',
   'editor.apply': 'Apply',
   'editor.cancel': 'Cancel',
+  'editor.mention': 'Mention someone',
+  'editor.noMatches': 'Nobody by that name',
 };

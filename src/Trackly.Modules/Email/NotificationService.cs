@@ -101,6 +101,47 @@ public class NotificationService(
         catch (Exception ex) { logger.LogWarning(ex, "OnReply notify failed for {TicketId}", ticketId); }
     }
 
+    /// <summary>
+    /// "X mentioned you on a ticket."
+    ///
+    /// Emailed as well as belled, because a mention is a direct request to a
+    /// named person — the one notification that should find them whether or not
+    /// they happen to have Trackly open.
+    ///
+    /// Deliberately not gated on <c>NotifyAgentOnReply</c>: that toggle is about
+    /// the firehose of replies on tickets you are assigned. Being named by hand
+    /// is not that, and silently swallowing it would make the feature unreliable
+    /// in exactly the situation it exists for.
+    /// </summary>
+    public async Task OnMentionedAsync(
+        Guid ticketId, IReadOnlyList<Guid> userIds, Guid actorId, string? excerpt, CancellationToken ct)
+    {
+        try
+        {
+            if (userIds.Count == 0) return;
+            var ticket = await LoadAsync(ticketId, ct);
+            if (ticket is null) return;
+            var ctx = await ResolveAsync(ticket.WorkspaceId, ct);
+
+            var author = await db.Users.Where(u => u.Id == actorId).Select(u => u.Name ?? u.Email).SingleOrDefaultAsync(ct);
+            var recipients = await db.Users
+                .Where(u => userIds.Contains(u.Id) && u.IsActive && u.Email != null)
+                .Select(u => new { u.Email, u.Name })
+                .ToListAsync(ct);
+
+            var quoted = string.IsNullOrWhiteSpace(excerpt) ? "" : $"\n\n{excerpt.Trim()}";
+            foreach (var person in recipients)
+                await SendAsync(ctx, person.Email!, person.Name,
+                    $"[{Ref(ticket)}] {author ?? "Someone"} mentioned you — {ticket.Subject}",
+                    $"{author ?? "Someone"} mentioned you on {Ref(ticket)} · {ticket.Subject}.{quoted}\n\n{AgentLink(ticket)}",
+                    // replyable: false — an emailed reply would land as a public
+                    // customer-visible comment, and a mention usually lives on an
+                    // internal note. Answering means opening the ticket.
+                    ticketId, null, replyable: false);
+        }
+        catch (Exception ex) { logger.LogWarning(ex, "OnMentioned notify failed for {TicketId}", ticketId); }
+    }
+
     public async Task OnStatusChangedAsync(Guid ticketId, string newStatus, CancellationToken ct)
     {
         try

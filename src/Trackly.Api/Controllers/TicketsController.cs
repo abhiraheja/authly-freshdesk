@@ -30,6 +30,16 @@ public class TicketsController(TicketService tickets, AttachmentService attachme
         return Ok(new { items, total });
     }
 
+    /// <summary>
+    /// Counts for the filter rail. Takes the same query as the list above, so
+    /// the client sends one filter state to two endpoints rather than keeping
+    /// two shapes in step.
+    /// </summary>
+    [HttpGet("facets")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> Facets([FromQuery] TicketListQuery query, CancellationToken ct)
+        => Ok(await tickets.FacetsAsync(User.GetActor(), query, ct));
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateTicketRequest request, CancellationToken ct)
     {

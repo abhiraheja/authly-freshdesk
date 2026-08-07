@@ -64,7 +64,9 @@
       "myTickets": "My tickets",
       "newTicket": "New ticket",
       "configuration": "Configuration",
-      "ticketLayout": "Ticket layout"
+      "ticketLayout": "Ticket layout",
+      "mentioned": "Mentioning me",
+      "watching": "Watching"
     }
   },
   "palette": {
@@ -291,7 +293,13 @@
       "needEmail": "No match. Type an email address to create a new customer.",
       "link": "Link",
       "createAndLink": "Create and link",
-      "createNew": "Create a new customer for {{email}}"
+      "createNew": "Create a new customer for {{email}}",
+      "teamNote": "Team note",
+      "myNote": "Only me",
+      "onlyYou": "Only you",
+      "placeholderPublic": "Reply to {{name}} — the customer will see this",
+      "placeholderTeam": "Note for the team — every agent sees this, the customer does not. Type @ to mention someone.",
+      "placeholderPrivate": "A note only you can read. Nobody else sees it, not even an admin."
     },
     "noCustomer": "No customer",
     "links": {
@@ -306,6 +314,12 @@
         "heading": "Remove this link?",
         "message": "{{link}} will no longer be listed on this ticket."
       }
+    },
+    "filters": {
+      "heading": "Filters",
+      "none": "Nothing to filter by yet.",
+      "showAll": "Show all {{count}}",
+      "showLess": "Show less"
     }
   },
   "status": {
@@ -530,6 +544,20 @@
     "unlink": "Remove link",
     "clearFormatting": "Clear formatting",
     "apply": "Apply",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "mention": "Mention someone",
+    "noMatches": "Nobody by that name"
+  },
+  "notifications": {
+    "markAllRead": "Mark all read",
+    "loadFailed": "Couldn't load notifications",
+    "someone": "Someone",
+    "unreadLabel": "Notifications, {{count}} unread",
+    "types": {
+      "mention": "{{actor}} mentioned you",
+      "watching": "{{actor}} updated a ticket you watch",
+      "assigned": "{{actor}} assigned a ticket to you",
+      "reply": "{{actor}} replied"
+    }
   }
 }

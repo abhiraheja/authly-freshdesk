@@ -64,7 +64,9 @@
       "myTickets": "मेरे टिकट",
       "newTicket": "नया टिकट",
       "configuration": "कॉन्फ़िगरेशन",
-      "ticketLayout": "टिकट लेआउट"
+      "ticketLayout": "टिकट लेआउट",
+      "mentioned": "मुझे मेंशन किया",
+      "watching": "देख रहे हैं"
     }
   },
   "palette": {
@@ -291,7 +293,13 @@
       "needEmail": "कोई मैच नहीं। नया ग्राहक बनाने के लिए ईमेल लिखें।",
       "link": "जोड़ें",
       "createAndLink": "बनाकर जोड़ें",
-      "createNew": "{{email}} के लिए नया ग्राहक बनाएँ"
+      "createNew": "{{email}} के लिए नया ग्राहक बनाएँ",
+      "teamNote": "टीम नोट",
+      "myNote": "सिर्फ़ मैं",
+      "onlyYou": "सिर्फ़ आप",
+      "placeholderPublic": "{{name}} को जवाब — यह ग्राहक को दिखेगा",
+      "placeholderTeam": "टीम के लिए नोट — हर एजेंट देखेगा, ग्राहक नहीं। मेंशन करने के लिए @ लिखें।",
+      "placeholderPrivate": "सिर्फ़ आप पढ़ सकते हैं। कोई और नहीं, एडमिन भी नहीं।"
     },
     "noCustomer": "कोई ग्राहक नहीं",
     "links": {
@@ -306,6 +314,12 @@
         "heading": "यह लिंक हटाएँ?",
         "message": "{{link}} अब इस टिकट पर नहीं दिखेगा।"
       }
+    },
+    "filters": {
+      "heading": "फ़िल्टर",
+      "none": "अभी फ़िल्टर करने को कुछ नहीं है।",
+      "showAll": "सभी {{count}} दिखाएँ",
+      "showLess": "कम दिखाएँ"
     }
   },
   "status": {
@@ -530,6 +544,20 @@
     "unlink": "लिंक हटाएँ",
     "clearFormatting": "फ़ॉर्मेटिंग हटाएँ",
     "apply": "लागू करें",
-    "cancel": "रद्द करें"
+    "cancel": "रद्द करें",
+    "mention": "किसी को मेंशन करें",
+    "noMatches": "इस नाम का कोई नहीं"
+  },
+  "notifications": {
+    "markAllRead": "सब पढ़ा हुआ करें",
+    "loadFailed": "नोटिफ़िकेशन लोड नहीं हो सके",
+    "someone": "किसी ने",
+    "unreadLabel": "नोटिफ़िकेशन, {{count}} अनपढ़े",
+    "types": {
+      "mention": "{{actor}} ने आपको मेंशन किया",
+      "watching": "{{actor}} ने आपके देखे जा रहे टिकट में बदलाव किया",
+      "assigned": "{{actor}} ने आपको टिकट असाइन किया",
+      "reply": "{{actor}} ने जवाब दिया"
+    }
   }
 }

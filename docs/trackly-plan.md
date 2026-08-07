@@ -1141,6 +1141,47 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | GET    | `/api/tickets/{id}/links` | AgentOrAdmin | Related work — stories, PRs, docs |
 | POST   | `/api/tickets/{id}/links` | AgentOrAdmin | Add one; url must be absolute http(s) |
 | DELETE | `/api/tickets/{id}/links/{linkId}` | AgentOrAdmin | Any agent may remove any link |
+| GET    | `/api/notifications` | Any | The caller's bell. `?unreadOnly` |
+| GET    | `/api/notifications/unread-count` | Any | Just the badge number |
+| POST   | `/api/notifications/{id}/read` | Any | Own rows only — no id in the filter |
+| POST   | `/api/notifications/read-all` | Any | Same |
+
+`GET /api/tickets` also takes `?mentioned=true` and `?watching=true`. Both are
+**flags, not ids**: they resolve to the caller server-side, so there is no shape
+of request that could ask for somebody else's mentions.
+
+### List filtering, sorting and facets
+
+`GET /api/tickets` and `GET /api/tickets/facets` take **the same query object**.
+One filter state, two endpoints — two shapes would drift, and the symptom is
+facet counts that do not add up to the rows beneath them.
+
+Multi-value filters are lists (`?status=open&status=pending`). A single value
+still binds to a one-element list, so callers written before this keep working.
+`unassigned=true` is its own flag because "nobody" has no id; given alongside
+`assigneeId` it reads as an OR ("mine or nobody's").
+
+`sort` ∈ `updated | created | priority | status | subject | due`, `desc` boolean.
+Two rules that are not decoration:
+
+- **Every sort tie-breaks on `id`.** Without it, two tickets updated in the same
+  millisecond — which happens constantly, because automation touches several at
+  once — can swap places between page 1 and page 2, showing one twice and
+  another never.
+- **`priority` sorts by the configured `ticket_options.sort_order`**, via a
+  correlated subquery, not alphabetically. A value whose option row was deleted
+  sorts last: an orphan is not urgent.
+- **`due` puts nulls last in both directions.** No SLA is neither the most nor
+  the least urgent.
+
+Facet groups are each counted with every filter applied **except their own** —
+that is what makes the rail navigable rather than a dead end.
+
+> **EF note.** Every facet groups in SQL and shapes in memory
+> (`GroupBy(...).Select(g => new { ... primitives ... }).ToListAsync()`, then map).
+> Projecting straight into a record and ordering by one of its properties does
+> not translate and throws at query-compile time — it has bitten this file once
+> already.
 | POST   | `/api/users/{id}/avatar` | Session | Own photo always; anyone else's needs agent/admin. 1 MB, PNG/JPEG/WebP |
 | DELETE | `/api/users/{id}/avatar` | Session | Same rule as POST |
 | GET    | `/api/users/{id}/avatar` | Session | Any member of the same workspace. Streamed, never redirected to a CDN |
@@ -1403,11 +1444,75 @@ CREATE TABLE comments (
     author_id        UUID REFERENCES users(id),   -- null for guest comments
     guest_email      TEXT,                        -- set for guest replies
     body             TEXT NOT NULL,
+    -- 'text' or 'html'. A column, not a guess: "<3 that fix" is plain text that
+    -- reads as markup, and sniffing would render a customer's words as a broken
+    -- tag. Defaulting to 'text' also keeps every pre-composer row correct.
+    --
+    -- HTML bodies are sanitised on WRITE (Trackly.Infrastructure.Text.RichText,
+    -- HtmlSanitizer/AngleSharp) against a small allowlist: p, br, div, span,
+    -- strong/b, em/i, u, s, ul/ol/li, blockquote, pre, code, h3, h4, a, hr —
+    -- href/title/class(language-*) only, http(s)/mailto only. Nothing
+    -- downstream re-checks, so nothing downstream may skip it.
+    body_format      TEXT NOT NULL DEFAULT 'text',
+    -- 'public' | 'internal' | 'private'.
+    --   public   — the customer sees it; the only kind that leaves Trackly
+    --   internal — every agent in the workspace sees it, no customer does
+    --   private  — ONLY the author, including from an admin. A note nobody else
+    --              can read is only useful if that is actually true.
+    visibility       TEXT NOT NULL DEFAULT 'public',
+    -- Kept in step with visibility (= visibility <> 'public') and still what
+    -- every customer-facing filter tests. Invariant 5 is enforced by THIS
+    -- boolean; adding a level a filter forgot about is how it breaks quietly.
     is_internal      BOOLEAN DEFAULT false,
     source           TEXT DEFAULT 'web',          -- 'web' or 'email'
     email_message_id TEXT,
     created_at       TIMESTAMPTZ DEFAULT now()
 );
+
+-- Somebody named in a comment.
+--
+-- A row rather than re-parsing every body on read: "tickets where I was
+-- mentioned" is a nav item with a count beside it, and scanning the workspace's
+-- comments to build it is not a query anybody wants on each page load.
+--
+-- The mention list is DERIVED FROM THE BODY server-side, never taken from a
+-- field beside it: two lists that can disagree is one too many, and a
+-- hand-written request could otherwise ping anyone without naming them.
+CREATE TABLE comment_mentions (
+    comment_id UUID NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+    user_id    UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- Denormalised from the comment, purely for the query above.
+    -- NO ACTION, not CASCADE: the comment's cascade already clears these, and a
+    -- second cascade path from tickets is one PostgreSQL refuses to create.
+    ticket_id  UUID NOT NULL REFERENCES tickets(id),
+    created_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (comment_id, user_id)
+);
+CREATE INDEX ON comment_mentions (user_id, ticket_id);
+CREATE INDEX ON comment_mentions (ticket_id);
+
+-- The in-app bell. Distinct from the email notifications: email is for people
+-- who are NOT looking at Trackly, this is for people who are. A mention writes
+-- both, because it should reach you either way.
+--
+-- Stores WHAT HAPPENED, never a sentence. "Priya mentioned you" as a stored
+-- string would freeze the notification in whatever language the server was
+-- running in; the client renders it from type + actor + ticket.
+CREATE TABLE notifications (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,  -- recipient
+    type         TEXT NOT NULL,   -- mention | watching | assigned | reply
+    -- CASCADE: a bell row that leads to a 404 is worse than no row.
+    ticket_id    UUID REFERENCES tickets(id) ON DELETE CASCADE,
+    comment_id   UUID,
+    actor_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+    preview      TEXT,             -- plain text only, never markup
+    read_at      TIMESTAMPTZ,      -- null = unread; a timestamp, so "when" survives
+    created_at   TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX ON notifications (user_id, created_at);
+CREATE INDEX ON notifications (user_id, read_at);
 
 -- Attachments (on tickets and comments)
 CREATE TABLE attachments (

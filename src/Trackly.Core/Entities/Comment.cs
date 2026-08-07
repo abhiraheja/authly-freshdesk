@@ -26,10 +26,56 @@ public class Comment
     /// </summary>
     public string BodyFormat { get; set; } = CommentBodyFormat.Text;
 
-    public bool IsInternal { get; set; }       // private note: never shown to customers/guests
+    /// <summary>
+    /// One of <see cref="CommentVisibility"/>: who can read this.
+    ///
+    /// <see cref="IsInternal"/> is kept in step with it and is still what every
+    /// customer-facing filter tests. That is deliberate: invariant 5 says a
+    /// private note never reaches a customer, and the safest way to add a third
+    /// level was to leave the boolean that already enforces it exactly where it
+    /// is. Adding a visibility that a filter forgot about is how that invariant
+    /// gets broken quietly.
+    /// </summary>
+    public string Visibility { get; set; } = CommentVisibility.Public;
+
+    /// <summary>
+    /// True for anything a customer must not see. Derived from
+    /// <see cref="Visibility"/> — set them together, never one alone.
+    /// </summary>
+    public bool IsInternal { get; set; }
+
     public string Source { get; set; } = CommentSource.Web;
     public string? EmailMessageId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<CommentMention> Mentions { get; set; } = new List<CommentMention>();
+}
+
+public static class CommentVisibility
+{
+    /// <summary>The customer sees it. The only kind that leaves Trackly.</summary>
+    public const string Public = "public";
+
+    /// <summary>
+    /// Every agent and admin in the workspace sees it; no customer does.
+    /// The shared scratchpad — "billing says this is a known issue".
+    /// </summary>
+    public const string Internal = "internal";
+
+    /// <summary>
+    /// Only the author sees it. A reminder to self, not a message.
+    ///
+    /// Admins do not get to read these either. A note nobody else can see is
+    /// only useful if that is actually true, and an agent who suspects otherwise
+    /// simply stops writing them — at which point the feature is worse than not
+    /// having it.
+    /// </summary>
+    public const string Private = "private";
+
+    public static readonly string[] All = [Public, Internal, Private];
+
+    /// <summary>The <c>is_internal</c> that goes with a visibility.</summary>
+    public static bool HiddenFromCustomer(string visibility) => visibility != Public;
 }
 
 public static class CommentSource

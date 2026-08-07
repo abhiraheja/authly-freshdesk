@@ -574,6 +574,7 @@ h4,
 }
 
 .editor-surface {
+  position: relative;
   padding: 0.75rem;
   font-size: 0.875rem;
   color: rgb(var(--foreground));
@@ -586,12 +587,76 @@ h4,
 }
 /* The placeholder is a pseudo-element because a contenteditable has no
    `placeholder` attribute, and `:empty` does not match the `<br>` a browser
-   leaves behind — hence the class the component maintains. */
+   leaves behind — hence the class the component maintains.
+ *
+ * Absolutely positioned, NOT display:block. A block pseudo-element takes a line
+ * of its own in the flow, which pushes the caret onto the line underneath it —
+ * so the composer opened with the cursor sitting below its own placeholder.
+ * Out of flow, the text sits behind the caret where it belongs. */
 .editor-surface.is-empty::before {
   content: attr(data-placeholder);
+  position: absolute;
+  left: 0.75rem;
+  right: 0.75rem;
+  top: 0.75rem;
   color: rgb(var(--muted-foreground));
   pointer-events: none;
-  display: block;
+  /* Matches the line box the caret sits in, so the two line up exactly. */
+  line-height: 1.6;
+}
+
+.editor-mentions {
+  max-height: 13rem;
+  overflow-y: auto;
+  border-bottom: 1px solid rgb(var(--border));
+  padding: 0.25rem;
+}
+.editor-mention-option {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.375rem 0.5rem;
+  border-radius: var(--radius-chip);
+  font-size: 0.8125rem;
+  color: rgb(var(--foreground));
+}
+.editor-mention-option:hover,
+.editor-mention-option.is-active {
+  background: rgb(var(--accent));
+  color: rgb(var(--accent-foreground));
+}
+.editor-mention-detail {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  color: rgb(var(--muted-foreground));
+}
+.editor-mention-option.is-active .editor-mention-detail {
+  color: inherit;
+  opacity: 0.75;
+}
+.editor-mention-empty {
+  padding: 0.5rem;
+  font-size: 0.75rem;
+  color: rgb(var(--muted-foreground));
+}
+
+/* The chip itself. `contenteditable=false` on the element makes it delete as one
+   unit; this only makes it look like one. */
+.editor-surface .mention,
+.rich-text .mention {
+  display: inline-block;
+  padding: 0 0.25rem;
+  border-radius: 6px;
+  background: rgb(var(--primary) / 0.12);
+  color: rgb(var(--primary-ink));
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rich-text.on-dark .mention {
+  background: rgb(255 255 255 / 0.22);
+  color: #fff;
 }
 
 /* -------- Prose: shared by the editor surface and rendered bodies -------- */
@@ -1566,6 +1631,90 @@ tr:focus-within .row-actions {
 .menu-item.is-highlighted {
   background: rgb(var(--primary) / 0.1);
   color: rgb(var(--primary));
+}
+
+/* ---- Facet rail ---- */
+
+.facet-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.125rem 0.25rem;
+  border-radius: var(--radius-chip);
+  font-size: 0.8125rem;
+}
+.facet-row:hover {
+  background: rgb(var(--accent));
+}
+/* tabular-nums so the counts form a straight edge down the rail instead of
+   jittering with each digit width. */
+.facet-count {
+  flex: none;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: rgb(var(--muted-foreground));
+}
+
+/* A sortable column header. The whole cell is the target, and the arrow only
+   appears on the column actually doing the sorting — an arrow on every heading
+   says nothing about which one is active. */
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: inherit;
+  font: inherit;
+}
+.th-sort:hover {
+  color: rgb(var(--foreground));
+}
+.th-sort-icon {
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.th-sort-icon.is-asc {
+  transform: rotate(180deg);
+}
+
+/* ---- Notification bell ---- */
+
+/* A count, not a dot: "you have something" and "you have eleven things" are
+   different messages and only one of them is urgent. */
+.notification-badge {
+  position: absolute;
+  top: 0.125rem;
+  right: 0.125rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.25rem;
+  display: grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgb(var(--danger));
+  color: #fff;
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1;
+  /* Rings against the bar so the badge reads as attached to the bell rather
+     than floating over whatever is behind it. */
+  box-shadow: 0 0 0 2px rgb(var(--background));
+}
+
+.notification-row {
+  display: flex;
+  gap: 0.625rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.5rem 0.625rem;
+  border-radius: var(--radius-chip);
+}
+.notification-row:hover {
+  background: rgb(var(--accent));
+}
+.notification-row.is-unread {
+  background: rgb(var(--primary) / 0.06);
+}
+.notification-row.is-unread:hover {
+  background: rgb(var(--primary) / 0.1);
 }
 
 /* ---- Conversation ----

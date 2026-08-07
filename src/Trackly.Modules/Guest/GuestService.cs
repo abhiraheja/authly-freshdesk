@@ -229,8 +229,12 @@ public class GuestService(
                 // No avatar: this view is reached with a link token, not a
                 // session, so the photo endpoint would 401 and the agent would
                 // render as a broken image rather than their initials.
+                // is_internal false and visibility "public" are hard-coded, not
+                // read from the row: the query above already filters to public
+                // comments, and a guest surface should not be able to report a
+                // note's existence even by echoing its label back (invariant 5).
                 c.Id, UserSummaryDto.From(c.Author, withAvatar: false), c.GuestEmail, c.Body, c.BodyFormat,
-                false, c.Source,
+                false, CommentVisibility.Public, c.Source,
                 attachments.Where(a => a.CommentId == c.Id).Select(ToDto).ToList(),
                 c.CreatedAt)).ToList(),
             attachments.Where(a => a.CommentId == null).Select(ToDto).ToList(),
@@ -266,7 +270,7 @@ public class GuestService(
         // way into every agent's screen.
         return new CommentDto(
             comment.Id, null, comment.GuestEmail, comment.Body, comment.BodyFormat,
-            false, comment.Source, [], comment.CreatedAt);
+            false, CommentVisibility.Public, comment.Source, [], comment.CreatedAt);
     }
 
     // ---- Guest attachments ---------------------------------------------------------

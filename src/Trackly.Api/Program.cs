@@ -31,6 +31,7 @@ builder.Services.AddOpenApi();
 builder.Services.AddTracklyInfrastructure(builder.Configuration);
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<Trackly.Modules.Notifications.NotificationFeed>();
 builder.Services.AddScoped<InboundEmailService>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<AttachmentService>();

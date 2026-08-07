@@ -16,8 +16,16 @@ export interface UploadOptions {
   onProgress?: (progress: UploadProgress) => void;
 }
 
-/** Query-string values a caller may pass; `undefined` and `''` are dropped. */
-export type QueryParams = Record<string, string | number | boolean | undefined | null>;
+/**
+ * Query-string values a caller may pass; `undefined` and `''` are dropped.
+ *
+ * An array becomes **repeated params** (`?status=open&status=pending`), which is
+ * what a list-typed parameter binds from server-side.
+ */
+export type QueryParams = Record<
+  string,
+  string | number | boolean | undefined | null | readonly (string | number)[]
+>;
 
 /**
  * The single HTTP entry point for every Trackly API call.
@@ -102,6 +110,19 @@ function toHttpParams(params?: QueryParams): HttpParams {
   if (!params) return result;
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined || value === null || value === '') continue;
+
+    // `append`, not `set`, and one call per element. `String(['a','b'])` is
+    // "a,b" — a single value that a list-typed parameter binds as one string
+    // containing a comma, so every multi-select filter would silently match
+    // nothing. Repeated params are what the server actually reads.
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (item === undefined || item === null || item === '') continue;
+        result = result.append(key, String(item));
+      }
+      continue;
+    }
+
     result = result.set(key, String(value));
   }
   return result;

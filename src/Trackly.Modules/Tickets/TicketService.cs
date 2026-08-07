@@ -4,12 +4,13 @@ using Trackly.Infrastructure.Data;
 using Trackly.Infrastructure.Text;
 using Trackly.Modules.Csat;
 using Trackly.Modules.Email;
+using Trackly.Modules.Notifications;
 
 namespace Trackly.Modules.Tickets;
 
 public class TicketService(
     TracklyDbContext db, NotificationService notifications, SlaService sla, AutomationService automation,
-    CsatService csat, TagService tags, TicketOptionService options)
+    CsatService csat, TagService tags, TicketOptionService options, NotificationFeed feed)
 {
     // ---- Queries ------------------------------------------------------------
 
@@ -23,32 +24,80 @@ public class TicketService(
         return query;
     }
 
+    /// <summary>
+    /// Applies the query's filters, optionally leaving one field out.
+    ///
+    /// <paramref name="except"/> is what makes the facet counts usable: a facet
+    /// group has to be counted with every filter EXCEPT its own, or picking
+    /// "Open" leaves every other status reading zero and there is no way to see
+    /// what else exists — or to widen the selection to include it.
+    /// </summary>
+    private IQueryable<Ticket> Filtered(Actor actor, TicketListQuery query, string? except = null)
+    {
+        var tickets = VisibleTickets(actor);
+        var agent = actor.IsAgentOrAdmin;
+
+        if (except != "status" && query.Status is { Count: > 0 } statuses)
+            tickets = tickets.Where(t => statuses.Contains(t.Status));
+        if (except != "priority" && query.Priority is { Count: > 0 } priorities)
+            tickets = tickets.Where(t => priorities.Contains(t.Priority));
+        if (except != "channel" && query.Channel is { Count: > 0 } channels)
+            tickets = tickets.Where(t => channels.Contains(t.Channel));
+
+        if (agent && except != "assignee")
+        {
+            // Unassigned is its own flag because "nobody" has no id. When both
+            // are given they are an OR: "mine or nobody's" is a real queue view.
+            var wanted = query.AssigneeId;
+            if (query.Unassigned && wanted is { Count: > 0 })
+                tickets = tickets.Where(t => t.AssigneeId == null || wanted.Contains(t.AssigneeId!.Value));
+            else if (query.Unassigned)
+                tickets = tickets.Where(t => t.AssigneeId == null);
+            else if (wanted is { Count: > 0 })
+                tickets = tickets.Where(t => t.AssigneeId != null && wanted.Contains(t.AssigneeId!.Value));
+        }
+
+        if (agent && except != "tag" && query.Tag is { Count: > 0 } tagNames)
+            tickets = tickets.Where(t => t.TicketTags.Any(tt => tagNames.Contains(tt.Tag.Name)));
+        if (agent && except != "team" && query.TeamId is { Count: > 0 } teams)
+            tickets = tickets.Where(t => t.TeamId != null && teams.Contains(t.TeamId!.Value));
+        if (agent && except != "category" && query.CategoryId is { Count: > 0 } categories)
+            tickets = tickets.Where(t => t.CategoryId != null && categories.Contains(t.CategoryId!.Value));
+
+        if (query.RequesterId is not null && agent)
+            tickets = tickets.Where(t => t.RequesterId == query.RequesterId);
+
+        // Both are about the caller, not about an id they could pass. "Whose
+        // mentions?" is never a question the client gets to answer.
+        if (query.Mentioned && agent)
+            tickets = tickets.Where(t => db.CommentMentions.Any(
+                m => m.TicketId == t.Id && m.UserId == actor.UserId));
+        if (query.Watching && agent)
+            tickets = tickets.Where(t => t.Watchers.Any(w => w.AgentId == actor.UserId));
+
+        if (!string.IsNullOrWhiteSpace(query.Search))
+        {
+            var term = $"%{query.Search.Trim()}%";
+            // Subject and description. Not the comments: a full-text search of
+            // every reply is a different feature with different indexing, and
+            // doing it with ILIKE would be a sequential scan of the workspace.
+            tickets = tickets.Where(t =>
+                EF.Functions.ILike(t.Subject, term) || EF.Functions.ILike(t.Description, term));
+        }
+
+        return tickets;
+    }
+
     public async Task<(IReadOnlyList<TicketSummaryDto> Items, int Total)> ListAsync(
         Actor actor, TicketListQuery query, CancellationToken ct)
     {
-        var tickets = VisibleTickets(actor);
-
-        if (!string.IsNullOrWhiteSpace(query.Status))
-            tickets = tickets.Where(t => t.Status == query.Status);
-        if (!string.IsNullOrWhiteSpace(query.Priority))
-            tickets = tickets.Where(t => t.Priority == query.Priority);
-        if (query.AssigneeId is not null && actor.IsAgentOrAdmin)
-            tickets = tickets.Where(t => t.AssigneeId == query.AssigneeId);
-        if (!string.IsNullOrWhiteSpace(query.Tag) && actor.IsAgentOrAdmin)
-            tickets = tickets.Where(t => t.TicketTags.Any(tt => tt.Tag.Name == query.Tag));
-        if (query.TeamId is not null && actor.IsAgentOrAdmin)
-            tickets = tickets.Where(t => t.TeamId == query.TeamId);
-        if (query.RequesterId is not null && actor.IsAgentOrAdmin)
-            tickets = tickets.Where(t => t.RequesterId == query.RequesterId);
-        if (!string.IsNullOrWhiteSpace(query.Search))
-            tickets = tickets.Where(t => EF.Functions.ILike(t.Subject, $"%{query.Search}%"));
+        var tickets = Filtered(actor, query);
 
         var total = await tickets.CountAsync(ct);
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var page = Math.Max(query.Page, 1);
 
-        var items = await tickets
-            .OrderByDescending(t => t.UpdatedAt)
+        var items = await Sorted(actor, tickets, query)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(t => new TicketSummaryDto(
@@ -70,6 +119,200 @@ public class TicketService(
 
         return (items, total);
     }
+
+    /// <summary>
+    /// Applies the sort, always with a tie-break on id.
+    ///
+    /// The tie-break is not decoration. Without it two tickets updated in the
+    /// same millisecond — which happens constantly, because automation touches
+    /// several at once — can swap places between page 1 and page 2, so one is
+    /// shown twice and another is never shown at all.
+    /// </summary>
+    private IQueryable<Ticket> Sorted(Actor actor, IQueryable<Ticket> tickets, TicketListQuery query)
+    {
+        var desc = query.Desc;
+
+        IOrderedQueryable<Ticket> ordered = query.Sort switch
+        {
+            TicketSort.Created => desc
+                ? tickets.OrderByDescending(t => t.CreatedAt)
+                : tickets.OrderBy(t => t.CreatedAt),
+
+            TicketSort.Subject => desc
+                ? tickets.OrderByDescending(t => t.Subject)
+                : tickets.OrderBy(t => t.Subject),
+
+            TicketSort.Status => desc
+                ? tickets.OrderByDescending(t => t.Status)
+                : tickets.OrderBy(t => t.Status),
+
+            // The workspace's own order, not the alphabet: "high" sorting above
+            // "urgent" is the kind of wrong that makes a queue useless. The rank
+            // comes from the same ticket_options row the picker is built from.
+            TicketSort.Priority => desc
+                ? tickets.OrderByDescending(t => PriorityRank(actor.WorkspaceId, t.Priority))
+                : tickets.OrderBy(t => PriorityRank(actor.WorkspaceId, t.Priority)),
+
+            // Nulls last either way. A ticket with no SLA is not "the most
+            // urgent" and it is not "the least" — it simply has no deadline, and
+            // floating it to the top of a due-date sort would bury the ones that
+            // do.
+            TicketSort.Due => desc
+                ? tickets.OrderBy(t => t.ResolveDueAt == null).ThenByDescending(t => t.ResolveDueAt)
+                : tickets.OrderBy(t => t.ResolveDueAt == null).ThenBy(t => t.ResolveDueAt),
+
+            _ => desc
+                ? tickets.OrderByDescending(t => t.UpdatedAt)
+                : tickets.OrderBy(t => t.UpdatedAt),
+        };
+
+        return ordered.ThenBy(t => t.Id);
+    }
+
+    /// <summary>
+    /// The configured position of a priority, as a correlated subquery.
+    ///
+    /// A value with no row left (a priority that was deleted out from under a
+    /// ticket) sorts to the end rather than the front — an orphan is not urgent.
+    /// </summary>
+    private int PriorityRank(Guid workspaceId, string priority) =>
+        db.TicketOptions
+            .Where(o => o.WorkspaceId == workspaceId
+                        && o.Kind == TicketOptionKind.Priority
+                        && o.Value == priority)
+            .Select(o => (int?)o.SortOrder)
+            .FirstOrDefault() ?? int.MaxValue;
+
+    /// <summary>
+    /// The counts behind the filter rail — agent-facing, like every other
+    /// cross-workspace read.
+    /// </summary>
+    public async Task<TicketFacetsDto> FacetsAsync(
+        Actor actor, TicketListQuery query, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin)
+            throw new UnauthorizedAccessException();
+
+        // Labels come from the same configured lists the pickers use, so a
+        // renamed priority reads the same in both places.
+        var priorityLabels = await LabelsAsync(actor.WorkspaceId, TicketOptionKind.Priority, ct);
+        var channelLabels = await LabelsAsync(actor.WorkspaceId, TicketOptionKind.Channel, ct);
+
+        var status = await CountBy(actor, query, "status", t => t.Status, ct);
+        var priority = await CountBy(actor, query, "priority", t => t.Priority, ct);
+        var channel = await CountBy(actor, query, "channel", t => t.Channel, ct);
+
+        // Every grouped facet materialises into an anonymous type of primitives
+        // and is shaped afterwards.
+        //
+        // EF translates the GROUP BY, but not a projection into a record it then
+        // has to sort by — `GroupBy(...).Select(g => new FacetBucket(...))
+        // .OrderByDescending(b => b.Count)` throws at query-compile time,
+        // because by that point `Count` is a property of a CLR object rather
+        // than an aggregate it can put in an ORDER BY. Grouping in SQL and
+        // shaping in memory is the version that is both translatable and
+        // obviously correct.
+        var teamRows = await Filtered(actor, query, "team")
+            .Where(t => t.TeamId != null)
+            .GroupBy(t => new { Id = t.TeamId!.Value, t.Team!.Name })
+            .Select(g => new { g.Key.Id, g.Key.Name, Count = g.Count() })
+            .ToListAsync(ct);
+        var team = teamRows
+            .Select(r => new FacetBucket(r.Id.ToString(), r.Name, r.Count))
+            .ToList();
+
+        var categoryRows = await Filtered(actor, query, "category")
+            .Where(t => t.CategoryId != null)
+            .GroupBy(t => new { Id = t.CategoryId!.Value, t.Category!.Name })
+            .Select(g => new { g.Key.Id, g.Key.Name, Count = g.Count() })
+            .ToListAsync(ct);
+        var category = categoryRows
+            .Select(r => new FacetBucket(r.Id.ToString(), r.Name, r.Count))
+            .ToList();
+
+        var assigned = Filtered(actor, query, "assignee");
+        var assigneeRows = await assigned
+            .Where(t => t.AssigneeId != null)
+            .GroupBy(t => new { Id = t.AssigneeId!.Value, t.Assignee!.Name, t.Assignee!.Email })
+            .Select(g => new { g.Key.Id, g.Key.Name, g.Key.Email, Count = g.Count() })
+            .ToListAsync(ct);
+        var assignee = assigneeRows
+            .Select(r => new FacetBucket(r.Id.ToString(), r.Name ?? r.Email ?? "—", r.Count))
+            .OrderBy(b => b.Label)
+            .ToList();
+
+        // Unassigned is a bucket, not an absence. It is the most-used queue view
+        // there is, and leaving it out of the rail means it can only be reached
+        // by knowing the URL. First, because it is the one people look for.
+        var unassignedCount = await assigned.CountAsync(t => t.AssigneeId == null, ct);
+        if (unassignedCount > 0)
+            assignee.Insert(0, new FacetBucket(UnassignedFacet, "Unassigned", unassignedCount));
+
+        var tagRows = await Filtered(actor, query, "tag")
+            .SelectMany(t => t.TicketTags)
+            .GroupBy(tt => tt.Tag.Name)
+            .Select(g => new { Name = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+        // Twenty most-used. A workspace can have hundreds of tags and a rail
+        // listing all of them is a scrollbar, not a filter.
+        var tag = tagRows
+            .OrderByDescending(r => r.Count)
+            .ThenBy(r => r.Name)
+            .Take(20)
+            .Select(r => new FacetBucket(r.Name, r.Name, r.Count))
+            .ToList();
+
+        // Status keeps its raw value as the label — the client translates the
+        // four it owns. Priority and channel are workspace vocabulary, so their
+        // labels have to come from the rows the pickers are built from.
+        return new TicketFacetsDto(
+            status,
+            Relabel(priority, priorityLabels),
+            Relabel(channel, channelLabels),
+            Sort(team), Sort(category), assignee, tag);
+    }
+
+    private async Task<List<FacetBucket>> CountBy(
+        Actor actor, TicketListQuery query, string field,
+        System.Linq.Expressions.Expression<Func<Ticket, string>> selector, CancellationToken ct)
+    {
+        // Same rule as the grouped facets above: group in SQL, shape in memory.
+        var rows = await Filtered(actor, query, field)
+            .GroupBy(selector)
+            .Select(g => new { Value = g.Key, Count = g.Count() })
+            .ToListAsync(ct);
+
+        return rows
+            .OrderByDescending(r => r.Count)
+            .ThenBy(r => r.Value)
+            .Select(r => new FacetBucket(r.Value, r.Value, r.Count))
+            .ToList();
+    }
+
+    /// <summary>The sentinel the assignee facet uses for "nobody".</summary>
+    public const string UnassignedFacet = "none";
+
+    private async Task<Dictionary<string, string>> LabelsAsync(
+        Guid workspaceId, string kind, CancellationToken ct) =>
+        await db.TicketOptions
+            .Where(o => o.WorkspaceId == workspaceId && o.Kind == kind)
+            .ToDictionaryAsync(o => o.Value, o => o.Label, ct);
+
+    /// <summary>
+    /// Swaps stored values for the workspace's own wording.
+    ///
+    /// A value with no row keeps itself as the label rather than disappearing: a
+    /// ticket carrying a retired priority still exists, and a facet that hides
+    /// it makes those tickets unreachable from the rail.
+    /// </summary>
+    private static IReadOnlyList<FacetBucket> Relabel(
+        List<FacetBucket> buckets, Dictionary<string, string> labels) =>
+        buckets
+            .Select(b => labels.TryGetValue(b.Value, out var label) ? b with { Label = label } : b)
+            .ToList();
+
+    private static IReadOnlyList<FacetBucket> Sort(List<FacetBucket> buckets) =>
+        buckets.OrderBy(b => b.Label).ToList();
 
     public async Task<TicketDetailDto?> GetAsync(Actor actor, Guid ticketId, CancellationToken ct)
     {
@@ -479,6 +722,28 @@ public class TicketService(
         // are not re-evaluated, so rules can't loop).
         await automation.RunOnUpdateAsync(ticket, ct);
 
+        // Watchers hear about every change, which is what watching means. One
+        // row per save, not one per field: an agent who fixes the priority and
+        // the department in the same breath made one change, and three bell rows
+        // for it is how people turn the bell off.
+        var changes = DescribeChanges(ticket, previousStatus, previousPriority, previousAssignee);
+        if (changes.Count > 0)
+        {
+            var watchers = await feed.InterestedAsync(ticket.Id, ct);
+            // The new assignee gets their own row, so it is excluded from this
+            // one — "the ticket changed" and "the ticket is now yours" are not
+            // the same message, and receiving both says neither clearly.
+            var newlyAssigned = ticket.AssigneeId != previousAssignee ? ticket.AssigneeId : null;
+            var interested = watchers.Where(id => id != newlyAssigned).ToList();
+            if (interested.Count > 0)
+                feed.Queue(actor.WorkspaceId, interested, NotificationType.Watching,
+                    actor.UserId, ticket.Id, preview: string.Join(" · ", changes));
+
+            if (newlyAssigned is { } assignee)
+                feed.Queue(actor.WorkspaceId, [assignee], NotificationType.Assigned,
+                    actor.UserId, ticket.Id, preview: ticket.Subject);
+        }
+
         ticket.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
@@ -618,6 +883,30 @@ public class TicketService(
 
     private static TimeEntryDto ToTimeEntry(TicketTimeEntry e) =>
         new(e.Id, UserSummaryDto.From(e.User)!, e.Minutes, e.Note, e.SpentAt, e.CreatedAt);
+
+    /// <summary>
+    /// What actually moved, in words, for the watchers' bell row.
+    ///
+    /// Only the three fields anybody watches a ticket *for*. A subject typo or a
+    /// tag being tidied is a change; it is not news, and treating it as news is
+    /// how a useful notification becomes noise.
+    ///
+    /// The assignee is reported as "reassigned" rather than by name: resolving
+    /// the name is another query, and the row links to the ticket where it is
+    /// already on screen.
+    /// </summary>
+    private static List<string> DescribeChanges(
+        Ticket ticket, string previousStatus, string previousPriority, Guid? previousAssignee)
+    {
+        var changes = new List<string>();
+        if (ticket.Status != previousStatus)
+            changes.Add($"Status: {previousStatus} → {ticket.Status}");
+        if (ticket.Priority != previousPriority)
+            changes.Add($"Priority: {previousPriority} → {ticket.Priority}");
+        if (ticket.AssigneeId != previousAssignee)
+            changes.Add(ticket.AssigneeId is null ? "Unassigned" : "Reassigned");
+        return changes;
+    }
 
     // ---- Related work ---------------------------------------------------------
     //
@@ -780,9 +1069,17 @@ public class TicketService(
             return null;
 
         var comments = db.Comments.Where(c => c.TicketId == ticketId);
-        // Private notes never reach customers — enforced here, not in the UI.
+        // Two filters, both here rather than in the UI (invariant 5):
+        //
+        //  · a customer sees only public comments;
+        //  · a note marked private is its author's alone — including from an
+        //    admin. A note nobody else can see is only worth writing if that is
+        //    actually true, and an agent who doubts it stops writing them.
         if (!actor.IsAgentOrAdmin)
             comments = comments.Where(c => !c.IsInternal);
+        else
+            comments = comments.Where(
+                c => c.Visibility != CommentVisibility.Private || c.AuthorId == actor.UserId);
 
         var attachments = await db.Attachments
             .Where(a => a.TicketId == ticketId && a.CommentId != null)
@@ -800,6 +1097,7 @@ public class TicketService(
             c.Body,
             c.BodyFormat,
             c.IsInternal,
+            c.Visibility,
             c.Source,
             attachments
                 .Where(a => a.CommentId == c.Id)
@@ -823,9 +1121,28 @@ public class TicketService(
         if (string.IsNullOrWhiteSpace(body))
             throw new ArgumentException("Comment body is required.");
 
+        var visibility = ResolveVisibility(actor, request);
+
         var ticket = await VisibleTickets(actor).SingleOrDefaultAsync(t => t.Id == ticketId, ct);
         if (ticket is null)
             return null;
+
+        // Mentions are read out of the body, never taken from a field beside it.
+        // Two lists that can disagree is one too many: deleting "@Priya" from a
+        // note and sending it would still ping her, and a hand-written request
+        // could ping anyone without naming them at all.
+        var named = wantsHtml ? RichText.ExtractMentions(body) : [];
+        var mentioned = named.Count > 0
+            ? await MentionableAsync(actor, named, ct)
+            : [];
+
+        if (visibility == CommentVisibility.Private && named.Count > 0)
+        {
+            // A note only you can read cannot notify anyone, so the chip would be
+            // a live-looking control that did nothing. The names stay as words.
+            body = RichText.StripMentionMarkup(body);
+            mentioned = [];
+        }
 
         var comment = new Comment
         {
@@ -833,25 +1150,103 @@ public class TicketService(
             AuthorId = actor.UserId,
             Body = body,
             BodyFormat = wantsHtml ? CommentBodyFormat.Html : CommentBodyFormat.Text,
-            // Customers can never create private notes — is_internal is forced off.
-            IsInternal = actor.IsAgentOrAdmin && request.IsInternal,
+            Visibility = visibility,
+            // Kept in step with Visibility, and still what every customer-facing
+            // filter tests — see the note on Comment.IsInternal.
+            IsInternal = CommentVisibility.HiddenFromCustomer(visibility),
+            Source = CommentSource.Web,
         };
         db.Comments.Add(comment);
         ticket.UpdatedAt = DateTime.UtcNow;
         // First public agent reply stops the first-response SLA clock.
         if (actor.IsAgentOrAdmin && !comment.IsInternal)
             sla.OnAgentReply(ticket);
+
+        foreach (var userId in mentioned)
+            db.CommentMentions.Add(new CommentMention
+            {
+                Comment = comment,
+                UserId = userId,
+                TicketId = ticket.Id,
+            });
+
+        // Bell rows are queued into the same SaveChanges as the comment, so one
+        // can never announce something the other failed to write.
+        var preview = comment.BodyFormat == CommentBodyFormat.Html
+            ? RichText.ToPlainText(comment.Body)
+            : comment.Body;
+
+        if (mentioned.Count > 0)
+            feed.Queue(actor.WorkspaceId, mentioned, NotificationType.Mention,
+                actor.UserId, ticket.Id, preview: preview);
+
+        // Watchers hear about everything on the ticket, except a note nobody but
+        // its author can read. Anyone already told they were mentioned is not
+        // told a second time.
+        if (visibility != CommentVisibility.Private)
+        {
+            var watchers = (await feed.InterestedAsync(ticket.Id, ct))
+                .Except(mentioned)
+                .ToList();
+            if (watchers.Count > 0)
+                feed.Queue(actor.WorkspaceId, watchers,
+                    visibility == CommentVisibility.Public ? NotificationType.Reply : NotificationType.Watching,
+                    actor.UserId, ticket.Id, preview: preview);
+        }
+
         await db.SaveChangesAsync(ct);
 
         // Internal notes stay internal — no external notification. External
         // replies notify the other party (agent → customer, customer → agents).
         if (!comment.IsInternal)
             await notifications.OnReplyAsync(ticket.Id, comment.Id, authoredByAgent: actor.IsAgentOrAdmin, ct);
+        // A mention also emails, because the whole point is that it reaches you
+        // whether or not you happen to be looking at Trackly.
+        if (mentioned.Count > 0)
+            await notifications.OnMentionedAsync(ticket.Id, mentioned, actor.UserId, preview, ct);
 
         var author = await db.Users.SingleAsync(u => u.Id == actor.UserId, ct);
         return new CommentDto(
             comment.Id, UserSummaryDto.From(author), null, comment.Body, comment.BodyFormat,
-            comment.IsInternal, comment.Source, [], comment.CreatedAt);
+            comment.IsInternal, comment.Visibility, comment.Source, [], comment.CreatedAt);
+    }
+
+    /// <summary>
+    /// What a caller is actually allowed to create.
+    ///
+    /// A customer's comment is always public — not rejected, forced. The portal
+    /// has no note UI, so anything asking for one is either a stale client or a
+    /// probe, and neither is worth a 400 that a customer would then see.
+    /// </summary>
+    private static string ResolveVisibility(Actor actor, CreateCommentRequest request)
+    {
+        if (!actor.IsAgentOrAdmin) return CommentVisibility.Public;
+
+        var wanted = request.Visibility;
+        if (wanted is not null && CommentVisibility.All.Contains(wanted)) return wanted;
+        // Older clients send only the boolean. Honour it so a deploy in either
+        // order keeps working.
+        return request.IsInternal ? CommentVisibility.Internal : CommentVisibility.Public;
+    }
+
+    /// <summary>
+    /// Narrows named ids to real colleagues.
+    ///
+    /// Re-checked against the workspace because the id came out of an HTTP body:
+    /// without this, a crafted request would notify — and grant a "you were
+    /// mentioned" ticket view to — any user id in the system.
+    /// </summary>
+    private async Task<List<Guid>> MentionableAsync(
+        Actor actor, IReadOnlyList<Guid> ids, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin) return [];
+        return await db.Users
+            .Where(u => ids.Contains(u.Id)
+                        && u.WorkspaceId == actor.WorkspaceId
+                        && u.IsActive
+                        && (u.Role == TracklyRoles.Agent || u.Role == TracklyRoles.Admin))
+            .Select(u => u.Id)
+            .ToListAsync(ct);
     }
 
     // ---- Mapping -----------------------------------------------------------------

@@ -648,6 +648,111 @@ from as many people as worked on it.
   going overnight or never started, and the number ends up corrected by hand
   anyway.
 
+### Finding tickets
+
+**Search** matches the subject *and* the description. It does not search replies —
+that is a different kind of index and doing it with a plain text match would
+scan every comment in the workspace.
+
+**Sort** by clicking a column heading: Ticket, Priority, Status, SLA or Updated.
+Clicking the active column flips the direction. Two things worth knowing:
+
+- **Priority sorts by your configured order**, not alphabetically — so Urgent is
+  above High because you put it there, not because of the letter it starts with.
+- **Sorting by SLA puts tickets with no deadline last**, in both directions. A
+  ticket with no policy is not the most urgent and it is not the least; floating
+  it to the top would bury the ones that do have a clock.
+
+**Filters** live in the rail on the left (or behind the **Filters** button on a
+narrow screen). Every value shows a count, and you can tick more than one in a
+group — "Open **or** Pending", "Priya **or** unassigned".
+
+The counts are the useful part: each group is counted **ignoring its own
+filter**. So after picking "Open" you can still see there are 12 Pending, and
+add them. A filter list that counted itself would show every other option at
+zero and there would be no way back out except clearing everything.
+
+Everything is in the URL, so a filtered, sorted view is a link you can send
+someone, and Back works.
+
+### Notes: who reads them
+
+The composer has three modes, and they are three different promises:
+
+| Mode | Who sees it |
+|---|---|
+| **Reply** | The customer, and everyone internally. This is the only one that leaves Trackly. |
+| **Team note** | Every agent and admin in the workspace. Never the customer. |
+| **Only me** | Just you. Not your colleagues, **not an admin**. |
+
+"Only me" is for the reminder you leave yourself — *check the billing export
+before closing this*. It is genuinely private, because a note that might be read
+by somebody else is a note people stop writing.
+
+Because of that, **"Only me" cannot mention anyone**. If you type a name in one,
+it stays as ordinary words and nobody is notified — a chip that looks like it
+pinged somebody, and did not, would be worse than no chip.
+
+### Mentions
+
+Type **@** in a reply or a team note and pick a colleague. They get:
+
+- a **bell notification** in Trackly, and
+- an **email**, so it reaches them whether or not they have Trackly open.
+
+Mentioning somebody does **not** change the assignee and does **not** make them a
+watcher. It is a nudge, not a handover — the ticket stays exactly where it was.
+
+They can find everything they were named in under **Mentioning me** in the
+sidebar, which also carries a count.
+
+### Watchers
+
+Any number of agents can watch a ticket. A watcher hears about **every** change
+to it — status, priority, reassignment, and every reply or team note. The
+assignee is treated as a watcher automatically; nobody has to remember to add
+themselves to their own ticket.
+
+**Watching** in the sidebar lists everything you watch, with a count.
+
+Add and remove watchers from the **Watchers** card on the ticket.
+
+### The bell
+
+The bell in the top bar shows unread notifications with a count. Opening one
+marks it read and takes you to the ticket; **Mark all read** clears the lot.
+
+The count refreshes about once a minute, so a brand-new mention can take up to
+that long to appear — the email has already gone out by then either way.
+
+### Formatting a reply
+
+**Where:** the reply and private-note composer on any ticket.
+
+The composer has a toolbar: **bold, italic, underline, strikethrough, bullet and
+numbered lists, quote, inline code, code block, link, clear formatting**.
+Keyboard shortcuts work as you would expect — Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+K for
+a link.
+
+- **Code blocks carry a language.** Pick it from the dropdown next to the code
+  buttons; changing it while the cursor is inside a block re-tags that block.
+  Trackly stores the language and renders the block in a monospace frame — it
+  does not colour the syntax.
+- **Pasting is cleaned automatically.** Copying from Word, Google Docs or Outlook
+  normally brings a document's fonts, colours and hidden markup with it. Trackly
+  keeps the words, the bold, the links and the list structure, and drops the
+  rest. Hold **Shift** while pasting to paste with no formatting at all, and use
+  **Clear formatting** on a selection that came out wrong.
+- **A table pasted from a spreadsheet becomes plain lines.** Trackly does not
+  render tables in a reply; the text survives, the grid does not.
+
+Formatted replies reach the customer's **email as plain text** — bold becomes
+plain words, lists become dashes. The formatting is for the agent view and the
+portal.
+
+> Replies and notes are formatted. The ticket **description** is still plain
+> text, because it is written on the submit form that customers use.
+
 ### Related work
 
 **Where:** the **Related work** card on the right of any ticket.

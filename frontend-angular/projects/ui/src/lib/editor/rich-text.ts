@@ -43,7 +43,13 @@ const ALLOWED_ATTRIBUTES: Record<string, readonly string[]> = {
   A: ['href', 'title'],
   CODE: ['class'],
   PRE: ['class'],
+  // A mention chip. The id is re-checked against workspace membership on the
+  // server before anyone is notified — surviving here only means well-formed.
+  SPAN: ['class', 'data-user-id'],
 };
+
+/** The class the composer marks a mention with. Must match the server. */
+export const MENTION_CLASS = 'mention';
 
 /** Languages the code-block picker offers. Must match `CodeLanguages` on the server. */
 export const CODE_LANGUAGES = [
@@ -81,7 +87,10 @@ export const CODE_LANGUAGES = [
 
 export type CodeLanguage = (typeof CODE_LANGUAGES)[number];
 
-const LANGUAGE_CLASSES = new Set(CODE_LANGUAGES.map((language) => `language-${language}`));
+const LANGUAGE_CLASSES = new Set([
+  ...CODE_LANGUAGES.map((language) => `language-${language}`),
+  MENTION_CLASS,
+]);
 
 /**
  * Cleans an HTML fragment down to the allowlist.
@@ -91,9 +100,21 @@ const LANGUAGE_CLASSES = new Set(CODE_LANGUAGES.map((language) => `language-${la
  * somebody actually wants. Deleting the tag deletes the sentence with it.
  */
 export function sanitizeHtml(html: string): string {
-  const parsed = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+  const parsed = new DOMParser().parseFromString(`<body>${flattenTables(html)}</body>`, 'text/html');
   clean(parsed.body);
   return parsed.body.innerHTML;
+}
+
+/**
+ * Table structure → spaces and line breaks, before the cells are unwrapped.
+ *
+ * Trackly does not render tables in a reply, so `<td>` is unwrapped like any
+ * other unknown tag — and unwrapping alone runs every cell together into one
+ * word. Somebody pasting from a spreadsheet should still be able to read it.
+ * The server does the same thing for the same reason.
+ */
+function flattenTables(html: string): string {
+  return html.replace(/<\/t[dh]\s*>/gi, ' ').replace(/<\/tr\s*>/gi, '<br>');
 }
 
 /** Plain text → an HTML fragment, newlines preserved. */
@@ -161,11 +182,18 @@ function stripAttributes(element: Element, tag: string): void {
     }
 
     if (attribute.name.toLowerCase() === 'class') {
-      // The only class that means anything to Trackly is the code language.
+      // The only classes that mean anything to Trackly are the code language
+      // and the mention marker; everything else is another app's stylesheet.
       const kept = attribute.value.split(/\s+/).filter((name) => LANGUAGE_CLASSES.has(name));
       if (kept.length) element.setAttribute('class', kept.join(' '));
       else element.removeAttribute('class');
     }
+  }
+
+  // A data-user-id without the mention class is not a mention — it is an
+  // attribute somebody's stylesheet or another app left behind.
+  if (tag === 'SPAN' && !element.classList.contains(MENTION_CLASS)) {
+    element.removeAttribute('data-user-id');
   }
 
   if (tag === 'A') {

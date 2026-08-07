@@ -45,6 +45,8 @@ All standalone, all `OnPush`, all signal-based. Add new controls under
 | `Drawer` | `tk-drawer` | `[(open)]`, `heading`, `persistent`; `[drawer-footer]` |
 | `Dropdown` | `tk-dropdown` | `align`; `[dropdown-trigger]` + `[dropdown-menu]` |
 | `PageHeader` | `tk-page-header` | `title` (required), `subtitle`; `[page-actions]` |
+| `Editor` | `tk-editor` | `[(value)]` (HTML), `placeholder`, `ariaLabel`, `rows`, `disabled`, `labels`; `[editor-tools]` slot |
+| `RichTextView` | `tk-rich-text` | `value`, `format` ('html' \| 'text'), `dark` |
 | `StatCard` | `tk-stat-card` | `label`, `value`, `icon`, `tone`, `delta`, `invert`, `clickable` |
 | `TableDirective` | `table[tkTable]` | `hover` |
 | `Pagination` | `tk-pagination` | `[(page)]`, `total`, `pageSize` |
@@ -230,6 +232,38 @@ Mixing the first two up is the usual reason a settings page feels
 unpredictable. All three wrap a real native input (clipped, never
 `display: none`), so focus, the space key and screen-reader semantics come from
 the browser rather than being re-implemented.
+
+### Rich text: `tk-editor` writes it, `tk-rich-text` reads it
+
+```html
+<tk-editor
+  [(value)]="body"
+  [rows]="4"
+  [labels]="editorLabels()"
+  [placeholder]="placeholder()"
+/>
+
+<tk-rich-text [value]="comment.body" [format]="comment.bodyFormat" [dark]="onPrimary()" />
+```
+
+Four rules:
+
+1. **Always pass `format`, never sniff the body.** `"<3 that fix"` is plain text
+   that reads as markup. The API sends `bodyFormat` on every comment; branch on
+   it. Getting this wrong shows a customer a broken tag instead of their words.
+2. **The editor's output is not trusted.** The server sanitises again on write
+   (`RichText` in `Trackly.Infrastructure.Text`) and that pass is the control.
+   Client-side cleaning exists so a paste from Word *looks* like what will be
+   stored — keep `projects/ui/src/lib/editor/rich-text.ts` in step with the
+   server allowlist or formatting will survive the composer and vanish on save.
+3. **Emptiness is `isEmptyHtml()`, not `.trim()`.** An emptied contenteditable
+   serialises to `"<p><br></p>"`, which is truthy and is not a message.
+4. **`labels` is passed in.** `@trackly/ui` has no locale of its own — a
+   component library that injects the app's translation service stops being
+   usable on its own. Build the map with a `computed()` that reads `lang()`.
+
+Prose styling (`.rich-text`, `.editor-surface`) lives in `styles.scss` and is
+shared by both, so what you type is what you see afterwards.
 
 ### Never hand-roll a file input
 

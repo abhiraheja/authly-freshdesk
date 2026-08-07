@@ -23,6 +23,7 @@ import {
   formatDateTime,
   timeAgo,
   toneFor,
+  valueOr,
   type Attachment,
   type Comment,
   type UpdateTicketBody,
@@ -47,6 +48,7 @@ import {
   isEmptyHtml,
   type AttachmentItem,
   type IconName,
+  type MentionCandidate,
   type TabItem,
 } from '@trackly/ui';
 import { TicketDetailPanel } from './ticket-detail-panel';
@@ -225,10 +227,20 @@ const CHANNEL_ICON: Record<string, IconName> = {
                       />
                       <div class="min-w-0 flex-1">
                         <p class="mb-1 text-meta text-muted-foreground" [class.text-right]="fromTeam(comment)">
-                          @if (comment.isInternal) {
-                            <span class="font-semibold text-warning-ink">
+                          <!-- Two different labels, because they are two
+                               different promises. "Team note" means every agent
+                               reads it; "Only you" means nobody else does, not
+                               even an admin. Showing one word for both is how
+                               somebody writes the wrong one. -->
+                          @if (comment.visibility === 'private') {
+                            <span class="font-semibold text-primary">
                               <tk-icon name="lock" [size]="12" class="inline align-[-1px]" />
-                              {{ 'tickets.detail.internalNote' | transloco }} ·
+                              {{ 'tickets.detail.onlyYou' | transloco }} ·
+                            </span>
+                          } @else if (comment.isInternal) {
+                            <span class="font-semibold text-warning-ink">
+                              <tk-icon name="users" [size]="12" class="inline align-[-1px]" />
+                              {{ 'tickets.detail.teamNote' | transloco }} ·
                             </span>
                           }
                           <span class="font-semibold text-foreground">{{ authorName(comment) }}</span>
@@ -275,13 +287,16 @@ const CHANNEL_ICON: Record<string, IconName> = {
 
           <!-- Composer -->
           <tk-card>
-            <div class="mb-3 flex gap-1">
+            <!-- Three modes, not two. "Private note" used to mean "every agent
+                 sees it, the customer does not", which is a shared scratchpad —
+                 a genuinely private one had nowhere to live. -->
+            <div class="mb-3 flex flex-wrap gap-1">
               <button
                 type="button"
                 class="composer-tab"
-                [class.is-active]="mode() === 'reply'"
-                [attr.aria-pressed]="mode() === 'reply'"
-                (click)="mode.set('reply')"
+                [class.is-active]="mode() === 'public'"
+                [attr.aria-pressed]="mode() === 'public'"
+                (click)="mode.set('public')"
               >
                 <tk-icon name="message-square" [size]="15" />
                 {{ 'tickets.detail.publicReply' | transloco }}
@@ -289,20 +304,34 @@ const CHANNEL_ICON: Record<string, IconName> = {
               <button
                 type="button"
                 class="composer-tab composer-tab-note"
-                [class.is-active]="mode() === 'note'"
-                [attr.aria-pressed]="mode() === 'note'"
-                (click)="mode.set('note')"
+                [class.is-active]="mode() === 'internal'"
+                [attr.aria-pressed]="mode() === 'internal'"
+                (click)="mode.set('internal')"
+              >
+                <tk-icon name="users" [size]="15" />
+                {{ 'tickets.detail.teamNote' | transloco }}
+              </button>
+              <button
+                type="button"
+                class="composer-tab composer-tab-note"
+                [class.is-active]="mode() === 'private'"
+                [attr.aria-pressed]="mode() === 'private'"
+                (click)="mode.set('private')"
               >
                 <tk-icon name="lock" [size]="15" />
-                {{ 'tickets.detail.privateNote' | transloco }}
+                {{ 'tickets.detail.myNote' | transloco }}
               </button>
             </div>
 
+            <!-- No mentionable list in private mode: a note nobody else reads
+                 cannot notify anyone, and offering the picker there would be a
+                 control that quietly does nothing. -->
             <tk-editor
               [(value)]="body"
               [rows]="4"
               [labels]="editorLabels()"
               [disabled]="sending()"
+              [mentionable]="mentionable()"
               [placeholder]="composerPlaceholder()"
               [ariaLabel]="composerPlaceholder()"
             />
@@ -331,7 +360,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
                 } @else {
                   <tk-icon name="send" [size]="16" />
                 }
-                {{ (mode() === 'reply' ? 'tickets.detail.sendReply' : 'tickets.detail.addNote') | transloco }}
+                {{ (mode() === 'public' ? 'tickets.detail.sendReply' : 'tickets.detail.addNote') | transloco }}
               </button>
             </div>
           </tk-card>
@@ -407,7 +436,7 @@ export class TicketDetail {
   private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
 
   protected readonly threadTab = signal<'conversation' | 'notes' | 'attachments'>('conversation');
-  protected readonly mode = signal<'reply' | 'note'>('reply');
+  protected readonly mode = signal<'public' | 'internal' | 'private'>('public');
   protected readonly body = signal('');
   protected readonly files = signal<File[]>([]);
   protected readonly maxUploadBytes = MAX_ATTACHMENT_BYTES;
@@ -522,11 +551,47 @@ export class TicketDetail {
 
   protected readonly opened = computed(() => timeAgo(this.ticket.value()?.createdAt ?? ''));
   protected readonly createdAt = computed(() => formatDateTime(this.ticket.value()?.createdAt ?? ''));
-  protected readonly composerPlaceholder = computed(() =>
-    this.mode() === 'reply'
-      ? `Reply to ${this.requesterName()}… (the customer will see this)`
-      : 'Private note… (only agents and admins can see this)',
-  );
+  /**
+   * Says who will read it, in the field they are about to type into.
+   *
+   * The three modes look almost identical once you are writing, and the cost of
+   * confusing two of them is a private note sent to a customer. The placeholder
+   * is the last thing on screen before the first keystroke.
+   */
+  protected readonly composerPlaceholder = computed(() => {
+    this.lang();
+    switch (this.mode()) {
+      case 'public':
+        return this.transloco.translate('tickets.detail.placeholderPublic', {
+          name: this.requesterName(),
+        });
+      case 'internal':
+        return this.transloco.translate('tickets.detail.placeholderTeam');
+      default:
+        return this.transloco.translate('tickets.detail.placeholderPrivate');
+    }
+  });
+
+  /**
+   * Agents this composer can name — empty in private mode, which is how the
+   * editor knows to switch mentions off rather than offer a control that would
+   * notify nobody.
+   */
+  protected readonly mentionable = computed<MentionCandidate[]>(() => {
+    if (this.mode() === 'private') return [];
+    const me = this.session.user()?.id;
+    return valueOr(this.agents, [])
+      // Naming yourself is not a way to leave yourself a note — that is what
+      // the private mode beside it is for.
+      .filter((agent) => agent.id !== me)
+      .map((agent) => ({
+        id: agent.id,
+        name: agent.name || agent.email || '',
+        detail: agent.name ? (agent.email ?? undefined) : undefined,
+      }));
+  });
+
+  private readonly agents = resource({ loader: () => this.api.agents() });
 
   /** The editor's own emptiness rule — see the note in `send()`. */
   protected readonly composerEmpty = computed(() => isEmptyHtml(this.body()));
@@ -581,6 +646,10 @@ export class TicketDetail {
   }
 
   protected bubbleClass(comment: Comment): string {
+    // Three static strings, never an interpolated class name — `bg-${tone}`
+    // emits no CSS at all under Tailwind v4 and fails silently.
+    if (comment.visibility === 'private')
+      return 'rounded-tr-sm border-dashed border-primary/40 bg-primary/5';
     if (comment.isInternal) return 'rounded-tr-sm border-dashed border-warning/50 bg-warning/10';
     return this.isAgentReply(comment)
       ? 'rounded-tr-sm border-transparent bg-primary'
@@ -604,7 +673,10 @@ export class TicketDetail {
     try {
       const comment = await this.api.addComment(this.id(), {
         body,
-        isInternal: this.mode() === 'note',
+        visibility: this.mode(),
+        // Still sent, so an API deployed before `visibility` existed still gets
+        // the note/reply distinction right.
+        isInternal: this.mode() !== 'public',
         bodyFormat: 'html',
       });
 
