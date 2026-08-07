@@ -1348,6 +1348,66 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.ToTable("sso_login_states", (string)null);
                 });
 
+            modelBuilder.Entity("Trackly.Core.Entities.StorageConfig", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AzureConnectionStringEncrypted")
+                        .HasColumnType("text")
+                        .HasColumnName("azure_connection_string_encrypted");
+
+                    b.Property<string>("AzureContainer")
+                        .HasColumnType("text")
+                        .HasColumnName("azure_container");
+
+                    b.Property<string>("GcsBucket")
+                        .HasColumnType("text")
+                        .HasColumnName("gcs_bucket");
+
+                    b.Property<string>("PathPrefix")
+                        .HasColumnType("text")
+                        .HasColumnName("path_prefix");
+
+                    b.Property<string>("GcsCredentialsJsonEncrypted")
+                        .HasColumnType("text")
+                        .HasColumnName("gcs_credentials_json_encrypted");
+
+                    b.Property<DateTime?>("LastVerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_verified_at");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("local")
+                        .HasColumnName("provider");
+
+                    b.Property<string>("PublicBaseUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("public_base_url");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_storage_configs");
+
+                    b.HasIndex("WorkspaceId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_storage_configs_workspace_id");
+
+                    b.ToTable("storage_configs", (string)null);
+                });
+
             modelBuilder.Entity("Trackly.Core.Entities.Tag", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2481,6 +2541,18 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasConstraintName("fk_sso_group_role_mappings_sso_connections_connection_id");
 
                     b.Navigation("Connection");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.StorageConfig", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_storage_configs_workspaces_workspace_id");
+
+                    b.Navigation("Workspace");
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.Tag", b =>

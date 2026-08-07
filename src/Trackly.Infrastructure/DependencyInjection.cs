@@ -36,7 +36,12 @@ public static class DependencyInjection
         // Option B inbound transport (stateless).
         services.AddSingleton<IMailboxReader, ImapMailboxReader>();
 
+        // IFileStorage is the LOCAL backend and the fallback for any workspace
+        // that hasn't configured one. Everything that stores files goes through
+        // IWorkspaceFileStorage instead, which picks the workspace's provider.
         services.AddSingleton<IFileStorage, LocalFileStorage>();
+        services.AddSingleton<StorageProviderCache>();
+        services.AddScoped<IWorkspaceFileStorage, WorkspaceFileStorage>();
         services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();
 
         // OIDC (discovery/JWKS caching lives inside the singleton client).

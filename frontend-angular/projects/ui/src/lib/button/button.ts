@@ -17,9 +17,20 @@ export type ButtonSize = 'sm' | 'md' | 'lg';
  *   <tk-icon name="refresh-cw" [size]="20" />
  * </button>
  * ```
+ *
+ * `label[tkButton]` covers one case only: a file picker. `<input type="file">`
+ * cannot be styled, so the standard pattern is a visually hidden input inside a
+ * label — and that label has to look like a button.
+ *
+ * ```html
+ * <label tkButton variant="outline" size="sm" class="cursor-pointer">
+ *   Choose a file
+ *   <input type="file" class="sr-only" (change)="read($event)" />
+ * </label>
+ * ```
  */
 @Component({
-  selector: 'button[tkButton], a[tkButton]',
+  selector: 'button[tkButton], a[tkButton], label[tkButton]',
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: '<ng-content />',
   host: { '[class]': 'classes()' },

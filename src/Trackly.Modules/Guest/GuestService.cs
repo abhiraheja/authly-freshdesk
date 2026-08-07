@@ -12,7 +12,7 @@ namespace Trackly.Modules.Guest;
 public class GuestService(
     TracklyDbContext db,
     IEmailSender emailSender,
-    IFileStorage storage,
+    IWorkspaceFileStorage storage,
     IConfiguration configuration,
     TicketService ticketService,
     NotificationService notifications,
@@ -281,7 +281,8 @@ public class GuestService(
                 throw new ArgumentException("Comment does not belong to this ticket.");
         }
 
-        var storageKey = await storage.SaveAsync($"{ticket.WorkspaceId}/{ticket.Id}", fileName, content, ct);
+        var storageKey = await storage.SaveAsync(
+            ticket.WorkspaceId, $"{ticket.WorkspaceId}/{ticket.Id}", fileName, content, ct: ct);
         var attachment = new Attachment
         {
             WorkspaceId = ticket.WorkspaceId,
@@ -314,7 +315,7 @@ public class GuestService(
         if (attachment.Comment?.IsInternal == true)
             return null;
 
-        var stream = await storage.OpenReadAsync(attachment.StorageKey, ct);
+        var stream = await storage.OpenReadAsync(attachment.WorkspaceId, attachment.StorageKey, ct);
         return (new AttachmentDto(attachment.Id, attachment.CommentId, attachment.FileName,
             attachment.ContentType, attachment.SizeBytes, attachment.CreatedAt), stream);
     }

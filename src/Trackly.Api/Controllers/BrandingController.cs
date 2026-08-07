@@ -10,7 +10,7 @@ using Trackly.Infrastructure.Data;
 namespace Trackly.Api.Controllers;
 
 [ApiController]
-public partial class BrandingController(TracklyDbContext db, IFileStorage storage) : ControllerBase
+public partial class BrandingController(TracklyDbContext db, IWorkspaceFileStorage storage) : ControllerBase
 {
     private const long MaxLogoBytes = 1024 * 1024; // 1 MB per the mockups
     private static readonly string[] AllowedLogoTypes =
@@ -66,7 +66,18 @@ public partial class BrandingController(TracklyDbContext db, IFileStorage storag
             return NotFound();
 
         Response.Headers.CacheControl = "public, max-age=300";
-        var stream = await storage.OpenReadAsync(branding.LogoStorageKey, ct);
+
+        // Anonymous endpoint, so the workspace comes from the branding row that
+        // the slug resolved to — there is no signed-in user to ask.
+        //
+        // A logo is public by definition, so a CDN in front of it is a plain
+        // win. 302 rather than 301: the workspace can change provider or drop
+        // the CDN, and a permanent redirect would be cached past that.
+        var cdnUrl = await storage.PublicUrlAsync(branding.WorkspaceId, branding.LogoStorageKey, ct);
+        if (cdnUrl is not null)
+            return Redirect(cdnUrl);
+
+        var stream = await storage.OpenReadAsync(branding.WorkspaceId, branding.LogoStorageKey, ct);
         return File(stream, branding.LogoContentType ?? "application/octet-stream");
     }
 
@@ -108,14 +119,19 @@ public partial class BrandingController(TracklyDbContext db, IFileStorage storag
         var branding = await GetOrCreateAsync(ct);
         var oldKey = branding.LogoStorageKey;
 
+        var workspaceId = User.GetWorkspaceId();
         await using var stream = file.OpenReadStream();
-        branding.LogoStorageKey = await storage.SaveAsync($"{User.GetWorkspaceId()}/branding", file.FileName, stream, ct);
+        // Public: a logo is shown on the sign-in page, the portal and every
+        // notification email, all of which are read by people with no session.
+        // It is the only thing Trackly writes that is not private.
+        branding.LogoStorageKey = await storage.SaveAsync(
+            workspaceId, $"{workspaceId}/branding", file.FileName, stream, StorageVisibility.Public, ct);
         branding.LogoContentType = file.ContentType;
         branding.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
         if (oldKey is not null)
-            await storage.DeleteAsync(oldKey, ct);
+            await storage.DeleteAsync(workspaceId, oldKey, ct);
         return Ok(ToResponse(branding));
     }
 

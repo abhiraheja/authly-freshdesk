@@ -139,9 +139,17 @@ public class TicketOptionService(TracklyDbContext db)
 
         if (option.IsSystem) return TicketOptionDeleteResult.SystemOption;
 
-        var inUse = option.Kind == TicketOptionKind.Priority
-            ? await db.Tickets.AnyAsync(t => t.WorkspaceId == workspaceId && t.Priority == option.Value, ct)
-            : await db.Tickets.AnyAsync(t => t.WorkspaceId == workspaceId && t.Channel == option.Value, ct);
+        var inUse = option.Kind switch
+        {
+            TicketOptionKind.Priority =>
+                await db.Tickets.AnyAsync(t => t.WorkspaceId == workspaceId && t.Priority == option.Value, ct),
+            TicketOptionKind.Channel =>
+                await db.Tickets.AnyAsync(t => t.WorkspaceId == workspaceId && t.Channel == option.Value, ct),
+            // A customer field is only a suggested key name. Nothing stores it,
+            // so removing it can't orphan anything — the values already on a
+            // customer keep their own keys.
+            _ => false,
+        };
         if (inUse) return TicketOptionDeleteResult.InUse;
 
         if (await IsLastActiveAsync(workspaceId, option, ct)) return TicketOptionDeleteResult.LastActive;
@@ -151,8 +159,16 @@ public class TicketOptionService(TracklyDbContext db)
         return TicketOptionDeleteResult.Deleted;
     }
 
+    /// <remarks>
+    /// Only applies to the kinds a ticket must carry. An empty customer-field
+    /// list is a perfectly good state — the suggestions are optional and an
+    /// agent can always type their own key — so guarding the last one would
+    /// trap the admin with a field they never wanted.
+    /// </remarks>
     private async Task<bool> IsLastActiveAsync(Guid workspaceId, TicketOption option, CancellationToken ct)
     {
+        if (option.Kind == TicketOptionKind.CustomerField) return false;
+
         var anotherIsActive = await db.TicketOptions.AnyAsync(
             o => o.WorkspaceId == workspaceId && o.Kind == option.Kind && o.IsActive && o.Id != option.Id, ct);
         return !anotherIsActive;
@@ -163,7 +179,21 @@ public class TicketOptionService(TracklyDbContext db)
         if (await db.TicketOptions.AnyAsync(o => o.WorkspaceId == workspaceId && o.Kind == kind, ct))
             return;
 
-        var defaults = kind == TicketOptionKind.Priority ? DefaultPriorities : DefaultChannels;
+        // Must stay exhaustive. A two-way ternary here silently seeded
+        // customer_field with the CHANNEL list, so the admin screen showed
+        // "Web, Email, Widget…" as customer fields — and marked IsSystem, so
+        // they couldn't be deleted either. Any new kind needs its own arm.
+        (string Value, string Label, string? Color)[] defaults = kind switch
+        {
+            TicketOptionKind.Priority => DefaultPriorities,
+            TicketOptionKind.Channel => DefaultChannels,
+            // Customer fields have no built-ins on purpose: what a workspace
+            // records about a customer is its own business, and a seeded guess
+            // would put words in the admin's mouth.
+            _ => [],
+        };
+        if (defaults.Length == 0) return;
+
         for (var i = 0; i < defaults.Length; i++)
         {
             var (value, label, color) = defaults[i];

@@ -23,6 +23,14 @@ All standalone, all `OnPush`, all signal-based. Add new controls under
 | `Avatar` | `tk-avatar` | `name`, `imageUrl`, `size`, `round`, `fallback` |
 | `InputDirective` | `input[tkInput]`, `textarea[tkInput]`, `select[tkInput]` | `inputSize`, `inset` |
 | `LabelDirective` | `label[tkLabel]` | — |
+| `Field` | `tk-field` | `label` (required), `for`, `hint`, `error`, `required` |
+| `Select` / `SelectOption` | `tk-select` / `tk-option` | `[(value)]`, `placeholder`, `inputId`, `ariaLabel`, `size`, `inset`, `auto`; option: `value`, `label`, `disabled` |
+| `Combobox` | `tk-combobox` | `[(value)]`, `suggestions`, `inputId`, `inset` — free text with hints |
+| `TagInput` | `tk-tag-input` | `[(value)]`, `suggestions`, `inputId`, `inset` |
+| `Checkbox` | `tk-checkbox` | `[(checked)]`, `indeterminate`, `disabled`, `inputId`, `ariaLabel` |
+| `Switch` | `tk-switch` | `[(checked)]`, `disabled`, `inputId`, `ariaLabel` |
+| `RadioGroup` / `Radio` | `tk-radio-group` / `tk-radio` | `[(value)]`, `ariaLabel`, `disabled`; option: `value`, `label`, `hint` |
+| `Tabs` | `tk-tabs` | `items`, `[(active)]` — presentational; caller renders the panel |
 | `SkeletonDirective` | `[tkSkeleton]` | size it with utilities |
 | `Spinner` | `tk-spinner` | `size` |
 | `Kbd` | `tk-kbd` | — |
@@ -153,6 +161,45 @@ carries a dot **and** a label.
 
 Every input needs a real label. A placeholder is not a label — it fails screen
 readers and vanishes the moment someone types.
+
+`tk-field` wraps the whole trio so the spacing and help-text size can't drift
+between screens. `for` must match the control's id.
+
+```html
+<tk-field [label]="'Container' | transloco" for="container" [error]="containerError()">
+  <input tkInput id="container" [(ngModel)]="container" />
+</tk-field>
+```
+
+### Never ship a raw `<select>`
+
+A native select's option list is drawn by the operating system. No CSS reaches
+it — not the palette, not the radius, not dark mode. The closed control looks
+like Trackly and opens into a stark OS list. Use `tk-select`:
+
+```html
+<tk-select inset [(value)]="priority" [ariaLabel]="'Priority' | transloco">
+  <tk-option value="" [label]="'All priorities' | transloco" />
+  @for (option of priorityOptions(); track option.id) {
+    <tk-option [value]="option.value" [label]="option.label" />
+  }
+</tk-select>
+```
+
+`label` is an input, not projected content, so the transloco pipe stays in the
+template while the select still has the text as data. `auto` shrinks to fit
+(filter bars); the default fills its row.
+
+### Picking between the boolean controls
+
+- **`tk-checkbox`** — the value is submitted later, with the rest of a form.
+- **`tk-switch`** — the setting applies the moment it is flipped.
+- **`tk-radio-group`** — exactly one of a small, visible set.
+
+Mixing the first two up is the usual reason a settings page feels
+unpredictable. All three wrap a real native input (clipped, never
+`display: none`), so focus, the space key and screen-reader semantics come from
+the browser rather than being re-implemented.
 
 `.dropzone` in `styles.scss` styles a drag-and-drop file area; keep the hidden
 `<input type="file">` inside a `<label>` so keyboard users can reach it.

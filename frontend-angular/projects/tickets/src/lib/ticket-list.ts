@@ -32,8 +32,9 @@ import {
   Card,
   EmptyState,
   Icon,
-  InputDirective,
   Pagination,
+  Select,
+  SelectOption,
   ToastService,
   SkeletonDirective,
   TableDirective,
@@ -93,8 +94,9 @@ const VIEW_STATUS: Record<string, string | undefined> = {
     Card,
     EmptyState,
     Icon,
-    InputDirective,
     Pagination,
+    Select,
+    SelectOption,
     SkeletonDirective,
     TableDirective,
   ],
@@ -127,36 +129,34 @@ const VIEW_STATUS: Record<string, string | undefined> = {
           />
         </div>
 
-        <select
-          tkInput
-          inputSize="sm"
-          class="input-auto"
-          [attr.aria-label]="'tickets.columns.status' | transloco"
-          [ngModel]="view()"
-          (ngModelChange)="setParam('view', $event)"
+        <tk-select
+          auto
+          size="sm"
+          [ariaLabel]="'tickets.columns.status' | transloco"
+          [value]="view()"
+          (valueChange)="setParam('view', $event)"
         >
-          <option value="">{{ 'tickets.allStatus' | transloco }}</option>
-          <option value="open">{{ 'status.open' | transloco }}</option>
-          <option value="pending">{{ 'status.pending' | transloco }}</option>
-          <option value="resolved">{{ 'status.resolved' | transloco }}</option>
-          <option value="closed">{{ 'status.closed' | transloco }}</option>
-          <option value="mine">{{ 'tickets.assignedToMe' | transloco }}</option>
-        </select>
+          <tk-option value="" [label]="'tickets.allStatus' | transloco" />
+          <tk-option value="open" [label]="'status.open' | transloco" />
+          <tk-option value="pending" [label]="'status.pending' | transloco" />
+          <tk-option value="resolved" [label]="'status.resolved' | transloco" />
+          <tk-option value="closed" [label]="'status.closed' | transloco" />
+          <tk-option value="mine" [label]="'tickets.assignedToMe' | transloco" />
+        </tk-select>
 
-        <select
-          tkInput
-          inputSize="sm"
-          class="input-auto"
-          [attr.aria-label]="'tickets.columns.priority' | transloco"
-          [ngModel]="priority()"
-          (ngModelChange)="setParam('priority', $event)"
+        <tk-select
+          auto
+          size="sm"
+          [ariaLabel]="'tickets.columns.priority' | transloco"
+          [value]="priority()"
+          (valueChange)="setParam('priority', $event)"
         >
-          <option value="">{{ 'tickets.allPriority' | transloco }}</option>
-          <option value="urgent">{{ 'priority.urgent' | transloco }}</option>
-          <option value="high">{{ 'priority.high' | transloco }}</option>
-          <option value="medium">{{ 'priority.medium' | transloco }}</option>
-          <option value="low">{{ 'priority.low' | transloco }}</option>
-        </select>
+          <tk-option value="" [label]="'tickets.allPriority' | transloco" />
+          <tk-option value="urgent" [label]="'priority.urgent' | transloco" />
+          <tk-option value="high" [label]="'priority.high' | transloco" />
+          <tk-option value="medium" [label]="'priority.medium' | transloco" />
+          <tk-option value="low" [label]="'priority.low' | transloco" />
+        </tk-select>
 
         @if (hasFilters()) {
           <button tkButton variant="ghost" size="sm" (click)="clearFilters()">{{ 'tickets.clear' | transloco }}</button>

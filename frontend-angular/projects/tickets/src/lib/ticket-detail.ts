@@ -33,6 +33,8 @@ import {
   Card,
   Icon,
   InputDirective,
+  Select,
+  SelectOption,
   SkeletonDirective,
   Spinner,
   Tabs,
@@ -86,6 +88,8 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
     Card,
     Icon,
     InputDirective,
+    Select,
+    SelectOption,
     SkeletonDirective,
     Spinner,
     Tabs,
@@ -131,20 +135,19 @@ const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
               </div>
 
               <div class="flex shrink-0 items-center gap-2">
-                <select
-                  tkInput
+                <tk-select
+                  auto
                   inset
-                  inputSize="sm"
-                  class="input-auto"
-                  [attr.aria-label]="'tickets.columns.status' | transloco"
-                  [ngModel]="data.status"
-                  (ngModelChange)="update({ status: $event })"
+                  size="sm"
+                  [ariaLabel]="'tickets.columns.status' | transloco"
+                  [value]="data.status"
+                  (valueChange)="update({ status: $event })"
                 >
-                  <option value="open">{{ 'status.open' | transloco }}</option>
-                  <option value="pending">{{ 'status.pending' | transloco }}</option>
-                  <option value="resolved">{{ 'status.resolved' | transloco }}</option>
-                  <option value="closed">{{ 'status.closed' | transloco }}</option>
-                </select>
+                  <tk-option value="open" [label]="'status.open' | transloco" />
+                  <tk-option value="pending" [label]="'status.pending' | transloco" />
+                  <tk-option value="resolved" [label]="'status.resolved' | transloco" />
+                  <tk-option value="closed" [label]="'status.closed' | transloco" />
+                </tk-select>
                 <!-- Hidden once it is resolved rather than disabled: a dead
                      button invites clicking, and the status select right beside
                      it can already move it back. -->

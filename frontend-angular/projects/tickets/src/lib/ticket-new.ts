@@ -21,6 +21,8 @@ import {
   Icon,
   InputDirective,
   LabelDirective,
+  Select,
+  SelectOption,
   Spinner,
   TagInput,
   ToastService,
@@ -55,6 +57,8 @@ import {
     Icon,
     InputDirective,
     LabelDirective,
+    Select,
+    SelectOption,
     Spinner,
     TagInput,
   ],
@@ -116,12 +120,12 @@ import {
             <div class="grid gap-5 sm:grid-cols-2">
               <div>
                 <label tkLabel for="team">{{ 'tickets.new.department' | transloco }}</label>
-                <select tkInput inset id="team" name="team" [(ngModel)]="teamId">
-                  <option value="">{{ 'tickets.new.noDepartment' | transloco }}</option>
+                <tk-select inset inputId="team" [(value)]="teamId">
+                  <tk-option value="" [label]="'tickets.new.noDepartment' | transloco" />
                   @for (team of teamList(); track team.id) {
-                    <option [value]="team.id">{{ team.name }}</option>
+                    <tk-option [value]="team.id" [label]="team.name" />
                   }
-                </select>
+                </tk-select>
               </div>
 
               <!-- Priority and channel come from the workspace's configured
@@ -130,30 +134,30 @@ import {
                    the tickets already carrying it. -->
               <div>
                 <label tkLabel for="priority">{{ 'tickets.columns.priority' | transloco }}</label>
-                <select tkInput inset id="priority" name="priority" [(ngModel)]="priority">
+                <tk-select inset inputId="priority" [(value)]="priority">
                   @for (option of priorityOptions(); track option.id) {
-                    <option [value]="option.value">{{ option.label }}</option>
+                    <tk-option [value]="option.value" [label]="option.label" />
                   }
-                </select>
+                </tk-select>
               </div>
 
               <div>
                 <label tkLabel for="category">{{ 'tickets.new.category' | transloco }}</label>
-                <select tkInput inset id="category" name="category" [(ngModel)]="categoryId">
-                  <option value="">{{ 'tickets.new.noCategory' | transloco }}</option>
+                <tk-select inset inputId="category" [(value)]="categoryId">
+                  <tk-option value="" [label]="'tickets.new.noCategory' | transloco" />
                   @for (category of categoryList(); track category.id) {
-                    <option [value]="category.id">{{ category.name }}</option>
+                    <tk-option [value]="category.id" [label]="category.name" />
                   }
-                </select>
+                </tk-select>
               </div>
 
               <div>
                 <label tkLabel for="channel">{{ 'tickets.new.channel' | transloco }}</label>
-                <select tkInput inset id="channel" name="channel" [(ngModel)]="channel">
+                <tk-select inset inputId="channel" [(value)]="channel">
                   @for (option of channelOptions(); track option.id) {
-                    <option [value]="option.value">{{ option.label }}</option>
+                    <tk-option [value]="option.value" [label]="option.label" />
                   }
-                </select>
+                </tk-select>
               </div>
             </div>
 

@@ -21,6 +21,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<WorkspaceBranding> WorkspaceBrandings => Set<WorkspaceBranding>();
     public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
     public DbSet<EmailConfig> EmailConfigs => Set<EmailConfig>();
+    public DbSet<StorageConfig> StorageConfigs => Set<StorageConfig>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<InboundEmailEvent> InboundEmailEvents => Set<InboundEmailEvent>();
     public DbSet<SsoConnection> SsoConnections => Set<SsoConnection>();
@@ -229,6 +230,15 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.Property(c => c.EmailMode).HasDefaultValue(EmailMode.NotificationsOnly);
             e.Property(c => c.NewTicketViaEmail).HasDefaultValue(false);
             e.Property(c => c.PollIntervalSeconds).HasDefaultValue(60);
+            e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<StorageConfig>(e =>
+        {
+            e.ToTable("storage_configs");
+            e.HasIndex(c => c.WorkspaceId).IsUnique();
+            e.Property(c => c.Provider).HasDefaultValue(StorageProviders.Local);
             e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

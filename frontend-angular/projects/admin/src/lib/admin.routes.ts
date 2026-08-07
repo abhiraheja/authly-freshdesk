@@ -14,6 +14,10 @@ export const adminRoutes: Routes = [
     path: 'settings/configuration',
     loadComponent: () => import('./configuration').then((m) => m.AdminConfiguration),
   },
+  {
+    path: 'settings/storage',
+    loadComponent: () => import('./storage-settings').then((m) => m.AdminStorageSettings),
+  },
   { path: 'analytics', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.analytics', from: 'frontend/src/pages/admin/AnalyticsPage.tsx' } },
   { path: 'announcements', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.announcements', from: 'frontend/src/pages/admin/AnnouncementsPage.tsx' } },
   { path: 'users', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.members', from: 'frontend/src/pages/admin/UsersPage.tsx' } },

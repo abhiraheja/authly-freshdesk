@@ -40,6 +40,7 @@ export type IconName =
   | 'chevron-left'
   | 'x'
   | 'plus'
+  | 'minus'
   | 'check'
   // Status + KPI
   | 'folder-open'
@@ -145,6 +146,7 @@ export type IconName =
         @case ('chevron-left') { <path d="m15 18-6-6 6-6"/> }
         @case ('x') { <path d="M18 6 6 18"/><path d="m6 6 12 12"/> }
         @case ('plus') { <path d="M5 12h14"/><path d="M12 5v14"/> }
+        @case ('minus') { <path d="M5 12h14"/> }
         @case ('check') { <path d="M20 6 9 17l-5-5"/> }
 
         <!-- Status + KPI -->

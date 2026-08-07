@@ -594,6 +594,202 @@ select.input-sm {
   background-position: right 0.5rem center;
 }
 
+/* ---- Select (tk-select) ----
+   A native select's option list is drawn by the operating system: it ignores
+   the token palette, the radius and dark mode, and no CSS reaches it. So the
+   closed control looked like Trackly and opened into a stark OS list. tk-select
+   owns its list (styled with .menu / .menu-item) and reuses .input here so the
+   trigger stays visually identical to every other field. */
+.select-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  /* Buttons don't inherit the page font, and the trigger has to match the
+     inputs beside it rather than fall back to the OS UI font. */
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.select-trigger:disabled {
+  cursor: not-allowed;
+}
+.select-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-placeholder {
+  color: rgb(var(--muted-foreground));
+}
+.select-caret {
+  flex: none;
+  color: rgb(var(--muted-foreground));
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.select-trigger[aria-expanded='true'] .select-caret {
+  transform: rotate(180deg);
+}
+
+/* ---- Checkbox / radio / switch ----
+   Each wraps a REAL native input. The input is clipped rather than hidden
+   (`display: none` and `visibility: hidden` both remove it from the tab order
+   and from assistive tech), so focus, the space key, form submission and the
+   correct role all still come from the browser. Only the visuals are ours. */
+.control {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: rgb(var(--foreground));
+}
+.control-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.control-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.control-label {
+  min-width: 0;
+  line-height: 1.3;
+  padding-top: 0.0625rem;
+}
+.control-hint {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.75rem;
+  color: rgb(var(--muted-foreground));
+}
+
+/* Boxed variant — a radio that is a whole choice, not a word in a list. */
+.control-boxed {
+  align-items: flex-start;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid rgb(var(--input));
+  border-radius: var(--radius-control);
+  transition:
+    border-color var(--motion-fast) var(--motion-ease),
+    background var(--motion-fast) var(--motion-ease);
+}
+.control-boxed:hover:not(.control-disabled) {
+  border-color: rgb(var(--ring) / 0.6);
+}
+.control-boxed.is-selected {
+  border-color: rgb(var(--primary));
+  background: rgb(var(--primary) / 0.05);
+}
+
+.checkbox-box {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 1px solid rgb(var(--input));
+  border-radius: 0.3125rem;
+  background: rgb(var(--card));
+  color: transparent;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    border-color var(--motion-fast) var(--motion-ease);
+}
+.control-input:checked + .checkbox-box,
+.control-input:indeterminate + .checkbox-box {
+  background: rgb(var(--primary));
+  border-color: rgb(var(--primary));
+  color: rgb(var(--primary-foreground));
+}
+
+.radio-dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 1.125rem;
+  height: 1.125rem;
+  border: 1px solid rgb(var(--input));
+  border-radius: 999px;
+  background: rgb(var(--card));
+  transition: border-color var(--motion-fast) var(--motion-ease);
+}
+.radio-dot::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 999px;
+  background: rgb(var(--primary));
+  transform: scale(0);
+  transition: transform var(--motion-fast) var(--motion-ease);
+}
+.control-input:checked + .radio-dot {
+  border-color: rgb(var(--primary));
+}
+.control-input:checked + .radio-dot::after {
+  transform: scale(1);
+}
+
+.switch-track {
+  flex: none;
+  width: 2.25rem;
+  height: 1.25rem;
+  padding: 0.125rem;
+  border-radius: 999px;
+  background: rgb(var(--input));
+  transition: background var(--motion-fast) var(--motion-ease);
+}
+.switch-thumb {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background: rgb(var(--card));
+  box-shadow: var(--shadow-soft);
+  transition: transform var(--motion-base) var(--motion-ease);
+}
+.control-input:checked + .switch-track {
+  background: rgb(var(--primary));
+}
+.control-input:checked + .switch-track .switch-thumb {
+  transform: translateX(1rem);
+}
+
+/* The clipped input can't show a ring, so focus is drawn on the visible part.
+   :focus-visible, not :focus — a mouse click on a checkbox should not leave a
+   keyboard ring behind. */
+.control-input:focus-visible + .checkbox-box,
+.control-input:focus-visible + .radio-dot,
+.control-input:focus-visible + .switch-track {
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(var(--ring) / 0.25);
+}
+
+/* ---- Field (tk-field) ---- */
+.field-required {
+  margin-left: 0.125rem;
+  color: rgb(var(--danger));
+}
+.field-hint,
+.field-error {
+  margin-top: 0.375rem;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+.field-hint {
+  color: rgb(var(--muted-foreground));
+}
+.field-error {
+  color: rgb(var(--danger));
+}
+
 /* Suppress Edge's built-in reveal/clear glyphs so a custom eye toggle isn't doubled. */
 input[type='password']::-ms-reveal,
 input[type='password']::-ms-clear {
@@ -759,28 +955,10 @@ tr:focus-within .row-actions {
 
 /* ---------------------------- Navigation ---------------------------- */
 
-.tabs {
-  display: inline-flex;
-  gap: 0.25rem;
-  border-bottom: 1px solid rgb(var(--border));
-}
-.tab {
-  padding: 0.625rem 0.25rem;
-  margin-right: 0.75rem;
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: rgb(var(--muted-foreground));
-  border-bottom: 2px solid transparent;
-  cursor: pointer;
-  transition: color var(--motion-fast) var(--motion-ease);
-}
-.tab:hover {
-  color: rgb(var(--foreground));
-}
-.tab.active {
-  color: rgb(var(--primary));
-  border-bottom-color: rgb(var(--primary));
-}
+/* `.tab` and `.tablist` live further down, with the tab rail. An earlier
+   duplicate of `.tab` used to sit here: everything in it was overridden by the
+   later block EXCEPT `margin-right`, which quietly stacked on top of the rail's
+   flex gap and pushed the last tab off the edge sooner than it should have. */
 
 .segmented {
   display: inline-flex;
@@ -964,15 +1142,50 @@ tr:focus-within .row-actions {
    control, and a moving underline is the cheapest way to show which one the
    panel belongs to. The rail is a bottom border on the list, so the active tab's
    own border paints over it. */
+/* The rail scrolls sideways when the tabs outgrow it. The scrollbar is hidden
+   because a horizontal bar under a tab strip reads as a second underline —
+   the arrow buttons are the affordance instead, and they only appear when
+   there is somewhere to go. */
+.tabs-rail {
+  position: relative;
+}
 .tablist {
   display: flex;
   gap: 0.25rem;
   border-bottom: 1px solid rgb(var(--border));
   overflow-x: auto;
   scrollbar-width: none;
+  scroll-behavior: smooth;
 }
 .tablist::-webkit-scrollbar {
   display: none;
+}
+.tabs-arrow {
+  position: absolute;
+  top: 0;
+  /* Stops 1px short so the rail's underline runs unbroken behind the button. */
+  bottom: 1px;
+  z-index: 1;
+  display: grid;
+  align-items: center;
+  width: 3rem;
+  color: rgb(var(--muted-foreground));
+  cursor: pointer;
+}
+.tabs-arrow:hover {
+  color: rgb(var(--foreground));
+}
+/* Fades into the page rather than sitting on a hard block, so a tab sliding
+   under it looks cut off — which is the point. */
+.tabs-arrow-start {
+  left: 0;
+  justify-items: start;
+  background: linear-gradient(to right, rgb(var(--background)) 55%, transparent);
+}
+.tabs-arrow-end {
+  right: 0;
+  justify-items: end;
+  background: linear-gradient(to left, rgb(var(--background)) 55%, transparent);
 }
 .tab {
   position: relative;

@@ -1,6 +1,9 @@
 namespace Trackly.Core.Interfaces;
 
-// Local disk for self-hosted deployments; S3-compatible object storage later.
+// One storage backend: local disk, Azure Blob, GCS. Implementations are
+// single-tenant and know nothing about workspaces — IWorkspaceFileStorage picks
+// which one a given workspace gets and owns the provider prefix on the key.
+// Storage keys handed to these methods are bare (no "azure:"/"gcs:" prefix).
 public interface IFileStorage
 {
     Task<string> SaveAsync(string keyPrefix, string fileName, Stream content, CancellationToken ct = default);

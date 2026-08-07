@@ -17,6 +17,7 @@ export * from './lib/api/api.service';
 export * from './lib/api/http.interceptors';
 
 // Typed endpoints
+export * from './lib/api/admin.api';
 export * from './lib/api/public.api';
 export * from './lib/api/tickets.api';
 export * from './lib/auth/auth.api';

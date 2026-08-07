@@ -19,7 +19,7 @@ namespace Trackly.Modules.Email;
 // back rather than creating a second comment.
 public class InboundEmailService(
     TracklyDbContext db,
-    IFileStorage storage,
+    IWorkspaceFileStorage storage,
     ISecretProtector secrets,
     NotificationService notifications,
     TicketService ticketService,
@@ -284,7 +284,8 @@ public class InboundEmailService(
         {
             if (a.Content.LongLength is <= 0 or > AttachmentService.MaxSizeBytes) continue;
             await using var stream = new MemoryStream(a.Content);
-            var key = await storage.SaveAsync($"{ticket.WorkspaceId}/{ticket.Id}", a.FileName, stream, ct);
+            var key = await storage.SaveAsync(
+                ticket.WorkspaceId, $"{ticket.WorkspaceId}/{ticket.Id}", a.FileName, stream, ct: ct);
             db.Attachments.Add(new Attachment
             {
                 WorkspaceId = ticket.WorkspaceId,

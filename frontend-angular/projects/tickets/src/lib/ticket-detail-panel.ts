@@ -32,10 +32,11 @@ import {
   Button,
   Card,
   Icon,
-  InputDirective,
   LabelDirective,
   Combobox,
   Modal,
+  Select,
+  SelectOption,
   Spinner,
   TagInput,
   ToastService,
@@ -63,11 +64,12 @@ import { CustomerForm } from './customer-form';
     Button,
     Card,
     Icon,
-    InputDirective,
     Combobox,
     CustomerForm,
     LabelDirective,
     Modal,
+    Select,
+    SelectOption,
     Spinner,
     TagInput,
   ],
@@ -348,69 +350,65 @@ import { CustomerForm } from './customer-form';
         <div class="space-y-4">
           <div>
             <label tkLabel for="detail-assignee">{{ 'tickets.columns.assignee' | transloco }}</label>
-            <select
-              tkInput
+            <tk-select
               inset
-              inputSize="sm"
-              id="detail-assignee"
-              [ngModel]="ticket().assignee?.id ?? ''"
-              (ngModelChange)="assign($event)"
+              size="sm"
+              inputId="detail-assignee"
+              [value]="ticket().assignee?.id ?? ''"
+              (valueChange)="assign($event)"
             >
-              <option value="">{{ 'tickets.unassigned' | transloco }}</option>
+              <tk-option value="" [label]="'tickets.unassigned' | transloco" />
               @for (agent of agentList(); track agent.id) {
-                <option [value]="agent.id">{{ agent.name || agent.email }}</option>
+                <tk-option [value]="agent.id" [label]="agent.name || agent.email || ''" />
               }
-            </select>
+            </tk-select>
           </div>
 
           <div>
             <label tkLabel for="detail-priority">{{ 'tickets.columns.priority' | transloco }}</label>
-            <select
-              tkInput
+            <tk-select
               inset
-              inputSize="sm"
-              id="detail-priority"
-              [ngModel]="ticket().priority"
-              (ngModelChange)="change.emit({ priority: $event })"
+              size="sm"
+              inputId="detail-priority"
+              [value]="ticket().priority"
+              (valueChange)="change.emit({ priority: $event })"
             >
               @for (option of priorityOptions(); track option.id) {
-                <option [value]="option.value">{{ option.label }}</option>
+                <tk-option [value]="option.value" [label]="option.label" />
               }
-            </select>
+            </tk-select>
           </div>
 
           <div>
             <label tkLabel for="detail-team">{{ 'tickets.new.department' | transloco }}</label>
-            <select
-              tkInput
+            <tk-select
               inset
-              inputSize="sm"
-              id="detail-team"
-              [ngModel]="ticket().teamId ?? ''"
-              (ngModelChange)="setTeam($event)"
+              size="sm"
+              inputId="detail-team"
+              [value]="ticket().teamId ?? ''"
+              (valueChange)="setTeam($event)"
             >
-              <option value="">{{ 'tickets.new.noDepartment' | transloco }}</option>
+              <tk-option value="" [label]="'tickets.new.noDepartment' | transloco" />
               @for (team of teamList(); track team.id) {
-                <option [value]="team.id">{{ team.name }}</option>
+                <tk-option [value]="team.id" [label]="team.name" />
               }
-            </select>
+            </tk-select>
           </div>
 
           <div>
             <label tkLabel for="detail-category">{{ 'tickets.new.category' | transloco }}</label>
-            <select
-              tkInput
+            <tk-select
               inset
-              inputSize="sm"
-              id="detail-category"
-              [ngModel]="ticket().category?.id ?? ''"
-              (ngModelChange)="setCategory($event)"
+              size="sm"
+              inputId="detail-category"
+              [value]="ticket().category?.id ?? ''"
+              (valueChange)="setCategory($event)"
             >
-              <option value="">{{ 'tickets.new.noCategory' | transloco }}</option>
+              <tk-option value="" [label]="'tickets.new.noCategory' | transloco" />
               @for (category of categoryList(); track category.id) {
-                <option [value]="category.id">{{ category.name }}</option>
+                <tk-option [value]="category.id" [label]="category.name" />
               }
-            </select>
+            </tk-select>
           </div>
 
           <div>
@@ -448,19 +446,22 @@ import { CustomerForm } from './customer-form';
             <p class="text-meta text-muted-foreground">{{ 'tickets.detail.noWatchers' | transloco }}</p>
           }
 
-          <select
-            tkInput
+          <!-- An action dressed as a field: it never holds a value, it just
+               names who to add. Once picked, the agent leaves unwatched() and
+               the trigger falls back to the placeholder — so it reads "Add
+               watcher" again without needing a reset. -->
+          <tk-select
             inset
-            inputSize="sm"
-            [attr.aria-label]="'tickets.detail.addWatcher' | transloco"
-            [ngModel]="''"
-            (ngModelChange)="watch.emit($event)"
+            size="sm"
+            [ariaLabel]="'tickets.detail.addWatcher' | transloco"
+            [placeholder]="'tickets.detail.addWatcher' | transloco"
+            [value]="''"
+            (valueChange)="watch.emit($event)"
           >
-            <option value="">{{ 'tickets.detail.addWatcher' | transloco }}</option>
             @for (agent of unwatched(); track agent.id) {
-              <option [value]="agent.id">{{ agent.name || agent.email }}</option>
+              <tk-option [value]="agent.id" [label]="agent.name || agent.email || ''" />
             }
-          </select>
+          </tk-select>
         </div>
       </tk-card>
 

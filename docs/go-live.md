@@ -75,13 +75,79 @@ Generate a master key:
 
 ## 3. File storage (attachments + workspace logos)
 
-- Current implementation is **`LocalFileStorage`** — writes to `Storage:LocalPath`
-  (defaults to `<app>/storage`). Fine for a single instance.
-- **Gaps to close before horizontal scaling:** local disk is not shared across
-  instances and not durable on ephemeral hosts. A cloud `IFileStorage`
-  (S3 / Azure Blob / GCS) is the intended production implementation — not yet
-  built. Until then: run a single API instance, mount a **persistent** volume at
-  `Storage:LocalPath`, and include it in backups.
+Storage is **per workspace**, chosen by an admin under **Admin → Storage**, not
+by an environment variable. Three providers:
+
+| Provider | Configured with | Notes |
+|---|---|---|
+| `local` (default) | `Storage:LocalPath` | Single instance only |
+| `azure` | Connection string + container | Container auto-created if the credential may |
+| `gcs` | Service-account JSON + bucket | Bucket must already exist |
+
+One bucket per workspace holds both attachments and logos; an optional folder
+prefix keeps them out of the way of anything else sharing it.
+
+Both cloud credentials are AES-256-GCM encrypted with `Security:MasterKey`, so
+**that key must be set and backed up before any workspace configures one** —
+lose it and the credentials are unrecoverable.
+
+- **Local disk remains the default and the fallback.** A workspace with no
+  configuration, and any workspace on `local`, still writes to
+  `Storage:LocalPath` (defaults to `<app>/storage`). Mount a **persistent**
+  volume there, include it in backups, and run one API instance — local disk is
+  neither shared across instances nor durable on ephemeral hosts.
+- **Switching provider does not move existing files.** Every storage key is
+  written with a provider prefix (`azure:`, `gcs:`, `local:`) and reads route on
+  that prefix, so files written before a switch keep being served from where
+  they are. This works *only while the old provider's credentials remain saved* —
+  the admin screen keeps Azure and GCS credentials in separate fields for
+  exactly this reason, and warns before a switch. There is no migration tool
+  that moves existing objects between providers.
+- Keys with no prefix predate this and mean local disk.
+- **Verify after configuring:** Admin → Storage → *Test connection* writes a
+  probe file, reads it back and deletes it, which is what catches a credential
+  that can write but not read.
+
+### Folder prefix
+
+**Folder prefix** (e.g. `trackly`) is the folder inside the bucket everything is
+written under. Set one whenever the bucket is shared with another application.
+It lives inside the stored key, so changing it later does not strand old files —
+they keep resolving under the prefix they were written with.
+
+### CDN (optional)
+
+A workspace on a cloud provider may set a **Public CDN base URL**
+(e.g. `https://cdn-beta.saarvix.in`). It maps onto the **bucket root**, so the
+bucket name is not part of a CDN path:
+
+```
+object:  trackly/019fd6b2-…/branding/019f…_logo.png
+bucket:  https://storage.googleapis.com/saarvix-beta-public/trackly/…/logo.png
+CDN:     https://cdn-beta.saarvix.in/trackly/…/logo.png
+```
+
+**Only workspace logos are ever given a CDN URL.**
+`GET /api/public/workspaces/{slug}/logo` answers with a `302` to the CDN;
+everything else keeps streaming through the API. Attachments go through
+`GET /api/attachments/{id}`, which is where workspace isolation, requester
+scoping and the private-note rule (invariant 5) are enforced — a CDN URL carries
+no sign-in, so publishing one would bypass all three. The mechanism is the key
+prefix: logos are written `gcs-public:…`, everything else `gcs:…`, and
+`PublicUrlAsync` returns null for anything not marked public.
+
+> ⚠️ **One bucket holds both.** A CDN requires that bucket to be publicly
+> readable, and attachments live in it. Trackly never publishes an attachment's
+> path, but it cannot make a public bucket private — anyone who *knows* an object
+> path could fetch it directly, and GCS uniform access cannot make one folder
+> public and another private. If that matters, give attachments a separate
+> private bucket, or skip the CDN and let Trackly serve logos.
+
+- Points at the CDN only while the key's provider matches the workspace's
+  current provider — a logo left behind on local disk keeps being streamed.
+- If attachment throughput ever becomes the bottleneck, the answer is short-TTL
+  signed URLs issued *after* the permission check (Azure SAS / GCS V4), not a
+  public CDN.
 
 ---
 
@@ -170,7 +236,9 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] Migrations applied (`dotnet ef database update`) — **not automatic here**
 - [ ] `Security:MasterKey` set to a real base64 32-byte key, stored + backed up
 - [ ] `App:FrontendBaseUrl` = the public SPA URL (test a magic-link email points there)
-- [ ] `Storage:LocalPath` on a persistent, backed-up volume (single instance)
+- [ ] `Storage:LocalPath` on a persistent, backed-up volume (single instance) — still the default and the fallback even when workspaces use a cloud provider
+- [ ] Any workspace on Azure/GCS has passed **Admin → Storage → Test connection**
+- [ ] Cloud buckets are **private** — unless a CDN is in use, in which case the exposure noted in §3 was a conscious decision
 - [ ] Shared SMTP relay configured + SPF/DKIM, or a conscious decision to rely only on per-workspace relays
 - [ ] SPA served same-origin with `/api/*` reverse-proxied over HTTPS
 - [ ] `AllowedHosts` restricted; forwarded headers configured behind the proxy
@@ -190,6 +258,10 @@ Append here as phases land, so nothing is missed later.
 - **Phase 4 (email):** `Security:MasterKey` (secrets at rest), shared SMTP relay,
   the inbound webhook endpoint reachability, the IMAP-worker single-instance
   constraint. Per-workspace email config is data, not env.
+- **Cloud storage:** no new env keys — provider and credentials are per-workspace
+  data, set in Admin → Storage. But they are encrypted with `Security:MasterKey`,
+  so that key must exist and be backed up *before* any workspace configures one.
+  `Storage:LocalPath` still applies to every workspace left on local disk.
 - **Phase 5 (SSO):** `App:ApiBaseUrl` drives the OIDC/SAML callback URIs, which
   must be publicly reachable over HTTPS and whitelisted at each IdP:
   - OIDC redirect URI: `{ApiBaseUrl}/api/auth/sso/callback`

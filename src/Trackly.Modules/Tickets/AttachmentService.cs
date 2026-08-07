@@ -5,7 +5,7 @@ using Trackly.Infrastructure.Data;
 
 namespace Trackly.Modules.Tickets;
 
-public class AttachmentService(TracklyDbContext db, IFileStorage storage)
+public class AttachmentService(TracklyDbContext db, IWorkspaceFileStorage storage)
 {
     public const long MaxSizeBytes = 10 * 1024 * 1024; // 10 MB, enforced at API level too
 
@@ -34,8 +34,10 @@ public class AttachmentService(TracklyDbContext db, IFileStorage storage)
                 throw new UnauthorizedAccessException();
         }
 
+        // Private, always: an attachment is only ever served by DownloadAsync
+        // below, which is where the visibility rules run.
         var storageKey = await storage.SaveAsync(
-            $"{actor.WorkspaceId}/{ticketId}", fileName, content, ct);
+            actor.WorkspaceId, $"{actor.WorkspaceId}/{ticketId}", fileName, content, ct: ct);
 
         var attachment = new Attachment
         {
@@ -99,7 +101,7 @@ public class AttachmentService(TracklyDbContext db, IFileStorage storage)
                 return null;
         }
 
-        var stream = await storage.OpenReadAsync(attachment.StorageKey, ct);
+        var stream = await storage.OpenReadAsync(actor.WorkspaceId, attachment.StorageKey, ct);
         var meta = new AttachmentDto(
             attachment.Id, attachment.CommentId, attachment.FileName,
             attachment.ContentType, attachment.SizeBytes, attachment.CreatedAt);

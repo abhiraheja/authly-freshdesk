@@ -80,6 +80,7 @@ export const NAV: readonly NavGroup[] = [
       { labelKey: 'nav.items.messaging', icon: 'message-circle', route: '/admin/channels' },
       { labelKey: 'nav.items.widget', icon: 'globe', route: '/admin/widget' },
       { labelKey: 'nav.items.email', icon: 'mail', route: '/admin/settings/email' },
+      { labelKey: 'nav.items.storage', icon: 'upload-cloud', route: '/admin/settings/storage' },
       { labelKey: 'nav.items.branding', icon: 'palette', route: '/admin/settings/branding' },
       { labelKey: 'nav.items.sso', icon: 'shield-check', route: '/admin/settings/sso' },
       { labelKey: 'nav.items.domains', icon: 'at-sign', route: '/admin/settings/domains' },
