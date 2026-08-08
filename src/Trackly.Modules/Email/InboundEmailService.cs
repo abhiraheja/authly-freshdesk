@@ -25,6 +25,7 @@ public class InboundEmailService(
     TicketService ticketService,
     SlaService sla,
     AutomationService automation,
+    ActivityLog activity,
     ILogger<InboundEmailService> logger)
 {
     // ---- Option A webhook entry ---------------------------------------------
@@ -122,6 +123,15 @@ public class InboundEmailService(
         ticket.UpdatedAt = DateTime.UtcNow;
         if (authoredByAgent)
             sla.OnAgentReply(ticket);                 // an agent replying by email is a first response too
+
+        // An email reply is a reply. The actor is the matched user where there
+        // is one, so an agent answering from their inbox reads as themselves —
+        // a null actor here would file their reply under "Trackly".
+        //
+        // Queued into the same SaveChanges as the comment, so the duplicate
+        // check below rolls the log entry back with it rather than leaving a
+        // record of a reply that was never stored.
+        activity.Happened(workspaceId, ticket.Id, matchedUser?.Id, TicketActivityType.Replied);
         db.InboundEmailEvents.Add(NewEvent(workspaceId, msg.MessageId, InboundOutcome.Comment, ticket.Id, comment.Id));
 
         if (!await TrySaveAsync(ct))
@@ -221,6 +231,13 @@ public class InboundEmailService(
             ticket.GuestTokenHash = TokenUtils.Sha256Hex(guestToken);
         }
         db.Tickets.Add(ticket);                        // ticket.Id assigned client-side here
+
+        // Before automation, so the history opens with the email arriving rather
+        // than with the rules that fired on it. The actor is the sender when
+        // Trackly knows them; for a cold email there is no user row to point at,
+        // and the entry reads as "Trackly" — which is the truth.
+        activity.Happened(workspaceId, ticket.Id, matchedUser?.Id,
+            TicketActivityType.Created, ticket.Subject);
 
         var assigneeId = await ticketService.PickRoundRobinAssigneeAsync(workspaceId, null, ct);
         if (assigneeId is not null)

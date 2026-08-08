@@ -39,6 +39,12 @@ builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<TicketOptionService>();
 builder.Services.AddScoped<TicketStatusService>();
 builder.Services.AddScoped<ActivityLog>();
+builder.Services.AddScoped<TicketRelationService>();
+builder.Services.AddScoped<TicketTaskService>();
+builder.Services.AddScoped<AssetService>();
+builder.Services.AddScoped<TicketFieldService>();
+builder.Services.AddScoped<SlaBreachService>();
+builder.Services.AddScoped<BusinessHoursService>();
 builder.Services.AddScoped<TeamService>();
 builder.Services.AddScoped<SlaService>();
 builder.Services.AddScoped<KbService>();
@@ -58,6 +64,7 @@ builder.Services.AddScoped<ChannelInboundService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<AnnouncementWorker>();
+builder.Services.AddHostedService<SlaBreachWorker>();
 builder.Services.AddHostedService<EmailPollingWorker>();
 
 builder.Services.AddAuthentication(TracklySession.Scheme)

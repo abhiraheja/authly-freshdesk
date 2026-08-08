@@ -62,6 +62,52 @@ export interface SlaPolicy {
   readonly resolveMinutes: number | null;
 }
 
+/**
+ * When the desk is open, so an SLA deadline is a promise the team can keep.
+ *
+ * `isEnabled: false` means round-the-clock — the deadline is plain wall-clock
+ * arithmetic, which is what every workspace gets until somebody turns this on.
+ */
+export interface BusinessHours {
+  isEnabled: boolean;
+  /** IANA zone. "9am" means the workspace's 9am, not the server's. */
+  timeZone: string;
+  /** Only OPEN days appear. A missing day is closed. */
+  days: BusinessDay[];
+  holidays: BusinessHoliday[];
+}
+
+/** `dayOfWeek` 0 = Sunday. Minutes from local midnight: 540 = 09:00. */
+export interface BusinessDay {
+  dayOfWeek: number;
+  startMinute: number;
+  endMinute: number;
+}
+
+export interface BusinessHoliday {
+  id: string;
+  /** ISO date, no time — a holiday is a day, not an instant. */
+  date: string;
+  name: string | null;
+}
+
+/**
+ * How one agent did against the SLA.
+ *
+ * `attainment` is null — not zero — when nothing they finished had a target.
+ * "0%" reads as failure and the truth is that no policy applied.
+ */
+export interface AgentSlaScore {
+  agentId: string;
+  name: string;
+  resolved: number;
+  firstResponseTracked: number;
+  firstResponseMet: number;
+  resolutionTracked: number;
+  resolutionMet: number;
+  attainment: number | null;
+}
+
 @Injectable({ providedIn: 'root' })
 export class AdminApi {
   private readonly api = inject(ApiService);
@@ -77,6 +123,35 @@ export class AdminApi {
 
   deleteSlaPolicy(priority: string): Promise<void> {
     return this.api.delete<void>(`/api/admin/sla/${priority}`);
+  }
+
+  // ── Business hours ────────────────────────────────────────────────────────
+
+  /** Readable by agents: a countdown nobody can account for is one nobody trusts. */
+  businessHours(): Promise<BusinessHours> {
+    return this.api.get<BusinessHours>('/api/sla/hours');
+  }
+
+  /** Replaces the whole schedule — one call, one transaction. */
+  saveBusinessHours(body: {
+    isEnabled: boolean;
+    timeZone: string;
+    days: BusinessDay[];
+  }): Promise<BusinessHours> {
+    return this.api.put<BusinessHours>('/api/sla/hours', body);
+  }
+
+  addHoliday(date: string, name?: string | null): Promise<BusinessHoliday> {
+    return this.api.post<BusinessHoliday>('/api/sla/holidays', { date, name });
+  }
+
+  removeHoliday(id: string): Promise<void> {
+    return this.api.delete<void>(`/api/sla/holidays/${id}`);
+  }
+
+  /** Counted, never scored — see the service for why there is no points number. */
+  slaScorecard(days = 30): Promise<AgentSlaScore[]> {
+    return this.api.get<AgentSlaScore[]>('/api/sla/scorecard', { days });
   }
 
   storage(): Promise<StorageConfig> {

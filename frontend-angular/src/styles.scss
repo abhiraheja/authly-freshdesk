@@ -2108,6 +2108,74 @@ tr:focus-within .row-actions {
   background: linear-gradient(135deg, rgb(79 70 229), rgb(167 139 250));
 }
 
+/* ── Activity feed ─────────────────────────────────────────────────────────
+   A timeline: one continuous rail with a dot per entry.
+
+   The rail is drawn on the LIST, not on each row, so it is one line rather than
+   a stack of segments that show a hairline gap wherever two rows meet. Its
+   inset matches the marker's own centre, which is what keeps the dots sitting
+   on it instead of beside it. */
+.activity-feed {
+  position: relative;
+  padding-left: 1.75rem;
+}
+
+.activity-feed::before {
+  content: '';
+  position: absolute;
+  left: 0.625rem;
+  top: 0.5rem;
+  /* Stops at the last dot rather than running to the bottom of the list: a rail
+     continuing past the final entry reads as "more below", and there is not. */
+  bottom: 1.25rem;
+  width: 1px;
+  background: rgb(var(--border));
+}
+
+.activity-item {
+  position: relative;
+  display: flex;
+  gap: 0.625rem;
+}
+
+.activity-marker {
+  position: absolute;
+  left: -1.75rem;
+  top: 0.0625rem;
+  display: grid;
+  place-items: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 9999px;
+  /* Opaque, so the rail passes behind the dot instead of through it. */
+  background: rgb(var(--card));
+  border: 1px solid rgb(var(--border));
+}
+
+/* A value inside an entry — the old status, a file name, a duration. Sized down
+   from the sentence around it: the words carry the meaning and the chip is the
+   detail, so it should read as quieter, not louder. */
+.activity-chip {
+  display: inline-block;
+  max-width: 18rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.375rem;
+  background: rgb(var(--muted));
+  font-size: var(--text-meta);
+  color: rgb(var(--muted-foreground));
+}
+
+/* The "after" half of a change. Same shape, foreground colour — which side of
+   the arrow matters is the one thing a reader scanning the feed is after. */
+.activity-chip.is-to {
+  color: rgb(var(--foreground));
+  font-weight: 600;
+}
+
 /* A file on the Attachments tab — a full row rather than the inline chip, since
    here the list IS the content and needs a hit target, not a footnote. */
 /* The one way an attachment renders: a compact row, everywhere. */

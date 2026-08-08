@@ -17,7 +17,7 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 3. [Access & identity](#3-access--identity)
    - 3.1 Passwordless login · 3.2 Members & roles · 3.3 SSO (OIDC/SAML) · 3.4 Domains & login routing
 4. [Ticketing](#4-ticketing)
-   - 4.1 Tickets & the agent workspace · 4.2 Statuses & workflow · 4.3 Categories · 4.4 Customer portal · 4.5 Guest submission
+   - 4.1 Tickets & the agent workspace · 4.2 Statuses & workflow · 4.3 Registers · 4.4 Categories · 4.5 Customer portal · 4.6 Guest submission
 5. [Agent productivity](#5-agent-productivity)
    - 5.1 Canned responses · 5.2 Tags · 5.3 Teams & routing · 5.4 Problems
 6. [SLA policies](#6-sla-policies)
@@ -156,7 +156,7 @@ conversation.
 
 **Department and category are different things.** The department (a *team*,
 §5.3) is who the ticket is routed to — IT Support, Facilities. The category
-(§4.3) is what it is about — Billing, Hardware. The ticket list shows both, in
+(§4.4) is what it is about — Billing, Hardware. The ticket list shows both, in
 their own columns.
 **Where:** agents work in **Tickets** (a three-pane workspace: list · conversation
 · details).
@@ -257,7 +257,46 @@ rules and problem bulk-resolve set a status directly and are **not** checked
 against the workflow: those are your own rules acting, not somebody
 freehand-editing a ticket.
 
-### 4.3 Categories
+### 4.3 Registers: assets, services & your own properties
+
+**Where:** Admin → Registers (`/admin/settings/catalogue`). Agents read all three;
+only admins change what is on them.
+
+**Assets** — the machines, licences and equipment you support. Deliberately thin:
+name, kind, tag, location, who has it. It is not a CMDB, and building a bad one
+is worse than building none, because people put data in it and then cannot trust
+it. What it buys you is the number on the ticket screen: *"this laptop has 4
+other tickets"* turns a register from a list of nouns into the reason to replace
+the machine.
+
+**Services** — what your customers depend on: Payments, Email, the VPN. An asset
+is a thing you own; a service is a thing you promise, and you want to count them
+separately. Give each one an owning department and the catalogue answers "who do
+we call" without asking.
+
+**Ticket properties** — anything your workspace tracks that Trackly does not.
+Four types: **Text**, **Dropdown**, **Radio buttons**, **Checkbox**.
+
+- A **dropdown can learn.** Tick *"Let agents type a new value, and remember it"*
+  and the first agent to type "Mumbai" adds it to the list for everybody. Without
+  that, filling in a ticket means stopping to ask an admin, and the field gets
+  left blank instead.
+- **Required** blocks an agent saving the ticket. It never blocks an inbound
+  email or a chat becoming a ticket — the customer has never seen your field, and
+  dropping their message over it is not a trade any workspace would choose.
+- **The label is editable; the type is not.** Turning a text field into a
+  checkbox would leave a column of sentences that render as neither ticked nor
+  unticked, and there is no honest way to convert them. Retire it and make a new
+  one.
+- **Retire rather than delete.** A retired field leaves the form but its answers
+  stay, and a ticket that already answered it still shows the answer. Delete is
+  only offered once nothing has answered it.
+
+_These are your properties, not Trackly's: they are stored, shown and searched,
+but no SLA, automation rule or report acts on them. That is the trade for being
+able to invent them._
+
+### 4.4 Categories
 
 **What it is.** An organising dimension for tickets (e.g. Billing, Technical).
 Categories are per-workspace and used for filtering, automation, and reporting.
@@ -267,7 +306,7 @@ Admins create them via the API (`POST /api/categories`) or they arrive with demo
 data; automation can also route by category (§7). _(There is no dedicated
 category-management screen yet — this is a known gap.)_
 
-### 4.4 Customer portal
+### 4.5 Customer portal
 
 **What it is.** A signed-in space where your customers see **their own** tickets
 and replies, branded as your workspace.
@@ -276,7 +315,7 @@ and replies, branded as your workspace.
 **Set up.** Nothing beyond branding (§10). Customers reach it after signing in
 (magic link) or from links in notification emails.
 
-### 4.5 Guest submission
+### 4.6 Guest submission
 
 **What it is.** Anyone can raise a ticket without an account via a branded submit
 form; they verify with a one-time code and get a private **tracking link** to
@@ -573,7 +612,7 @@ Canned.
 | **Insights** | Analytics · Announcements |
 | **People** | Members · Teams |
 | **Workflow** | Statuses & workflow · SLA policies · Automation · AI copilot |
-| **Ticket view** | Ticket layout (§23) |
+| **Ticket view** | Registers (§4.3) · Ticket layout (§23) |
 | **Channels** | Messaging (connectors) · Widget · Email |
 | **Workspace** | Branding · SSO · Domains |
 
@@ -761,6 +800,46 @@ zero and there would be no way back out except clearing everything.
 
 Everything is in the URL, so a filtered, sorted view is a link you can send
 someone, and Back works.
+
+### Activity: what happened to this ticket
+
+**Where:** the **Activity** tab on any ticket, beside Conversation, Notes and
+Attachments.
+
+The audit trail — every change, oldest first, with who made it and when. Status
+moves, priority, assignee, department, category, subject, watchers, replies,
+notes, files, related work, time logged, resolutions and reopens.
+
+Things worth knowing before you rely on it:
+
+- **Agents and admins only.** Customers never see it, on the portal or anywhere
+  else. It records *that* a private note was written — never its words, so "Only
+  me" stays only yours.
+- **Entries are frozen at the time they were written.** Rename a status and last
+  month's entries still read as they did then, because that is what actually
+  happened. The person's name is the exception: that is shown live.
+- **Nothing you do creates a duplicate.** Saving the properties panel re-sends
+  every field, but only what actually moved is recorded — one save that changed
+  the priority is one line, not four.
+- **"Trackly" as the actor** means nobody with an account did it: an automation
+  rule fired, a guest or chat visitor replied, or a cold email arrived from
+  somebody Trackly has no user record for.
+- **History starts from the day this shipped.** Tickets raised before it show an
+  empty tab; nothing was reconstructed, because inventing timestamps and actors
+  from the ticket as it stands now would put entries in the log that are simply
+  wrong.
+
+**Where entries come from.** Everything that changes a ticket writes one —
+agents, automation rules (§7), inbound email (§9), the messaging connectors
+(§14), live chat (§15), guest submissions and replies (§4.5), problems being
+linked or bulk-resolved (§5.4), and attachments. An automation rule that
+re-prioritises a ticket at 3am leaves a line saying so.
+
+**The SLA clock is the deliberate exception.** It writes nothing, because
+everything it does follows something already in the feed — it pauses because the
+status moved to Pending, recalculates because the priority changed, stops because
+somebody replied. Entries for those would double every line without adding a
+fact.
 
 ### Notes: who reads them
 

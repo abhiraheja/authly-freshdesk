@@ -24,21 +24,38 @@ public class TeamService(TracklyDbContext db)
         return teams
             .Select(t => new TeamDto(
                 t.Id, t.Name,
-                t.Members.Select(m => UserSummaryDto.From(m.User)!).ToList()))
+                t.Members.Select(m => UserSummaryDto.From(m.User)!).ToList(),
+                t.ParentId))
             .ToList();
     }
 
-    public async Task<TeamDto> CreateAsync(Actor actor, string name, CancellationToken ct)
+    public async Task<TeamDto> CreateAsync(Actor actor, string name, Guid? parentId, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(name))
             throw new ArgumentException("Team name is required.");
-        if (await db.Teams.AnyAsync(t => t.WorkspaceId == actor.WorkspaceId && t.Name == name.Trim(), ct))
-            throw new ArgumentException("A team with that name already exists.");
 
-        var team = new Team { WorkspaceId = actor.WorkspaceId, Name = name.Trim() };
+        if (parentId is { } parent)
+        {
+            // Two levels, not a tree: routing reads the ticket's own TeamId and
+            // never walks upward, so a third level would be labels that no rule
+            // in the product can see.
+            var above = await db.Teams.SingleOrDefaultAsync(
+                t => t.Id == parent && t.WorkspaceId == actor.WorkspaceId, ct);
+            if (above is null) throw new ArgumentException("Unknown department.");
+            if (above.ParentId is not null)
+                throw new ArgumentException("A sub-department cannot have sub-departments of its own.");
+        }
+
+        // Unique within the parent, not across the workspace: two departments may
+        // each have a "Support" underneath them.
+        if (await db.Teams.AnyAsync(t =>
+                t.WorkspaceId == actor.WorkspaceId && t.ParentId == parentId && t.Name == name.Trim(), ct))
+            throw new ArgumentException("A team with that name already exists here.");
+
+        var team = new Team { WorkspaceId = actor.WorkspaceId, Name = name.Trim(), ParentId = parentId };
         db.Teams.Add(team);
         await db.SaveChangesAsync(ct);
-        return new TeamDto(team.Id, team.Name, []);
+        return new TeamDto(team.Id, team.Name, [], team.ParentId);
     }
 
     // Rename only. A team's identity is its id — tickets reference it by that,
@@ -53,13 +70,16 @@ public class TeamService(TracklyDbContext db)
         if (team is null) return null;
 
         var trimmed = name.Trim();
-        if (await db.Teams.AnyAsync(
-                t => t.WorkspaceId == actor.WorkspaceId && t.Name == trimmed && t.Id != teamId, ct))
-            throw new ArgumentException("A team with that name already exists.");
+        // Compared within the same parent, matching the unique index: renaming a
+        // sub-department only clashes with its siblings.
+        if (await db.Teams.AnyAsync(t =>
+                t.WorkspaceId == actor.WorkspaceId && t.ParentId == team.ParentId
+                && t.Name == trimmed && t.Id != teamId, ct))
+            throw new ArgumentException("A team with that name already exists here.");
 
         team.Name = trimmed;
         await db.SaveChangesAsync(ct);
-        return new TeamDto(team.Id, team.Name, []);
+        return new TeamDto(team.Id, team.Name, [], team.ParentId);
     }
 
     public async Task<bool> DeleteAsync(Actor actor, Guid teamId, CancellationToken ct)
@@ -98,4 +118,6 @@ public class TeamService(TracklyDbContext db)
     }
 }
 
-public record TeamDto(Guid Id, string Name, IReadOnlyList<UserSummaryDto> Members);
+/// <param name="ParentId">Null for a department; set makes this a sub-department.</param>
+public record TeamDto(
+    Guid Id, string Name, IReadOnlyList<UserSummaryDto> Members, Guid? ParentId = null);

@@ -17,7 +17,7 @@ namespace Trackly.Infrastructure.Data.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.9")
+                .HasAnnotation("ProductVersion", "10.0.4")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -61,13 +61,6 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("SentAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("sent_at");
-
-                    b.Property<string>("StatusCategory")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("open")
-                        .HasColumnName("status_category");
 
                     b.Property<string>("Subject")
                         .IsRequired()
@@ -152,6 +145,71 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_announcement_deliveries_user_id");
 
                     b.ToTable("announcement_deliveries", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.Asset", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AssignedToId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_to_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Kind")
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Location")
+                        .HasColumnType("text")
+                        .HasColumnName("location");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<string>("Tag")
+                        .HasColumnType("text")
+                        .HasColumnName("tag");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_assets");
+
+                    b.HasIndex("AssignedToId")
+                        .HasDatabaseName("ix_assets_assigned_to_id");
+
+                    b.HasIndex("WorkspaceId", "Name")
+                        .HasDatabaseName("ix_assets_workspace_id_name");
+
+                    b.HasIndex("WorkspaceId", "Tag")
+                        .IsUnique()
+                        .HasDatabaseName("ix_assets_workspace_id_tag")
+                        .HasFilter("tag IS NOT NULL");
+
+                    b.ToTable("assets", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.Attachment", b =>
@@ -278,6 +336,143 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.ToTable("automation_rules", (string)null);
                 });
 
+            modelBuilder.Entity("Trackly.Core.Entities.BusinessHoliday", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateOnly>("Date")
+                        .HasColumnType("date")
+                        .HasColumnName("date");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_business_holidays");
+
+                    b.HasIndex("WorkspaceId", "Date")
+                        .IsUnique()
+                        .HasDatabaseName("ix_business_holidays_workspace_id_date");
+
+                    b.ToTable("business_holidays", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.BusinessHourDay", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("integer")
+                        .HasColumnName("day_of_week");
+
+                    b.Property<int>("EndMinute")
+                        .HasColumnType("integer")
+                        .HasColumnName("end_minute");
+
+                    b.Property<int>("StartMinute")
+                        .HasColumnType("integer")
+                        .HasColumnName("start_minute");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_business_hour_days");
+
+                    b.HasIndex("WorkspaceId")
+                        .HasDatabaseName("ix_business_hour_days_workspace_id");
+
+                    b.ToTable("business_hour_days", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.BusinessHours", b =>
+                {
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.Property<bool>("IsEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_enabled");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("UTC")
+                        .HasColumnName("time_zone");
+
+                    b.HasKey("WorkspaceId")
+                        .HasName("pk_business_hours");
+
+                    b.ToTable("business_hours", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.BusinessService", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text")
+                        .HasColumnName("description");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("OwnerTeamId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_team_id");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_business_services");
+
+                    b.HasIndex("OwnerTeamId")
+                        .HasDatabaseName("ix_business_services_owner_team_id");
+
+                    b.HasIndex("WorkspaceId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_business_services_workspace_id_name");
+
+                    b.ToTable("business_services", (string)null);
+                });
+
             modelBuilder.Entity("Trackly.Core.Entities.CannedResponse", b =>
                 {
                     b.Property<Guid>("Id")
@@ -332,6 +527,10 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_id");
+
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("uuid")
                         .HasColumnName("workspace_id");
@@ -339,9 +538,12 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.HasKey("Id")
                         .HasName("pk_categories");
 
-                    b.HasIndex("WorkspaceId", "Name")
+                    b.HasIndex("ParentId")
+                        .HasDatabaseName("ix_categories_parent_id");
+
+                    b.HasIndex("WorkspaceId", "ParentId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("ix_categories_workspace_id_name");
+                        .HasDatabaseName("ix_categories_workspace_id_parent_id_name");
 
                     b.ToTable("categories", (string)null);
                 });
@@ -556,13 +758,6 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("email_message_id");
 
-                    b.Property<string>("Visibility")
-                        .IsRequired()
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("text")
-                        .HasDefaultValue("public")
-                        .HasColumnName("visibility");
-
                     b.Property<string>("GuestEmail")
                         .HasColumnType("text")
                         .HasColumnName("guest_email");
@@ -584,6 +779,13 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("ticket_id");
 
+                    b.Property<string>("Visibility")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("public")
+                        .HasColumnName("visibility");
+
                     b.HasKey("Id")
                         .HasName("pk_comments");
 
@@ -597,6 +799,36 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_comments_ticket_id_created_at");
 
                     b.ToTable("comments", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.CommentMention", b =>
+                {
+                    b.Property<Guid>("CommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("comment_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.HasKey("CommentId", "UserId")
+                        .HasName("pk_comment_mentions");
+
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_comment_mentions_ticket_id");
+
+                    b.HasIndex("UserId", "TicketId")
+                        .HasDatabaseName("ix_comment_mentions_user_id_ticket_id");
+
+                    b.ToTable("comment_mentions", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.CsatSurvey", b =>
@@ -983,6 +1215,71 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_kb_articles_workspace_id_status");
 
                     b.ToTable("kb_articles", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.Notification", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<Guid?>("CommentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("comment_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Preview")
+                        .HasColumnType("text")
+                        .HasColumnName("preview");
+
+                    b.Property<DateTime?>("ReadAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("read_at");
+
+                    b.Property<Guid?>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_notifications");
+
+                    b.HasIndex("ActorId")
+                        .HasDatabaseName("ix_notifications_actor_id");
+
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_notifications_ticket_id");
+
+                    b.HasIndex("WorkspaceId")
+                        .HasDatabaseName("ix_notifications_workspace_id");
+
+                    b.HasIndex("UserId", "CreatedAt")
+                        .HasDatabaseName("ix_notifications_user_id_created_at");
+
+                    b.HasIndex("UserId", "ReadAt")
+                        .HasDatabaseName("ix_notifications_user_id_read_at");
+
+                    b.ToTable("notifications", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.NotificationSettings", b =>
@@ -1388,10 +1685,6 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("gcs_bucket");
 
-                    b.Property<string>("PathPrefix")
-                        .HasColumnType("text")
-                        .HasColumnName("path_prefix");
-
                     b.Property<string>("GcsCredentialsJsonEncrypted")
                         .HasColumnType("text")
                         .HasColumnName("gcs_credentials_json_encrypted");
@@ -1399,6 +1692,10 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("LastVerifiedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_verified_at");
+
+                    b.Property<string>("PathPrefix")
+                        .HasColumnType("text")
+                        .HasColumnName("path_prefix");
 
                     b.Property<string>("Provider")
                         .IsRequired()
@@ -1479,6 +1776,10 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("name");
 
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_id");
+
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("uuid")
                         .HasColumnName("workspace_id");
@@ -1486,9 +1787,12 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.HasKey("Id")
                         .HasName("pk_teams");
 
-                    b.HasIndex("WorkspaceId", "Name")
+                    b.HasIndex("ParentId")
+                        .HasDatabaseName("ix_teams_parent_id");
+
+                    b.HasIndex("WorkspaceId", "ParentId", "Name")
                         .IsUnique()
-                        .HasDatabaseName("ix_teams_workspace_id_name");
+                        .HasDatabaseName("ix_teams_workspace_id_parent_id_name");
 
                     b.ToTable("teams", (string)null);
                 });
@@ -1578,6 +1882,18 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("requester_id");
 
+                    b.Property<string>("ResolutionLink")
+                        .HasColumnType("text")
+                        .HasColumnName("resolution_link");
+
+                    b.Property<string>("ResolutionNote")
+                        .HasColumnType("text")
+                        .HasColumnName("resolution_note");
+
+                    b.Property<string>("ResolutionSummary")
+                        .HasColumnType("text")
+                        .HasColumnName("resolution_summary");
+
                     b.Property<DateTime?>("ResolveDueAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("resolve_due_at");
@@ -1590,17 +1906,17 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("resolved_by_id");
 
-                    b.Property<string>("ResolutionLink")
-                        .HasColumnType("text")
-                        .HasColumnName("resolution_link");
-
-                    b.Property<string>("ResolutionNote")
-                        .HasColumnType("text")
-                        .HasColumnName("resolution_note");
+                    b.Property<DateTime?>("SlaBreachSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sla_breach_sent_at");
 
                     b.Property<DateTime?>("SlaPausedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("sla_paused_at");
+
+                    b.Property<DateTime?>("SlaWarningSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sla_warning_sent_at");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -1615,6 +1931,14 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("text")
                         .HasDefaultValue("open")
                         .HasColumnName("status_category");
+
+                    b.Property<Guid?>("SubCategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sub_category_id");
+
+                    b.Property<Guid?>("SubTeamId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sub_team_id");
 
                     b.Property<string>("Subject")
                         .IsRequired()
@@ -1651,6 +1975,12 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.HasIndex("ResolvedById")
                         .HasDatabaseName("ix_tickets_resolved_by_id");
 
+                    b.HasIndex("SubCategoryId")
+                        .HasDatabaseName("ix_tickets_sub_category_id");
+
+                    b.HasIndex("SubTeamId")
+                        .HasDatabaseName("ix_tickets_sub_team_id");
+
                     b.HasIndex("TeamId")
                         .HasDatabaseName("ix_tickets_team_id");
 
@@ -1666,102 +1996,7 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.HasIndex("WorkspaceId", "StatusCategory")
                         .HasDatabaseName("ix_tickets_workspace_id_status_category");
 
-                    b.ToTable("tickets");
-                });
-
-            modelBuilder.Entity("Trackly.Core.Entities.CommentMention", b =>
-                {
-                    b.Property<Guid>("CommentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("comment_id");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<Guid>("TicketId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("ticket_id");
-
-                    b.HasKey("CommentId", "UserId")
-                        .HasName("pk_comment_mentions");
-
-                    b.HasIndex("TicketId")
-                        .HasDatabaseName("ix_comment_mentions_ticket_id");
-
-                    b.HasIndex("UserId", "TicketId")
-                        .HasDatabaseName("ix_comment_mentions_user_id_ticket_id");
-
-                    b.ToTable("comment_mentions", (string)null);
-                });
-
-            modelBuilder.Entity("Trackly.Core.Entities.Notification", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid?>("ActorId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("actor_id");
-
-                    b.Property<Guid?>("CommentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("comment_id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Preview")
-                        .HasColumnType("text")
-                        .HasColumnName("preview");
-
-                    b.Property<DateTime?>("ReadAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("read_at");
-
-                    b.Property<Guid?>("TicketId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("ticket_id");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("type");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("user_id");
-
-                    b.Property<Guid>("WorkspaceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("workspace_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_notifications");
-
-                    b.HasIndex("ActorId")
-                        .HasDatabaseName("ix_notifications_actor_id");
-
-                    b.HasIndex("TicketId")
-                        .HasDatabaseName("ix_notifications_ticket_id");
-
-                    b.HasIndex("WorkspaceId")
-                        .HasDatabaseName("ix_notifications_workspace_id");
-
-                    b.HasIndex("UserId", "CreatedAt")
-                        .HasDatabaseName("ix_notifications_user_id_created_at");
-
-                    b.HasIndex("UserId", "ReadAt")
-                        .HasDatabaseName("ix_notifications_user_id_read_at");
-
-                    b.ToTable("notifications", (string)null);
+                    b.ToTable("tickets", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketActivity", b =>
@@ -1810,6 +2045,203 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_ticket_activities_ticket_id_created_at");
 
                     b.ToTable("ticket_activities", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketAsset", b =>
+                {
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<Guid>("AssetId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("asset_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at");
+
+                    b.Property<Guid?>("AddedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("added_by");
+
+                    b.HasKey("TicketId", "AssetId")
+                        .HasName("pk_ticket_assets");
+
+                    b.HasIndex("AssetId")
+                        .HasDatabaseName("ix_ticket_assets_asset_id");
+
+                    b.ToTable("ticket_assets", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("AssignedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("assigned_at");
+
+                    b.Property<Guid?>("AssignedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_by");
+
+                    b.Property<Guid>("AssignedTo")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assigned_to");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_assignments");
+
+                    b.HasIndex("AssignedBy")
+                        .HasDatabaseName("ix_ticket_assignments_assigned_by");
+
+                    b.HasIndex("AssignedTo")
+                        .HasDatabaseName("ix_ticket_assignments_assigned_to");
+
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_ticket_assignments_ticket_id");
+
+                    b.ToTable("ticket_assignments", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketField", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("AllowNewOptions")
+                        .HasColumnType("boolean")
+                        .HasColumnName("allow_new_options");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("HelpText")
+                        .HasColumnType("text")
+                        .HasColumnName("help_text");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsRequired")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_required");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("label");
+
+                    b.Property<string>("Options")
+                        .HasColumnType("text")
+                        .HasColumnName("options");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("type");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_fields");
+
+                    b.HasIndex("WorkspaceId", "Key")
+                        .IsUnique()
+                        .HasDatabaseName("ix_ticket_fields_workspace_id_key");
+
+                    b.ToTable("ticket_fields", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketFieldValue", b =>
+                {
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<Guid>("FieldId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("field_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("value");
+
+                    b.HasKey("TicketId", "FieldId")
+                        .HasName("pk_ticket_field_values");
+
+                    b.HasIndex("FieldId", "Value")
+                        .HasDatabaseName("ix_ticket_field_values_field_id_value");
+
+                    b.ToTable("ticket_field_values", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketImpactedService", b =>
+                {
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<Guid>("ServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at");
+
+                    b.Property<Guid?>("AddedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("added_by");
+
+                    b.Property<string>("Impact")
+                        .HasColumnType("text")
+                        .HasColumnName("impact");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("level");
+
+                    b.HasKey("TicketId", "ServiceId")
+                        .HasName("pk_ticket_impacted_services");
+
+                    b.HasIndex("ServiceId")
+                        .HasDatabaseName("ix_ticket_impacted_services_service_id");
+
+                    b.ToTable("ticket_impacted_services", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketLink", b =>
@@ -1865,6 +2297,144 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_ticket_links_ticket_id_url");
 
                     b.ToTable("ticket_links", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketOption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("color");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsSystem")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_system");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("label");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("value");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_options");
+
+                    b.HasIndex("WorkspaceId", "Kind", "Value")
+                        .IsUnique()
+                        .HasDatabaseName("ix_ticket_options_workspace_id_kind_value");
+
+                    b.ToTable("ticket_options", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketRelation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("kind");
+
+                    b.Property<Guid>("RelatedTicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("related_ticket_id");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_relations");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_ticket_relations_created_by_id");
+
+                    b.HasIndex("RelatedTicketId")
+                        .HasDatabaseName("ix_ticket_relations_related_ticket_id");
+
+                    b.HasIndex("WorkspaceId")
+                        .HasDatabaseName("ix_ticket_relations_workspace_id");
+
+                    b.HasIndex("TicketId", "RelatedTicketId", "Kind")
+                        .IsUnique()
+                        .HasDatabaseName("ix_ticket_relations_ticket_id_related_ticket_id_kind");
+
+                    b.ToTable("ticket_relations", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketResponder", b =>
+                {
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<Guid>("AgentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_id");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("added_at");
+
+                    b.Property<Guid?>("AddedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("added_by");
+
+                    b.Property<string>("Role")
+                        .HasColumnType("text")
+                        .HasColumnName("role");
+
+                    b.HasKey("TicketId", "AgentId")
+                        .HasName("pk_ticket_responders");
+
+                    b.HasIndex("AgentId")
+                        .HasDatabaseName("ix_ticket_responders_agent_id");
+
+                    b.ToTable("ticket_responders", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketStatus", b =>
@@ -1947,6 +2517,9 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.HasKey("Id")
                         .HasName("pk_ticket_status_transitions");
 
+                    b.HasIndex("FromStatusId")
+                        .HasDatabaseName("ix_ticket_status_transitions_from_status_id");
+
                     b.HasIndex("ToStatusId")
                         .HasDatabaseName("ix_ticket_status_transitions_to_status_id");
 
@@ -1954,6 +2527,94 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_ticket_status_transitions_workspace_id_from_status_id");
 
                     b.ToTable("ticket_status_transitions", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketTag", b =>
+                {
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<Guid>("TagId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tag_id");
+
+                    b.HasKey("TicketId", "TagId")
+                        .HasName("pk_ticket_tags");
+
+                    b.HasIndex("TagId")
+                        .HasDatabaseName("ix_ticket_tags_tag_id");
+
+                    b.ToTable("ticket_tags", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketTask", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AssigneeId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("assignee_id");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<Guid?>("CompletedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("completed_by_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_id");
+
+                    b.Property<DateTime?>("DueAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("due_at");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer")
+                        .HasColumnName("sort_order");
+
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_ticket_tasks");
+
+                    b.HasIndex("CompletedById")
+                        .HasDatabaseName("ix_ticket_tasks_completed_by_id");
+
+                    b.HasIndex("CreatedById")
+                        .HasDatabaseName("ix_ticket_tasks_created_by_id");
+
+                    b.HasIndex("WorkspaceId")
+                        .HasDatabaseName("ix_ticket_tasks_workspace_id");
+
+                    b.HasIndex("AssigneeId", "CompletedAt")
+                        .HasDatabaseName("ix_ticket_tasks_assignee_id_completed_at");
+
+                    b.HasIndex("TicketId", "SortOrder")
+                        .HasDatabaseName("ix_ticket_tasks_ticket_id_sort_order");
+
+                    b.ToTable("ticket_tasks", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketTimeEntry", b =>
@@ -2013,119 +2674,6 @@ namespace Trackly.Infrastructure.Data.Migrations
                         });
                 });
 
-            modelBuilder.Entity("Trackly.Core.Entities.TicketAssignment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("AssignedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("assigned_at");
-
-                    b.Property<Guid?>("AssignedBy")
-                        .HasColumnType("uuid")
-                        .HasColumnName("assigned_by");
-
-                    b.Property<Guid>("AssignedTo")
-                        .HasColumnType("uuid")
-                        .HasColumnName("assigned_to");
-
-                    b.Property<Guid>("TicketId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("ticket_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_ticket_assignments");
-
-                    b.HasIndex("AssignedBy")
-                        .HasDatabaseName("ix_ticket_assignments_assigned_by");
-
-                    b.HasIndex("AssignedTo")
-                        .HasDatabaseName("ix_ticket_assignments_assigned_to");
-
-                    b.HasIndex("TicketId")
-                        .HasDatabaseName("ix_ticket_assignments_ticket_id");
-
-                    b.ToTable("ticket_assignments", (string)null);
-                });
-
-            modelBuilder.Entity("Trackly.Core.Entities.TicketOption", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Color")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("color");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_active");
-
-                    b.Property<bool>("IsSystem")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_system");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)")
-                        .HasColumnName("kind");
-
-                    b.Property<string>("Label")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("label");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer")
-                        .HasColumnName("sort_order");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("value");
-
-                    b.Property<Guid>("WorkspaceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("workspace_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_ticket_options");
-
-                    b.HasIndex("WorkspaceId", "Kind", "Value")
-                        .IsUnique()
-                        .HasDatabaseName("ix_ticket_options_workspace_id_kind_value");
-
-                    b.ToTable("ticket_options", (string)null);
-                });
-
-            modelBuilder.Entity("Trackly.Core.Entities.TicketTag", b =>
-                {
-                    b.Property<Guid>("TicketId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("ticket_id");
-
-                    b.Property<Guid>("TagId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("tag_id");
-
-                    b.HasKey("TicketId", "TagId")
-                        .HasName("pk_ticket_tags");
-
-                    b.HasIndex("TagId")
-                        .HasDatabaseName("ix_ticket_tags_tag_id");
-
-                    b.ToTable("ticket_tags", (string)null);
-                });
-
             modelBuilder.Entity("Trackly.Core.Entities.TicketWatcher", b =>
                 {
                     b.Property<Guid>("TicketId")
@@ -2171,22 +2719,18 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("avatar_storage_key");
 
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
                     b.Property<string>("Company")
                         .HasColumnType("text")
                         .HasColumnName("company");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
 
                     b.Property<string>("CustomFields")
                         .IsRequired()
                         .HasColumnType("jsonb")
                         .HasColumnName("custom_fields");
-
-                    b.Property<string>("Location")
-                        .HasColumnType("text")
-                        .HasColumnName("location");
 
                     b.Property<string>("Email")
                         .HasColumnType("text")
@@ -2201,6 +2745,10 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("LastLoginAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_login_at");
+
+                    b.Property<string>("Location")
+                        .HasColumnType("text")
+                        .HasColumnName("location");
 
                     b.Property<string>("Name")
                         .HasColumnType("text")
@@ -2596,6 +3144,26 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Trackly.Core.Entities.Asset", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "AssignedTo")
+                        .WithMany()
+                        .HasForeignKey("AssignedToId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_assets_users_assigned_to_id");
+
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_assets_workspaces_workspace_id");
+
+                    b.Navigation("AssignedTo");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("Trackly.Core.Entities.Attachment", b =>
                 {
                     b.HasOne("Trackly.Core.Entities.Comment", "Comment")
@@ -2645,6 +3213,62 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("Trackly.Core.Entities.BusinessHoliday", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.BusinessHours", "BusinessHours")
+                        .WithMany("Holidays")
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_business_holidays_business_hours_workspace_id");
+
+                    b.Navigation("BusinessHours");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.BusinessHourDay", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.BusinessHours", "BusinessHours")
+                        .WithMany("Days")
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_business_hour_days_business_hours_workspace_id");
+
+                    b.Navigation("BusinessHours");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.BusinessHours", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_business_hours_workspaces_workspace_id");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.BusinessService", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.Team", "OwnerTeam")
+                        .WithMany()
+                        .HasForeignKey("OwnerTeamId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_business_services_teams_owner_team_id");
+
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_business_services_workspaces_workspace_id");
+
+                    b.Navigation("OwnerTeam");
+
+                    b.Navigation("Workspace");
+                });
+
             modelBuilder.Entity("Trackly.Core.Entities.CannedResponse", b =>
                 {
                     b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
@@ -2659,12 +3283,20 @@ namespace Trackly.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Trackly.Core.Entities.Category", b =>
                 {
+                    b.HasOne("Trackly.Core.Entities.Category", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_categories_categories_parent_id");
+
                     b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
                         .WithMany()
                         .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_categories_workspaces_workspace_id");
+
+                    b.Navigation("Parent");
 
                     b.Navigation("Workspace");
                 });
@@ -2754,6 +3386,36 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("Ticket");
                 });
 
+            modelBuilder.Entity("Trackly.Core.Entities.CommentMention", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.Comment", "Comment")
+                        .WithMany("Mentions")
+                        .HasForeignKey("CommentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_comment_mentions_comments_comment_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_comment_mentions_tickets_ticket_id");
+
+                    b.HasOne("Trackly.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_comment_mentions_users_user_id");
+
+                    b.Navigation("Comment");
+
+                    b.Navigation("Ticket");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Trackly.Core.Entities.CsatSurvey", b =>
                 {
                     b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
@@ -2835,6 +3497,43 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("Category");
 
                     b.Navigation("CreatedByUser");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.Notification", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_notifications_users_actor_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_notifications_tickets_ticket_id");
+
+                    b.HasOne("Trackly.Core.Entities.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notifications_users_user_id");
+
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_notifications_workspaces_workspace_id");
+
+                    b.Navigation("Actor");
+
+                    b.Navigation("Ticket");
+
+                    b.Navigation("User");
 
                     b.Navigation("Workspace");
                 });
@@ -2963,12 +3662,20 @@ namespace Trackly.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Trackly.Core.Entities.Team", b =>
                 {
+                    b.HasOne("Trackly.Core.Entities.Team", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .HasConstraintName("fk_teams_teams_parent_id");
+
                     b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
                         .WithMany()
                         .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_teams_workspaces_workspace_id");
+
+                    b.Navigation("Parent");
 
                     b.Navigation("Workspace");
                 });
@@ -3026,6 +3733,18 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_tickets_users_resolved_by_id");
 
+                    b.HasOne("Trackly.Core.Entities.Category", "SubCategory")
+                        .WithMany()
+                        .HasForeignKey("SubCategoryId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("fk_tickets_categories_sub_category_id");
+
+                    b.HasOne("Trackly.Core.Entities.Team", "SubTeam")
+                        .WithMany()
+                        .HasForeignKey("SubTeamId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .HasConstraintName("fk_tickets_teams_sub_team_id");
+
                     b.HasOne("Trackly.Core.Entities.Team", "Team")
                         .WithMany()
                         .HasForeignKey("TeamId")
@@ -3049,73 +3768,11 @@ namespace Trackly.Infrastructure.Data.Migrations
 
                     b.Navigation("ResolvedBy");
 
+                    b.Navigation("SubCategory");
+
+                    b.Navigation("SubTeam");
+
                     b.Navigation("Team");
-
-                    b.Navigation("Workspace");
-                });
-
-            modelBuilder.Entity("Trackly.Core.Entities.CommentMention", b =>
-                {
-                    b.HasOne("Trackly.Core.Entities.Comment", "Comment")
-                        .WithMany("Mentions")
-                        .HasForeignKey("CommentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_comment_mentions_comments_comment_id");
-
-                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
-                        .WithMany()
-                        .HasForeignKey("TicketId")
-                        .IsRequired()
-                        .HasConstraintName("fk_comment_mentions_tickets_ticket_id");
-
-                    b.HasOne("Trackly.Core.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_comment_mentions_users_user_id");
-
-                    b.Navigation("Comment");
-
-                    b.Navigation("Ticket");
-
-                    b.Navigation("User");
-                });
-
-            modelBuilder.Entity("Trackly.Core.Entities.Notification", b =>
-                {
-                    b.HasOne("Trackly.Core.Entities.User", "Actor")
-                        .WithMany()
-                        .HasForeignKey("ActorId")
-                        .OnDelete(DeleteBehavior.SetNull)
-                        .HasConstraintName("fk_notifications_users_actor_id");
-
-                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
-                        .WithMany()
-                        .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .HasConstraintName("fk_notifications_tickets_ticket_id");
-
-                    b.HasOne("Trackly.Core.Entities.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_notifications_users_user_id");
-
-                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
-                        .WithMany()
-                        .HasForeignKey("WorkspaceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_notifications_workspaces_workspace_id");
-
-                    b.Navigation("Actor");
-
-                    b.Navigation("Ticket");
-
-                    b.Navigation("User");
 
                     b.Navigation("Workspace");
                 });
@@ -3136,6 +3793,110 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasConstraintName("fk_ticket_activities_tickets_ticket_id");
 
                     b.Navigation("Actor");
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketAsset", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.Asset", "Asset")
+                        .WithMany()
+                        .HasForeignKey("AssetId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_assets_assets_asset_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany("Assets")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_assets_tickets_ticket_id");
+
+                    b.Navigation("Asset");
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketAssignment", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "AssignedByUser")
+                        .WithMany()
+                        .HasForeignKey("AssignedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_ticket_assignments_users_assigned_by");
+
+                    b.HasOne("Trackly.Core.Entities.User", "AssignedToUser")
+                        .WithMany()
+                        .HasForeignKey("AssignedTo")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_assignments_users_assigned_to");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_assignments_tickets_ticket_id");
+
+                    b.Navigation("AssignedByUser");
+
+                    b.Navigation("AssignedToUser");
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketField", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_fields_workspaces_workspace_id");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketFieldValue", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.TicketField", "Field")
+                        .WithMany()
+                        .HasForeignKey("FieldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_field_values_ticket_fields_field_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany("FieldValues")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_field_values_tickets_ticket_id");
+
+                    b.Navigation("Field");
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketImpactedService", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.BusinessService", "Service")
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_impacted_services_business_services_service_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany("ImpactedServices")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_impacted_services_tickets_ticket_id");
+
+                    b.Navigation("Service");
 
                     b.Navigation("Ticket");
                 });
@@ -3169,6 +3930,77 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("Workspace");
                 });
 
+            modelBuilder.Entity("Trackly.Core.Entities.TicketOption", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_options_workspaces_workspace_id");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketRelation", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_ticket_relations_users_created_by_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "RelatedTicket")
+                        .WithMany()
+                        .HasForeignKey("RelatedTicketId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_relations_tickets_related_ticket_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_relations_tickets_ticket_id");
+
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_relations_workspaces_workspace_id");
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("RelatedTicket");
+
+                    b.Navigation("Ticket");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketResponder", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "Agent")
+                        .WithMany()
+                        .HasForeignKey("AgentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_responders_users_agent_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany("Responders")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_responders_tickets_ticket_id");
+
+                    b.Navigation("Agent");
+
+                    b.Navigation("Ticket");
+                });
+
             modelBuilder.Entity("Trackly.Core.Entities.TicketStatus", b =>
                 {
                     b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
@@ -3186,11 +4018,13 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.HasOne("Trackly.Core.Entities.TicketStatus", "FromStatus")
                         .WithMany()
                         .HasForeignKey("FromStatusId")
+                        .OnDelete(DeleteBehavior.NoAction)
                         .HasConstraintName("fk_ticket_status_transitions_ticket_statuses_from_status_id");
 
                     b.HasOne("Trackly.Core.Entities.TicketStatus", "ToStatus")
                         .WithMany()
                         .HasForeignKey("ToStatusId")
+                        .OnDelete(DeleteBehavior.NoAction)
                         .IsRequired()
                         .HasConstraintName("fk_ticket_status_transitions_ticket_statuses_to_status_id");
 
@@ -3204,6 +4038,72 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("FromStatus");
 
                     b.Navigation("ToStatus");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketTag", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.Tag", "Tag")
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_tags_tags_tag_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany("TicketTags")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_tags_tickets_ticket_id");
+
+                    b.Navigation("Tag");
+
+                    b.Navigation("Ticket");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketTask", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "Assignee")
+                        .WithMany()
+                        .HasForeignKey("AssigneeId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_ticket_tasks_users_assignee_id");
+
+                    b.HasOne("Trackly.Core.Entities.User", "CompletedBy")
+                        .WithMany()
+                        .HasForeignKey("CompletedById")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_ticket_tasks_users_completed_by_id");
+
+                    b.HasOne("Trackly.Core.Entities.User", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_ticket_tasks_users_created_by_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany("Tasks")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_tasks_tickets_ticket_id");
+
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_tasks_workspaces_workspace_id");
+
+                    b.Navigation("Assignee");
+
+                    b.Navigation("CompletedBy");
+
+                    b.Navigation("CreatedBy");
+
+                    b.Navigation("Ticket");
 
                     b.Navigation("Workspace");
                 });
@@ -3236,68 +4136,6 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("User");
 
                     b.Navigation("Workspace");
-                });
-
-            modelBuilder.Entity("Trackly.Core.Entities.TicketAssignment", b =>
-                {
-                    b.HasOne("Trackly.Core.Entities.User", "AssignedByUser")
-                        .WithMany()
-                        .HasForeignKey("AssignedBy")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .HasConstraintName("fk_ticket_assignments_users_assigned_by");
-
-                    b.HasOne("Trackly.Core.Entities.User", "AssignedToUser")
-                        .WithMany()
-                        .HasForeignKey("AssignedTo")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired()
-                        .HasConstraintName("fk_ticket_assignments_users_assigned_to");
-
-                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
-                        .WithMany()
-                        .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_ticket_assignments_tickets_ticket_id");
-
-                    b.Navigation("AssignedByUser");
-
-                    b.Navigation("AssignedToUser");
-
-                    b.Navigation("Ticket");
-                });
-
-            modelBuilder.Entity("Trackly.Core.Entities.TicketOption", b =>
-                {
-                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
-                        .WithMany()
-                        .HasForeignKey("WorkspaceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_ticket_options_workspaces_workspace_id");
-
-                    b.Navigation("Workspace");
-                });
-
-            modelBuilder.Entity("Trackly.Core.Entities.TicketTag", b =>
-                {
-                    b.HasOne("Trackly.Core.Entities.Tag", "Tag")
-                        .WithMany()
-                        .HasForeignKey("TagId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_ticket_tags_tags_tag_id");
-
-                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
-                        .WithMany("TicketTags")
-                        .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_ticket_tags_tickets_ticket_id");
-
-                    b.Navigation("Tag");
-
-                    b.Navigation("Ticket");
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketWatcher", b =>
@@ -3425,9 +4263,26 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("Deliveries");
                 });
 
+            modelBuilder.Entity("Trackly.Core.Entities.BusinessHours", b =>
+                {
+                    b.Navigation("Days");
+
+                    b.Navigation("Holidays");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.Category", b =>
+                {
+                    b.Navigation("Children");
+                });
+
             modelBuilder.Entity("Trackly.Core.Entities.ChatSession", b =>
                 {
                     b.Navigation("Messages");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.Comment", b =>
+                {
+                    b.Navigation("Mentions");
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.SsoConnection", b =>
@@ -3437,19 +4292,26 @@ namespace Trackly.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("Trackly.Core.Entities.Team", b =>
                 {
-                    b.Navigation("Members");
-                });
+                    b.Navigation("Children");
 
-            modelBuilder.Entity("Trackly.Core.Entities.Comment", b =>
-                {
-                    b.Navigation("Mentions");
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.Ticket", b =>
                 {
+                    b.Navigation("Assets");
+
                     b.Navigation("Comments");
 
+                    b.Navigation("FieldValues");
+
+                    b.Navigation("ImpactedServices");
+
                     b.Navigation("Links");
+
+                    b.Navigation("Responders");
+
+                    b.Navigation("Tasks");
 
                     b.Navigation("TicketTags");
 

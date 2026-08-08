@@ -86,6 +86,14 @@ export function formatDateTime(iso: string): string {
   });
 }
 
+/**
+ * Date without the clock — for a due date, where the time of day is noise the
+ * person who set it never chose.
+ */
+export function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 /** `4h 12m` — for durations shown as a KPI value, where units carry the meaning. */
 export function formatDuration(minutes: number): string {
   if (minutes < 60) return `${Math.round(minutes)}m`;

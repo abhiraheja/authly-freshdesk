@@ -12,7 +12,8 @@ namespace Trackly.Modules.Tickets;
 // SaveChanges persists everything atomically. Automation's own mutations are not
 // re-evaluated, so rules can't loop.
 public class AutomationService(
-    TracklyDbContext db, ILogger<AutomationService> logger, TicketStatusService statuses)
+    TracklyDbContext db, ILogger<AutomationService> logger, TicketStatusService statuses,
+    ActivityLog activity)
 {
     private static readonly JsonSerializerOptions Json = new() { PropertyNameCaseInsensitive = true };
 
@@ -80,6 +81,12 @@ public class AutomationService(
         switch (action.Type)
         {
             case AutomationActionType.SetPriority when TicketPriority.All.Contains(value):
+                // Logged with a null actor, which the feed renders as "Trackly".
+                // A rule firing is a real change to the ticket, and an agent
+                // wondering why the priority moved on its own deserves an answer
+                // in the same place every other change is recorded.
+                activity.Changed(ticket.WorkspaceId, ticket.Id, null,
+                    TicketActivityType.Priority, ticket.Priority, value);
                 ticket.Priority = value;
                 break;
 
@@ -97,6 +104,12 @@ public class AutomationService(
                 var target = await statuses.ResolveAsync(ticket.WorkspaceId, value, ct);
                 if (target is { IsActive: true })
                 {
+                    // The status it is leaving, by name — resolved rather than
+                    // printed raw, so the entry reads the way the picker does.
+                    var previous = await statuses.ResolveAsync(ticket.WorkspaceId, ticket.Status, ct);
+                    activity.Changed(ticket.WorkspaceId, ticket.Id, null,
+                        TicketActivityType.Status, previous?.Name ?? ticket.Status, target.Name);
+
                     ticket.Status = target.Value;
                     ticket.StatusCategory = target.Category;
                 }
@@ -104,17 +117,40 @@ public class AutomationService(
             }
 
             case AutomationActionType.AssignTeam when Guid.TryParse(value, out var teamId):
-                if (await db.Teams.AnyAsync(t => t.Id == teamId && t.WorkspaceId == ticket.WorkspaceId, ct))
+            {
+                // Loaded, not just existence-checked: the entry has to name the
+                // department, and an id in the log tells the reader nothing.
+                var team = await db.Teams.SingleOrDefaultAsync(
+                    t => t.Id == teamId && t.WorkspaceId == ticket.WorkspaceId, ct);
+                if (team is not null)
                 {
+                    var wasTeam = ticket.TeamId is { } had
+                        ? (await db.Teams.SingleOrDefaultAsync(t => t.Id == had, ct))?.Name
+                        : null;
+                    activity.Changed(ticket.WorkspaceId, ticket.Id, null,
+                        TicketActivityType.Team, wasTeam, team.Name);
+
                     ticket.TeamId = teamId;
                     var assignee = await RoundRobinAsync(ticket.WorkspaceId, teamId, ct);
                     if (assignee is not null)
                     {
+                        var previousAssignee = ticket.AssigneeId;
                         ticket.AssigneeId = assignee;
                         db.TicketAssignments.Add(new TicketAssignment { TicketId = ticket.Id, AssignedTo = assignee.Value });
+
+                        if (assignee != previousAssignee)
+                        {
+                            var to = await db.Users.SingleOrDefaultAsync(u => u.Id == assignee.Value, ct);
+                            var from = previousAssignee is { } old
+                                ? await db.Users.SingleOrDefaultAsync(u => u.Id == old, ct)
+                                : null;
+                            activity.Changed(ticket.WorkspaceId, ticket.Id, null,
+                                TicketActivityType.Assignee, Display(from), Display(to));
+                        }
                     }
                 }
                 break;
+            }
 
             case AutomationActionType.AddTag when !string.IsNullOrWhiteSpace(value):
                 await AddTagAsync(ticket, value.Trim(), ct);
@@ -129,9 +165,14 @@ public class AutomationService(
                     IsInternal = true,         // never shown to the customer
                     Source = CommentSource.Web,
                 });
+                activity.Happened(ticket.WorkspaceId, ticket.Id, null, TicketActivityType.Noted);
                 break;
         }
     }
+
+    /// <summary>How a person reads in the activity log. Name, else email.</summary>
+    private static string? Display(User? user) =>
+        user is null ? null : (string.IsNullOrWhiteSpace(user.Name) ? user.Email : user.Name.Trim());
 
     private async Task AddTagAsync(Ticket ticket, string name, CancellationToken ct)
     {

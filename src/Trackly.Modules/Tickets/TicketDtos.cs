@@ -17,10 +17,13 @@ public record UserSummaryDto(Guid Id, string? Name, string? Email, string Role, 
                 withAvatar ? UserAvatar.UrlFor(user) : null);
 }
 
-public record CategoryDto(Guid Id, string Name, string? Color)
+/// <param name="ParentId">Null for a top-level category; set makes this a sub-category.</param>
+public record CategoryDto(Guid Id, string Name, string? Color, Guid? ParentId = null)
 {
     public static CategoryDto? From(Category? category) =>
-        category is null ? null : new CategoryDto(category.Id, category.Name, category.Color);
+        category is null
+            ? null
+            : new CategoryDto(category.Id, category.Name, category.Color, category.ParentId);
 }
 
 public record TagDto(Guid Id, string Name, string? Color);
@@ -70,6 +73,7 @@ public record TicketDetailDto(
     string Priority,
     string Channel,
     CategoryDto? Category,
+    CategoryDto? SubCategory,
     UserSummaryDto? Requester,
     string? GuestName,
     string? GuestEmail,
@@ -77,8 +81,11 @@ public record TicketDetailDto(
     IReadOnlyList<WatcherDto> Watchers,
     IReadOnlyList<TagDto> Tags,
     Guid? ProblemId,
+    string? ProblemTitle,
     Guid? TeamId,
     string? TeamName,
+    Guid? SubTeamId,
+    string? SubTeamName,
     DateTime? FirstResponseDueAt,
     DateTime? ResolveDueAt,
     DateTime? FirstResponseAt,
@@ -86,6 +93,9 @@ public record TicketDetailDto(
     // this is engineering detail, on the same footing as a private note.
     string? ResolutionNote,
     string? ResolutionLink,
+    // The customer-facing half. Safe on every surface — it exists to be read by
+    // the person who raised the ticket.
+    string? ResolutionSummary,
     UserSummaryDto? ResolvedBy,
     DateTime? ResolvedAt,
     DateTime CreatedAt,
@@ -175,6 +185,13 @@ public record UpdateTicketRequest(
     bool Unassign = false,
     Guid? TeamId = null,
     bool ClearTeam = false,
+    // The narrower answers. Each must sit under the one above it, and clearing
+    // the parent clears the child — a sub-category with no parent is a label
+    // with nothing above it.
+    Guid? SubCategoryId = null,
+    bool ClearSubCategory = false,
+    Guid? SubTeamId = null,
+    bool ClearSubTeam = false,
     // Re-points the ticket at a real customer — the usual case is a guest
     // submission or a logged call an agent has now matched to a person.
     Guid? RequesterId = null,
@@ -190,6 +207,12 @@ public record UpdateTicketRequest(
     string? ResolutionNote = null,
     /// <summary>Work item, PR or user story it was fixed under. Optional.</summary>
     string? ResolutionLink = null,
+    /// <summary>
+    /// What the CUSTOMER is told, in plain words. Optional, and the only part of
+    /// the resolution that ever leaves Trackly — the note beside it is
+    /// engineering detail and stays internal (invariant 5).
+    /// </summary>
+    string? ResolutionSummary = null,
     // Logged in the same request as the resolution rather than by a second call,
     // so a ticket can never end up resolved with its time entry lost in between.
     int? TimeSpentMinutes = null);

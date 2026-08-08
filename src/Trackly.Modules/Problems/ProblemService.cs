@@ -9,7 +9,8 @@ namespace Trackly.Modules.Problems;
 // Problems group related tickets under a root cause. Agent/admin-only (enforced
 // by the controller policy); every query is still workspace-scoped here.
 public class ProblemService(
-    TracklyDbContext db, NotificationService notifications, TicketStatusService statuses)
+    TracklyDbContext db, NotificationService notifications, TicketStatusService statuses,
+    ActivityLog activity)
 {
     private IQueryable<Problem> Visible(Actor actor) =>
         db.Problems.Where(p => p.WorkspaceId == actor.WorkspaceId);
@@ -110,8 +111,10 @@ public class ProblemService(
 
     public async Task<bool> LinkTicketAsync(Actor actor, Guid problemId, Guid ticketId, CancellationToken ct)
     {
-        var problemExists = await Visible(actor).AnyAsync(p => p.Id == problemId, ct);
-        if (!problemExists) return false;
+        // Loaded, not existence-checked: the activity entry names the problem,
+        // and an id in the log tells the reader nothing about what it was.
+        var problem = await Visible(actor).SingleOrDefaultAsync(p => p.Id == problemId, ct);
+        if (problem is null) return false;
 
         // Ticket must belong to the same workspace — never link across tenants.
         var ticket = await db.Tickets
@@ -120,6 +123,8 @@ public class ProblemService(
 
         ticket.ProblemId = problemId;
         ticket.UpdatedAt = DateTime.UtcNow;
+        activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
+            TicketActivityType.ProblemLinked, problem.Title);
         await db.SaveChangesAsync(ct);
         return true;
     }
@@ -127,10 +132,16 @@ public class ProblemService(
     public async Task<bool> UnlinkTicketAsync(Actor actor, Guid ticketId, CancellationToken ct)
     {
         var ticket = await db.Tickets
+            .Include(t => t.Problem)
             .SingleOrDefaultAsync(t => t.Id == ticketId && t.WorkspaceId == actor.WorkspaceId, ct);
         if (ticket is null) return false;
+
+        // Read before it is cleared: afterwards there is nothing left to name.
+        var was = ticket.Problem?.Title;
         ticket.ProblemId = null;
         ticket.UpdatedAt = DateTime.UtcNow;
+        activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
+            TicketActivityType.ProblemUnlinked, was);
         await db.SaveChangesAsync(ct);
         return true;
     }
@@ -155,12 +166,16 @@ public class ProblemService(
             var resolved = await statuses.DefaultForCategoryAsync(
                 actor.WorkspaceId, TicketStatusCategory.Resolved, ct);
 
-            var ticketIds = await db.Tickets
+            // The status each ticket is leaving, kept alongside its id: the bulk
+            // update below overwrites it, and the log has to say what it was.
+            var affected = await db.Tickets
                 .Where(t => t.ProblemId == id
                             && t.StatusCategory != TicketStatusCategory.Resolved
                             && t.StatusCategory != TicketStatusCategory.Closed)
-                .Select(t => t.Id)
+                .Select(t => new { t.Id, t.Status })
                 .ToListAsync(ct);
+            var ticketIds = affected.Select(t => t.Id).ToList();
+
             await db.Tickets
                 .Where(t => ticketIds.Contains(t.Id))
                 .ExecuteUpdateAsync(s => s
@@ -168,6 +183,28 @@ public class ProblemService(
                     .SetProperty(t => t.StatusCategory, resolved.Category)
                     .SetProperty(t => t.ResolvedAt, DateTime.UtcNow)
                     .SetProperty(t => t.UpdatedAt, DateTime.UtcNow), ct);
+
+            // Two entries per ticket, matching what a hand-made resolve writes:
+            // the status move, and the "resolved" event a manager scans for.
+            // Without these, a queue of tickets would go quiet with nothing on
+            // any of them saying why — which is the exact question the feed
+            // exists to answer.
+            //
+            // Names resolved once outside the loop; a workspace can close a
+            // problem covering hundreds of tickets.
+            var names = await db.TicketStatuses
+                .Where(s => s.WorkspaceId == actor.WorkspaceId)
+                .ToDictionaryAsync(s => s.Value, s => s.Name, ct);
+
+            foreach (var t in affected)
+            {
+                activity.Changed(actor.WorkspaceId, t.Id, actor.UserId,
+                    TicketActivityType.Status,
+                    names.GetValueOrDefault(t.Status, t.Status), resolved.Name);
+                activity.Happened(actor.WorkspaceId, t.Id, actor.UserId,
+                    TicketActivityType.Resolved, problem.Title);
+            }
+
             await db.SaveChangesAsync(ct);
 
             foreach (var ticketId in ticketIds)

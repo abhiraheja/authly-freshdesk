@@ -5,7 +5,7 @@ using Trackly.Infrastructure.Data;
 
 namespace Trackly.Modules.Tickets;
 
-public class AttachmentService(TracklyDbContext db, IWorkspaceFileStorage storage)
+public class AttachmentService(TracklyDbContext db, IWorkspaceFileStorage storage, ActivityLog activity)
 {
     public const long MaxSizeBytes = 10 * 1024 * 1024; // 10 MB, enforced at API level too
 
@@ -52,6 +52,14 @@ public class AttachmentService(TracklyDbContext db, IWorkspaceFileStorage storag
         };
         db.Attachments.Add(attachment);
         ticket.UpdatedAt = DateTime.UtcNow;
+
+        // Only files hung off the ticket itself. A file attached to a reply
+        // arrives with that reply, which already has its own entry — logging
+        // both would put two lines in the feed for one thing the agent did.
+        if (commentId is null)
+            activity.Happened(actor.WorkspaceId, ticketId, actor.UserId,
+                TicketActivityType.AttachmentAdded, attachment.FileName);
+
         await db.SaveChangesAsync(ct);
 
         return new AttachmentDto(

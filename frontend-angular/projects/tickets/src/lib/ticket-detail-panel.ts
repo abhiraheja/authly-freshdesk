@@ -48,6 +48,7 @@ import {
 import { CustomerForm } from './customer-form';
 import { TicketLinksCard } from './ticket-links-card';
 import { TicketTimeCard } from './ticket-time-card';
+import { TicketCustomFields } from './ticket-custom-fields';
 
 /** One card in the rail, as the workspace has arranged it. */
 interface RailPanel {
@@ -114,6 +115,7 @@ const PANEL_BY_KEY = new Map(PANEL_DEFAULTS.map((panel) => [panel.key, panel]));
     TagInput,
     TicketLinksCard,
     TicketTimeCard,
+    TicketCustomFields,
   ],
   template: `
     <div class="space-y-4">
@@ -195,6 +197,20 @@ const PANEL_BY_KEY = new Map(PANEL_DEFAULTS.map((panel) => [panel.key, panel]));
           (collapsedChange)="setCollapsed('resolution', $event)"
         >
           <p class="whitespace-pre-wrap text-body">{{ resolution }}</p>
+
+          <!-- The customer's half, marked as such. Two paragraphs with no label
+               between them would leave an agent unsure which one the customer
+               has already read — and that is the whole question this card is
+               asked. -->
+          @if (ticket().resolutionSummary; as summary) {
+            <div class="mt-3 rounded-lg border border-border bg-muted p-3">
+              <p class="mb-1 flex items-center gap-1.5 text-meta font-bold text-muted-foreground">
+                <tk-icon name="send" [size]="12" />
+                {{ 'tickets.resolution.customerSaw' | transloco }}
+              </p>
+              <p class="whitespace-pre-wrap text-body">{{ summary }}</p>
+            </div>
+          }
 
           @if (ticket().resolutionLink; as link) {
             <a
@@ -493,11 +509,32 @@ const PANEL_BY_KEY = new Map(PANEL_DEFAULTS.map((panel) => [panel.key, panel]));
               (valueChange)="setTeam($event)"
             >
               <tk-option value="" [label]="'tickets.new.noDepartment' | transloco" />
-              @for (team of teamList(); track team.id) {
+              @for (team of departments(); track team.id) {
                 <tk-option [value]="team.id" [label]="team.name" />
               }
             </tk-select>
           </div>
+
+          <!-- Hidden rather than disabled when the department above has no
+               sub-departments: an empty dropdown invites clicking and answers
+               nothing. -->
+          @if (subTeams().length) {
+            <div>
+              <label tkLabel for="detail-sub-team">{{ 'tickets.new.subDepartment' | transloco }}</label>
+              <tk-select
+                inset
+                size="sm"
+                inputId="detail-sub-team"
+                [value]="ticket().subTeamId ?? ''"
+                (valueChange)="setSubTeam($event)"
+              >
+                <tk-option value="" [label]="'common.none' | transloco" />
+                @for (team of subTeams(); track team.id) {
+                  <tk-option [value]="team.id" [label]="team.name" />
+                }
+              </tk-select>
+            </div>
+          }
 
           <div>
             <label tkLabel for="detail-category">{{ 'tickets.new.category' | transloco }}</label>
@@ -509,11 +546,29 @@ const PANEL_BY_KEY = new Map(PANEL_DEFAULTS.map((panel) => [panel.key, panel]));
               (valueChange)="setCategory($event)"
             >
               <tk-option value="" [label]="'tickets.new.noCategory' | transloco" />
-              @for (category of categoryList(); track category.id) {
+              @for (category of topCategories(); track category.id) {
                 <tk-option [value]="category.id" [label]="category.name" />
               }
             </tk-select>
           </div>
+
+          @if (subCategories().length) {
+            <div>
+              <label tkLabel for="detail-sub-category">{{ 'tickets.new.subCategory' | transloco }}</label>
+              <tk-select
+                inset
+                size="sm"
+                inputId="detail-sub-category"
+                [value]="ticket().subCategory?.id ?? ''"
+                (valueChange)="setSubCategory($event)"
+              >
+                <tk-option value="" [label]="'common.none' | transloco" />
+                @for (category of subCategories(); track category.id) {
+                  <tk-option [value]="category.id" [label]="category.name" />
+                }
+              </tk-select>
+            </div>
+          }
 
           <div>
             <label tkLabel for="detail-tags">{{ 'tickets.new.tags' | transloco }}</label>
@@ -527,6 +582,18 @@ const PANEL_BY_KEY = new Map(PANEL_DEFAULTS.map((panel) => [panel.key, panel]));
               [removeLabel]="'tickets.new.removeTag' | transloco"
               [createLabel]="'tickets.new.createTag' | transloco"
             />
+          </div>
+
+          <!-- The workspace's own properties, below Trackly's.
+               Inside this card rather than as a rail panel of their own: they
+               ARE properties, and a separate panel would need a fixed key in
+               the ticket_panel options, which is the one thing a workspace
+               cannot invent. -->
+          <div class="border-t border-border pt-4">
+            <p class="mb-3 text-meta font-bold text-muted-foreground">
+              {{ 'tickets.fields.title' | transloco }}
+            </p>
+            <tk-ticket-custom-fields [ticketId]="ticket().id" />
           </div>
         </div>
       </tk-card>
@@ -1024,4 +1091,32 @@ export class TicketDetailPanel {
   protected setCategory(id: string): void {
     this.change.emit(id ? { categoryId: id } : { clearCategory: true });
   }
+
+  protected setSubTeam(id: string): void {
+    this.change.emit(id ? { subTeamId: id } : { clearSubTeam: true });
+  }
+
+  protected setSubCategory(id: string): void {
+    this.change.emit(id ? { subCategoryId: id } : { clearSubCategory: true });
+  }
+
+  /** Top-level only — the narrower list is drawn from the chosen one's children. */
+  protected readonly departments = computed(() => this.teamList().filter((t) => !t.parentId));
+  protected readonly topCategories = computed(() => this.categoryList().filter((c) => !c.parentId));
+
+  /**
+   * The narrower lists.
+   *
+   * Empty until a parent is chosen, and the select is hidden rather than
+   * disabled when it is: an empty dropdown invites clicking and answers nothing.
+   */
+  protected readonly subTeams = computed(() => {
+    const parent = this.ticket().teamId;
+    return parent ? this.teamList().filter((t) => t.parentId === parent) : [];
+  });
+
+  protected readonly subCategories = computed(() => {
+    const parent = this.ticket().category?.id;
+    return parent ? this.categoryList().filter((c) => c.parentId === parent) : [];
+  });
 }

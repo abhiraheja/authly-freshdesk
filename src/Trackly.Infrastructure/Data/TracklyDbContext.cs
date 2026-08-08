@@ -20,6 +20,18 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<TicketTimeEntry> TicketTimeEntries => Set<TicketTimeEntry>();
     public DbSet<TicketLink> TicketLinks => Set<TicketLink>();
     public DbSet<TicketActivity> TicketActivities => Set<TicketActivity>();
+    public DbSet<TicketRelation> TicketRelations => Set<TicketRelation>();
+    public DbSet<TicketTask> TicketTasks => Set<TicketTask>();
+    public DbSet<TicketResponder> TicketResponders => Set<TicketResponder>();
+    public DbSet<Asset> Assets => Set<Asset>();
+    public DbSet<TicketAsset> TicketAssets => Set<TicketAsset>();
+    public DbSet<BusinessService> BusinessServices => Set<BusinessService>();
+    public DbSet<TicketImpactedService> TicketImpactedServices => Set<TicketImpactedService>();
+    public DbSet<TicketField> TicketFields => Set<TicketField>();
+    public DbSet<TicketFieldValue> TicketFieldValues => Set<TicketFieldValue>();
+    public DbSet<BusinessHours> BusinessHours => Set<BusinessHours>();
+    public DbSet<BusinessHourDay> BusinessHourDays => Set<BusinessHourDay>();
+    public DbSet<BusinessHoliday> BusinessHolidays => Set<BusinessHoliday>();
     public DbSet<TicketStatus> TicketStatuses => Set<TicketStatus>();
     public DbSet<TicketStatusTransition> TicketStatusTransitions => Set<TicketStatusTransition>();
     public DbSet<Notification> Notifications => Set<Notification>();
@@ -120,8 +132,15 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
         modelBuilder.Entity<Category>(e =>
         {
             e.ToTable("categories");
-            e.HasIndex(c => new { c.WorkspaceId, c.Name }).IsUnique();
+            // Unique on (workspace, parent, name): "Access" may exist once at the
+            // top level and again under two different parents, which is normal in
+            // a taxonomy and would be blocked by a workspace-wide unique name.
+            e.HasIndex(c => new { c.WorkspaceId, c.ParentId, c.Name }).IsUnique();
             e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Cascade: deleting a category takes its sub-categories, because a
+            // sub-category with no parent is a label with nothing above it.
+            e.HasOne(c => c.Parent).WithMany(c => c.Children).HasForeignKey(c => c.ParentId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -174,6 +193,15 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
                 .OnDelete(DeleteBehavior.SetNull);
             e.HasOne(t => t.Team).WithMany().HasForeignKey(t => t.TeamId)
                 .OnDelete(DeleteBehavior.SetNull);
+            // NoAction on the two narrower columns. SetNull would give PostgreSQL
+            // a second path from categories/teams into tickets and it refuses the
+            // schema outright; the services clear these explicitly when the
+            // parent goes, which is the one place that knows both are nulled
+            // together anyway.
+            e.HasOne(t => t.SubCategory).WithMany().HasForeignKey(t => t.SubCategoryId)
+                .OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(t => t.SubTeam).WithMany().HasForeignKey(t => t.SubTeamId)
+                .OnDelete(DeleteBehavior.NoAction);
             // SetNull, not Cascade: deactivating and removing an agent must not
             // take the resolution of every ticket they ever closed with them.
             e.HasOne(t => t.ResolvedBy).WithMany().HasForeignKey(t => t.ResolvedById)
@@ -243,6 +271,165 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             // outlives the agent's account.
             e.HasOne(x => x.CreatedBy).WithMany().HasForeignKey(x => x.CreatedById)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<BusinessHours>(e =>
+        {
+            e.ToTable("business_hours");
+            // One schedule per workspace, so the workspace id IS the key — no
+            // second identifier to keep unique and nothing that can produce two.
+            e.HasKey(h => h.WorkspaceId);
+            e.Property(h => h.TimeZone).HasDefaultValue("UTC");
+            e.HasOne(h => h.Workspace).WithMany().HasForeignKey(h => h.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BusinessHourDay>(e =>
+        {
+            e.ToTable("business_hour_days");
+            // Loaded as a set for one workspace, never queried by day alone.
+            e.HasIndex(d => d.WorkspaceId);
+            e.HasOne(d => d.BusinessHours).WithMany(h => h.Days).HasForeignKey(d => d.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BusinessHoliday>(e =>
+        {
+            e.ToTable("business_holidays");
+            // Unique: the same date twice is a duplicate the calendar would
+            // silently ignore, and the admin screen would show twice.
+            e.HasIndex(h => new { h.WorkspaceId, h.Date }).IsUnique();
+            e.HasOne(h => h.BusinessHours).WithMany(x => x.Holidays).HasForeignKey(h => h.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TicketRelation>(e =>
+        {
+            e.ToTable("ticket_relations");
+            // One row per pair per direction. The same two tickets can be linked
+            // twice with different meanings ("relates" and "blocks") but not
+            // twice with the same one, which is only ever a double-click.
+            e.HasIndex(r => new { r.TicketId, r.RelatedTicketId, r.Kind }).IsUnique();
+            // Read from the other end too — "what points AT me" is half the card.
+            e.HasIndex(r => r.RelatedTicketId);
+            e.HasOne(r => r.Workspace).WithMany().HasForeignKey(r => r.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.Ticket).WithMany().HasForeignKey(r => r.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // NoAction: two cascade paths from tickets into one table is a schema
+            // PostgreSQL will not create. Deleting a ticket clears rows pointing
+            // at it explicitly — see TicketRelationService.
+            e.HasOne(r => r.RelatedTicket).WithMany().HasForeignKey(r => r.RelatedTicketId)
+                .OnDelete(DeleteBehavior.NoAction);
+            e.HasOne(r => r.CreatedBy).WithMany().HasForeignKey(r => r.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TicketTask>(e =>
+        {
+            e.ToTable("ticket_tasks");
+            e.HasIndex(t => new { t.TicketId, t.SortOrder });
+            // "My open tasks" across the workspace — the only query that does not
+            // start from a ticket.
+            e.HasIndex(t => new { t.AssigneeId, t.CompletedAt });
+            e.HasOne(t => t.Workspace).WithMany().HasForeignKey(t => t.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(t => t.Ticket).WithMany(x => x.Tasks).HasForeignKey(t => t.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // SetNull on all three people: a task is a record of work, and it
+            // outlives whoever was assigned it or ticked it off.
+            e.HasOne(t => t.Assignee).WithMany().HasForeignKey(t => t.AssigneeId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.CompletedBy).WithMany().HasForeignKey(t => t.CompletedById)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(t => t.CreatedBy).WithMany().HasForeignKey(t => t.CreatedById)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TicketResponder>(e =>
+        {
+            e.ToTable("ticket_responders");
+            e.HasKey(r => new { r.TicketId, r.AgentId });
+            // "Tickets I'm responding on" — the agent's own working set.
+            e.HasIndex(r => r.AgentId);
+            e.HasOne(r => r.Ticket).WithMany(t => t.Responders).HasForeignKey(r => r.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.Agent).WithMany().HasForeignKey(r => r.AgentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Asset>(e =>
+        {
+            e.ToTable("assets");
+            e.HasIndex(a => new { a.WorkspaceId, a.Name });
+            // Sparse unique: two assets may both have no tag, but a tag that IS
+            // set has to identify exactly one thing or it is not an asset tag.
+            e.HasIndex(a => new { a.WorkspaceId, a.Tag })
+                .IsUnique()
+                .HasFilter("tag IS NOT NULL");
+            e.HasOne(a => a.Workspace).WithMany().HasForeignKey(a => a.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(a => a.AssignedTo).WithMany().HasForeignKey(a => a.AssignedToId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TicketAsset>(e =>
+        {
+            e.ToTable("ticket_assets");
+            e.HasKey(x => new { x.TicketId, x.AssetId });
+            // "Everything raised about this machine" — the reason to keep a
+            // register at all.
+            e.HasIndex(x => x.AssetId);
+            e.HasOne(x => x.Ticket).WithMany(t => t.Assets).HasForeignKey(x => x.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<BusinessService>(e =>
+        {
+            e.ToTable("business_services");
+            e.HasIndex(s => new { s.WorkspaceId, s.Name }).IsUnique();
+            e.HasOne(s => s.Workspace).WithMany().HasForeignKey(s => s.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(s => s.OwnerTeam).WithMany().HasForeignKey(s => s.OwnerTeamId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TicketImpactedService>(e =>
+        {
+            e.ToTable("ticket_impacted_services");
+            e.HasKey(x => new { x.TicketId, x.ServiceId });
+            // "What is currently hitting Payments" — the incident view.
+            e.HasIndex(x => x.ServiceId);
+            e.HasOne(x => x.Ticket).WithMany(t => t.ImpactedServices).HasForeignKey(x => x.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Service).WithMany().HasForeignKey(x => x.ServiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TicketField>(e =>
+        {
+            e.ToTable("ticket_fields");
+            // The key is what every stored answer points at, so two fields
+            // sharing one would make an answer ambiguous.
+            e.HasIndex(f => new { f.WorkspaceId, f.Key }).IsUnique();
+            e.HasOne(f => f.Workspace).WithMany().HasForeignKey(f => f.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<TicketFieldValue>(e =>
+        {
+            e.ToTable("ticket_field_values");
+            e.HasKey(v => new { v.TicketId, v.FieldId });
+            // Filtering the list by a custom field's answer.
+            e.HasIndex(v => new { v.FieldId, v.Value });
+            e.HasOne(v => v.Ticket).WithMany(t => t.FieldValues).HasForeignKey(v => v.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Cascade: deleting a field deletes its answers. Retiring is the
+            // non-destructive option and is what the admin screen offers.
+            e.HasOne(v => v.Field).WithMany().HasForeignKey(v => v.FieldId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<TicketActivity>(e =>
@@ -575,8 +762,12 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
         modelBuilder.Entity<Team>(e =>
         {
             e.ToTable("teams");
-            e.HasIndex(t => new { t.WorkspaceId, t.Name }).IsUnique();
+            // Same reasoning as categories: a sub-department may share a name
+            // with one under a different department.
+            e.HasIndex(t => new { t.WorkspaceId, t.ParentId, t.Name }).IsUnique();
             e.HasOne(t => t.Workspace).WithMany().HasForeignKey(t => t.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(t => t.Parent).WithMany(t => t.Children).HasForeignKey(t => t.ParentId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

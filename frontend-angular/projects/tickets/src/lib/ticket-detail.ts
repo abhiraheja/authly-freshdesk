@@ -54,6 +54,20 @@ import {
 } from '@trackly/ui';
 import { TicketDetailPanel } from './ticket-detail-panel';
 import { ResolveDialog, type ResolvePayload } from './resolve-dialog';
+import { TicketActivityFeed } from './ticket-activity';
+import { TicketRelations } from './ticket-relations';
+import { TicketTasks } from './ticket-tasks';
+import { TicketAssets } from './ticket-assets';
+
+/**
+ * The tabs above the thread, in the order they are drawn.
+ *
+ * One list, used to type the signal, to narrow the string the rail emits, and to
+ * build the rail itself — three places that would otherwise fall out of step the
+ * first time somebody adds a tab and forgets one of them.
+ */
+const TAB_IDS = ['conversation', 'notes', 'attachments', 'activity', 'related', 'tasks', 'assets'] as const;
+type ThreadTab = (typeof TAB_IDS)[number];
 
 /** Channel → icon, matching the ticket list so the same source reads the same. */
 const CHANNEL_ICON: Record<string, IconName> = {
@@ -106,6 +120,10 @@ const CHANNEL_ICON: Record<string, IconName> = {
     Spinner,
     Tabs,
     ResolveDialog,
+    TicketActivityFeed,
+    TicketRelations,
+    TicketTasks,
+    TicketAssets,
     TicketDetailPanel,
   ],
   template: `
@@ -194,6 +212,29 @@ const CHANNEL_ICON: Record<string, IconName> = {
                       {{ 'tickets.detail.noAttachments' | transloco }}
                     </p>
                   }
+                }
+
+                <!-- Each panel lives inside the @switch, so it is created when
+                     the tab is opened and its fetches never happen for the
+                     agents who only ever read the conversation. -->
+                @case ('activity') {
+                  <tk-ticket-activity [ticketId]="data.id" [version]="activityVersion()" />
+                }
+
+                @case ('related') {
+                  <tk-ticket-relations
+                    [ticketId]="data.id"
+                    [linkedProblemId]="data.problemId"
+                    (problemChanged)="reloadTicket()"
+                  />
+                }
+
+                @case ('tasks') {
+                  <tk-ticket-tasks [ticketId]="data.id" [agents]="agentList()" />
+                }
+
+                @case ('assets') {
+                  <tk-ticket-assets [ticketId]="data.id" />
                 }
 
                 @default {
@@ -467,7 +508,7 @@ export class TicketDetail {
   /** Re-resolve the TS-side tab labels when the language changes. */
   private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
 
-  protected readonly threadTab = signal<'conversation' | 'notes' | 'attachments'>('conversation');
+  protected readonly threadTab = signal<'conversation' | 'notes' | 'attachments' | 'activity' | 'related' | 'tasks' | 'assets'>('conversation');
   protected readonly mode = signal<'public' | 'internal' | 'private'>('public');
   protected readonly body = signal('');
   protected readonly files = signal<File[]>([]);
@@ -544,6 +585,14 @@ export class TicketDetail {
    * Resolving does both: it logs the agent's minutes and files their link.
    */
   protected readonly railVersion = signal(0);
+
+  /**
+   * Bumped after every write, so the Activity tab is current whenever it is
+   * opened. Separate from railVersion: that one refetches three cards and is
+   * only worth it when something they show actually moved, while this is one
+   * request that has to reflect literally any change.
+   */
+  protected readonly activityVersion = signal(0);
   protected readonly priorityTone = computed(() => toneFor(PRIORITY_TONE, this.ticket.value()?.priority));
   protected readonly channelIcon = computed(
     () => CHANNEL_ICON[this.ticket.value()?.channel?.toLowerCase() ?? ''] ?? 'globe',
@@ -573,6 +622,12 @@ export class TicketDetail {
         label: this.transloco.translate('tickets.detail.tabAttachments'),
         count: this.allAttachments().length || undefined,
       },
+      // No count: the activity feed only grows, so the number would be a
+      // permanent badge that never means "there is something new for you".
+      { id: 'activity', label: this.transloco.translate('tickets.detail.tabActivity'), icon: 'clock' },
+      { id: 'related', label: this.transloco.translate('tickets.detail.tabRelated'), icon: 'link' },
+      { id: 'tasks', label: this.transloco.translate('tickets.detail.tabTasks'), icon: 'clipboard-list' },
+      { id: 'assets', label: this.transloco.translate('tickets.detail.tabAssets'), icon: 'rocket' },
     ];
   });
 
@@ -683,6 +738,13 @@ export class TicketDetail {
 
   private readonly agents = resource({ loader: () => this.api.agents() });
 
+  /**
+   * The roster, for the panels that need to pick somebody. Passed down rather
+   * than fetched again in each one: the same list would otherwise be requested
+   * three times on one screen.
+   */
+  protected readonly agentList = computed(() => valueOr(this.agents, []));
+
   /** The editor's own emptiness rule — see the note in `send()`. */
   protected readonly composerEmpty = computed(() => isEmptyHtml(this.body()));
 
@@ -705,9 +767,22 @@ export class TicketDetail {
     );
   });
 
+  /**
+   * Pulls the ticket forward after a panel wrote something the header shows.
+   *
+   * The panels own their own data; this is for the fields that live ON the
+   * ticket — the problem association is the one so far.
+   */
+  protected reloadTicket(): void {
+    this.ticket.reload();
+    this.activityVersion.update((v) => v + 1);
+  }
+
   /** Tabs emit a plain string; narrow it here rather than widening the signal. */
   protected setThreadTab(tab: string): void {
-    if (tab === 'conversation' || tab === 'notes' || tab === 'attachments') this.threadTab.set(tab);
+    // The cast is on the ARRAY, not the value: `readonly ThreadTab[].includes`
+    // only accepts a ThreadTab, which is the very thing this is checking.
+    if ((TAB_IDS as readonly string[]).includes(tab)) this.threadTab.set(tab as ThreadTab);
   }
 
   protected fromTeam(comment: Comment): boolean {
@@ -788,6 +863,7 @@ export class TicketDetail {
       this.comments.reload();
       this.attachments.reload();
       this.ticket.reload();
+      this.activityVersion.update((v) => v + 1);
     } catch (error) {
       this.sendError.set(errorMessage(error));
     } finally {
@@ -869,10 +945,12 @@ export class TicketDetail {
         status: this.resolveTo(),
         resolutionNote: payload.note,
         resolutionLink: payload.link,
+        resolutionSummary: payload.summary,
         timeSpentMinutes: payload.minutes,
       });
       this.resolveOpen.set(false);
       this.ticket.reload();
+      this.activityVersion.update((v) => v + 1);
       // The resolution is written into the thread as an internal note; the time
       // belongs in the card that lists it, and the link in Related work.
       this.comments.reload();
@@ -915,11 +993,13 @@ export class TicketDetail {
     try {
       await action();
       this.ticket.reload();
+      this.activityVersion.update((v) => v + 1);
     } catch (error) {
       this.toast.error(errorMessage(error));
       // Put the controls back to the server's truth — they are bound to the
       // resource, so a failed write must not leave the UI showing the attempt.
       this.ticket.reload();
+      this.activityVersion.update((v) => v + 1);
     }
   }
 }

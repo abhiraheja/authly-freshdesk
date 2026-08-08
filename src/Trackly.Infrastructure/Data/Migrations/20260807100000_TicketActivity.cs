@@ -62,6 +62,21 @@ namespace Trackly.Infrastructure.Data.Migrations
             migrationBuilder.Sql(
                 "CREATE INDEX IF NOT EXISTS ix_ticket_activities_actor_id "
                 + "ON ticket_activities (actor_id);");
+
+            // ---- Carried fix, not part of the activity feature ----
+            //
+            // CustomStatusesAndWorkflow created (workspace_id, from_status_id)
+            // and assumed it also served the from_status_id foreign key. It does
+            // not: from_status_id is the SECOND column, so the index cannot be
+            // used for a lookup on it alone, and EF's model expects one that can.
+            //
+            // The mismatch was invisible until something called Migrate(), which
+            // compares the model against the snapshot and refuses to run at all
+            // when they disagree. That is a startup crash, not a slow query, so
+            // it is fixed here rather than left for a later migration.
+            migrationBuilder.Sql(
+                "CREATE INDEX IF NOT EXISTS ix_ticket_status_transitions_from_status_id "
+                + "ON ticket_status_transitions (from_status_id);");
         }
 
         /// <inheritdoc />

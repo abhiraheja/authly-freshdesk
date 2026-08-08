@@ -8,6 +8,8 @@ export interface ResolvePayload {
   note: string;
   link?: string;
   minutes?: number;
+  /** What the customer is told. Optional — see the field's hint for why. */
+  summary?: string;
 }
 
 /**
@@ -55,6 +57,25 @@ export interface ResolvePayload {
             rows="4"
             [placeholder]="'tickets.resolveDialog.notePlaceholder' | transloco"
             [(ngModel)]="note"
+          ></textarea>
+        </tk-field>
+
+        <!-- The customer's half. OPTIONAL on purpose: demanding two paragraphs
+             to close a ticket is how you end up with "." in both, and the
+             internal note is the one that has to exist. -->
+        <tk-field
+          [label]="'tickets.resolveDialog.summary' | transloco"
+          for="resolution-summary"
+          [hint]="'tickets.resolveDialog.summaryHint' | transloco"
+        >
+          <textarea
+            tkInput
+            inset
+            id="resolution-summary"
+            name="resolutionSummary"
+            rows="3"
+            [placeholder]="'tickets.resolveDialog.summaryPlaceholder' | transloco"
+            [(ngModel)]="summary"
           ></textarea>
         </tk-field>
 
@@ -142,6 +163,7 @@ export class ResolveDialog {
   readonly confirmed = output<ResolvePayload>();
 
   protected readonly note = signal('');
+  protected readonly summary = signal('');
   protected readonly link = signal('');
   protected readonly hours = signal<number | null>(null);
   protected readonly minutes = signal<number | null>(null);
@@ -182,6 +204,7 @@ export class ResolveDialog {
     effect(() => {
       if (!this.open()) return;
       this.note.set('');
+      this.summary.set('');
       this.link.set('');
       this.hours.set(null);
       this.minutes.set(null);
@@ -195,6 +218,7 @@ export class ResolveDialog {
       status: this.status(),
       note: this.note().trim(),
       link: this.link().trim() || undefined,
+      summary: this.summary().trim() || undefined,
       // Undefined rather than 0 — the API treats 0 as "no entry", and sending it
       // would be asking for a row that says nobody spent any time.
       minutes: total > 0 ? total : undefined,

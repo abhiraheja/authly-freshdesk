@@ -5,6 +5,8 @@ export interface Category {
   id: string;
   name: string;
   color: string | null;
+  /** Null for a top-level category; set makes this a sub-category. Two levels only. */
+  parentId: string | null;
 }
 
 export interface Tag {
@@ -86,6 +88,8 @@ export interface Team {
   id: string;
   name: string;
   members: UserSummary[];
+  /** Null for a department; set makes this a sub-department. Two levels only. */
+  parentId: string | null;
 }
 
 export interface UserSummary {
@@ -178,7 +182,12 @@ export interface TicketDetail extends Omit<TicketSummary, 'commentCount'> {
   description: string;
   watchers: Watcher[];
   problemId: string | null;
+  problemTitle: string | null;
   // teamId / teamName come from TicketSummary — the list needs them too.
+  /** The narrower answers. Each sits under the one above it; clearing the parent clears it. */
+  subCategory: Category | null;
+  subTeamId: string | null;
+  subTeamName: string | null;
 
   /**
    * Why the ticket was resolved or closed, and by whom. Null while it is open,
@@ -190,8 +199,162 @@ export interface TicketDetail extends Omit<TicketSummary, 'commentCount'> {
    */
   resolutionNote: string | null;
   resolutionLink: string | null;
+  /**
+   * What the customer is told, in plain words — the one part of the resolution
+   * that is written to be read by them, and so the one part every surface gets.
+   */
+  resolutionSummary: string | null;
   resolvedBy: UserSummary | null;
   resolvedAt: string | null;
+}
+
+/**
+ * How one ticket relates to another. Already flipped to read from the ticket you
+ * are looking at, so render `kind` as given.
+ */
+export type RelationKind =
+  | 'relates'
+  | 'duplicates'
+  | 'duplicated_by'
+  | 'blocks'
+  | 'blocked_by'
+  | 'caused_by'
+  | 'causes';
+
+/** What the picker offers. `relates` first — it is the one people mean. */
+export const RELATION_KINDS: readonly RelationKind[] = [
+  'relates',
+  'duplicates',
+  'duplicated_by',
+  'blocks',
+  'blocked_by',
+  'caused_by',
+  'causes',
+];
+
+export interface TicketRelation {
+  id: string;
+  kind: string;
+  /** The OTHER ticket — never the one you are looking at. */
+  ticketId: string;
+  subject: string;
+  status: string;
+  statusCategory: string;
+  priority: string;
+  createdBy: UserSummary | null;
+  createdAt: string;
+  /** True when the row was written on the other ticket and read backwards here. */
+  mirrored: boolean;
+}
+
+/** A group of tickets with one underlying cause. Agent-facing. */
+export interface ProblemSummary {
+  id: string;
+  title: string;
+  status: string;
+  assignee: UserSummary | null;
+  ticketCount: number;
+  createdAt: string;
+  updatedAt: string;
+  resolvedAt: string | null;
+}
+
+/** A step on the ticket.  null means open — there is no second flag. */
+export interface TicketTask {
+  id: string;
+  title: string;
+  assignee: UserSummary | null;
+  dueAt: string | null;
+  completedAt: string | null;
+  completedBy: UserSummary | null;
+  sortOrder: number;
+  createdAt: string;
+}
+
+/** Someone working the ticket alongside the assignee. A watcher reads; this one does. */
+export interface TicketResponder {
+  agent: UserSummary;
+  role: string | null;
+  addedAt: string;
+}
+
+/** A thing the workspace owns and supports. */
+export interface Asset {
+  id: string;
+  name: string;
+  kind: string | null;
+  tag: string | null;
+  location: string | null;
+  assignedTo: UserSummary | null;
+  notes: string | null;
+  isActive: boolean;
+  ticketCount: number;
+}
+
+export interface TicketAsset {
+  id: string;
+  name: string;
+  kind: string | null;
+  tag: string | null;
+  location: string | null;
+  assignedTo: UserSummary | null;
+  addedAt: string;
+  /** Other tickets about the same asset — the number that turns a register into a diagnosis. */
+  otherTicketCount: number;
+}
+
+/** Something the business runs that customers depend on. */
+export interface BusinessService {
+  id: string;
+  name: string;
+  description: string | null;
+  ownerTeamId: string | null;
+  ownerTeamName: string | null;
+  isActive: boolean;
+  sortOrder: number;
+  openTicketCount: number;
+}
+
+export type ImpactLevel = 'down' | 'degraded' | 'minor';
+export const IMPACT_LEVELS: readonly ImpactLevel[] = ['down', 'degraded', 'minor'];
+
+export interface TicketImpactedService {
+  id: string;
+  name: string;
+  impact: string | null;
+  level: string;
+  ownerTeamName: string | null;
+  addedAt: string;
+}
+
+/** The four shapes a workspace-defined property can take. */
+export type TicketFieldType = 'text' | 'select' | 'radio' | 'checkbox';
+export const TICKET_FIELD_TYPES: readonly TicketFieldType[] = ['text', 'select', 'radio', 'checkbox'];
+
+/** Whether this type is filled in from a list of choices. */
+export function fieldHasOptions(type: string): boolean {
+  return type === 'select' || type === 'radio';
+}
+
+export interface TicketField {
+  id: string;
+  key: string;
+  label: string;
+  type: string;
+  helpText: string | null;
+  options: string[];
+  /** A select that accepts a new value and remembers it for next time. */
+  allowNewOptions: boolean;
+  isRequired: boolean;
+  sortOrder: number;
+  isActive: boolean;
+}
+
+/** A field plus this ticket's answer, so the form renders from one call. */
+export interface TicketFieldAnswer extends Omit<TicketField, 'sortOrder'> {
+  /** False means retired — shown only because this ticket already answered it. */
+  isActive: boolean;
+  value: string | null;
 }
 
 /** One sitting of work on a ticket. */
@@ -256,6 +419,27 @@ export interface StatusTransition {
   id: string;
   fromStatusId: string | null;
   toStatusId: string;
+}
+
+/**
+ * One entry in a ticket's audit trail.
+ *
+ * The server stores what changed, never a sentence — the wording is built here
+ * so it reads in the language the agent has selected rather than the one
+ * whoever made the change happened to be using.
+ *
+ * `fromLabel` / `toLabel` are the labels **as they read at the time**. A status
+ * renamed since does not rewrite the entry, which is the point of an audit
+ * trail. `actor` null means Trackly did it: automation, an inbound email, the
+ * SLA clock.
+ */
+export interface TicketActivity {
+  id: string;
+  type: string;
+  fromLabel: string | null;
+  toLabel: string | null;
+  actor: UserSummary | null;
+  createdAt: string;
 }
 
 /** What Trackly offers in the picker — the server accepts any string. */
@@ -418,6 +602,14 @@ export interface UpdateTicketBody {
   unassign?: boolean;
   teamId?: string;
   clearTeam?: boolean;
+  /**
+   * The narrower answers. Each must sit under the one above it — the server
+   * rejects a mismatched pair — and clearing the parent clears the child.
+   */
+  subCategoryId?: string;
+  clearSubCategory?: boolean;
+  subTeamId?: string;
+  clearSubTeam?: boolean;
   /** Re-points the ticket at a customer. */
   requesterId?: string;
   /** Detaches the customer, leaving none. */
@@ -431,6 +623,11 @@ export interface UpdateTicketBody {
   resolutionNote?: string;
   /** Work item, PR or user story. Must be a full http(s) URL if given. */
   resolutionLink?: string;
+  /**
+   * What the customer is told, in plain words. Optional — unlike the note.
+   * Demanding two paragraphs to close a ticket is how you get . in both.
+   */
+  resolutionSummary?: string;
   /** Logged against the ticket in the same request as the resolution. */
   timeSpentMinutes?: number;
 }
@@ -489,8 +686,9 @@ export class TicketsApi {
     return this.api.get<Team[]>('/api/teams');
   }
 
-  createTeam(name: string): Promise<Team> {
-    return this.api.post<Team>('/api/teams', { name });
+  /** `parentId` creates a sub-department under an existing one. Two levels only. */
+  createTeam(name: string, parentId?: string | null): Promise<Team> {
+    return this.api.post<Team>('/api/teams', { name, parentId });
   }
 
   renameTeam(id: string, name: string): Promise<Team> {
@@ -501,7 +699,8 @@ export class TicketsApi {
     return this.api.delete<void>(`/api/teams/${id}`);
   }
 
-  createCategory(body: { name: string; color?: string }): Promise<Category> {
+  /** `parentId` creates a sub-category. Two levels only. */
+  createCategory(body: { name: string; color?: string; parentId?: string | null }): Promise<Category> {
     return this.api.post<Category>('/api/categories', body);
   }
 
@@ -684,6 +883,243 @@ export class TicketsApi {
 
   deleteTime(ticketId: string, entryId: string): Promise<void> {
     return this.api.delete<void>(`/api/tickets/${ticketId}/time/${entryId}`);
+  }
+
+  // ── Activity ──────────────────────────────────────────────────────────────
+
+  /** Oldest first — this is read as a story, and a story runs forwards. */
+  ticketActivity(ticketId: string): Promise<TicketActivity[]> {
+    return this.api.get<TicketActivity[]>(`/api/tickets/${ticketId}/activity`);
+  }
+
+  // ── Problems (associations) ───────────────────────────────────────────────
+
+  /**
+   * The workspace's problems, for the picker on a ticket.
+   *
+   * Agent-facing: a problem groups tickets across customers, and its title
+   * usually describes an outage affecting other people entirely.
+   */
+  problems(): Promise<ProblemSummary[]> {
+    return this.api.get<ProblemSummary[]>('/api/problems');
+  }
+
+  linkProblem(problemId: string, ticketId: string): Promise<void> {
+    return this.api.post<void>(`/api/problems/${problemId}/tickets`, { ticketId });
+  }
+
+  /** Keyed by the TICKET: a ticket belongs to at most one problem. */
+  unlinkProblem(ticketId: string): Promise<void> {
+    return this.api.delete<void>(`/api/problems/tickets/${ticketId}`);
+  }
+
+  // ── Related tickets ───────────────────────────────────────────────────────
+
+  /** Both directions, already flipped — render `kind` as given. */
+  ticketRelations(ticketId: string): Promise<TicketRelation[]> {
+    return this.api.get<TicketRelation[]>(`/api/tickets/${ticketId}/relations`);
+  }
+
+  addTicketRelation(
+    ticketId: string,
+    body: { relatedTicketId: string; kind: string },
+  ): Promise<TicketRelation> {
+    return this.api.post<TicketRelation>(`/api/tickets/${ticketId}/relations`, body);
+  }
+
+  /** Removable from either end — the id identifies the row, not the direction. */
+  deleteTicketRelation(ticketId: string, relationId: string): Promise<void> {
+    return this.api.delete<void>(`/api/tickets/${ticketId}/relations/${relationId}`);
+  }
+
+  // ── Tasks ─────────────────────────────────────────────────────────────────
+
+  ticketTasks(ticketId: string): Promise<TicketTask[]> {
+    return this.api.get<TicketTask[]>(`/api/tickets/${ticketId}/tasks`);
+  }
+
+  createTicketTask(
+    ticketId: string,
+    body: { title: string; assigneeId?: string | null; dueAt?: string | null },
+  ): Promise<TicketTask> {
+    return this.api.post<TicketTask>(`/api/tickets/${ticketId}/tasks`, body);
+  }
+
+  /**
+   * `clearAssignee` / `clearDueAt` exist because null means "leave it alone"
+   * for everything else here — without them a due date could never come back off.
+   */
+  updateTicketTask(
+    ticketId: string,
+    taskId: string,
+    body: {
+      title?: string;
+      assigneeId?: string | null;
+      clearAssignee?: boolean;
+      dueAt?: string | null;
+      clearDueAt?: boolean;
+      completed?: boolean;
+    },
+  ): Promise<TicketTask> {
+    return this.api.put<TicketTask>(`/api/tickets/${ticketId}/tasks/${taskId}`, body);
+  }
+
+  deleteTicketTask(ticketId: string, taskId: string): Promise<void> {
+    return this.api.delete<void>(`/api/tickets/${ticketId}/tasks/${taskId}`);
+  }
+
+  // ── Responders ────────────────────────────────────────────────────────────
+
+  ticketResponders(ticketId: string): Promise<TicketResponder[]> {
+    return this.api.get<TicketResponder[]>(`/api/tickets/${ticketId}/responders`);
+  }
+
+  /** PUT: adding somebody already on the ticket edits their role. */
+  addTicketResponder(ticketId: string, agentId: string, role?: string | null): Promise<void> {
+    return this.api.put<void>(`/api/tickets/${ticketId}/responders/${agentId}`, { role });
+  }
+
+  removeTicketResponder(ticketId: string, agentId: string): Promise<void> {
+    return this.api.delete<void>(`/api/tickets/${ticketId}/responders/${agentId}`);
+  }
+
+  // ── Assets on a ticket ────────────────────────────────────────────────────
+
+  ticketAssets(ticketId: string): Promise<TicketAsset[]> {
+    return this.api.get<TicketAsset[]>(`/api/tickets/${ticketId}/assets`);
+  }
+
+  attachAsset(ticketId: string, assetId: string): Promise<void> {
+    return this.api.put<void>(`/api/tickets/${ticketId}/assets/${assetId}`, {});
+  }
+
+  detachAsset(ticketId: string, assetId: string): Promise<void> {
+    return this.api.delete<void>(`/api/tickets/${ticketId}/assets/${assetId}`);
+  }
+
+  // ── Impacted services ─────────────────────────────────────────────────────
+
+  ticketImpactedServices(ticketId: string): Promise<TicketImpactedService[]> {
+    return this.api.get<TicketImpactedService[]>(`/api/tickets/${ticketId}/impacted-services`);
+  }
+
+  /** PUT: the first note during an incident is a guess, and refining it is an edit. */
+  setImpactedService(
+    ticketId: string,
+    serviceId: string,
+    body: { impact?: string | null; level?: string },
+  ): Promise<void> {
+    return this.api.put<void>(`/api/tickets/${ticketId}/impacted-services/${serviceId}`, body);
+  }
+
+  clearImpactedService(ticketId: string, serviceId: string): Promise<void> {
+    return this.api.delete<void>(`/api/tickets/${ticketId}/impacted-services/${serviceId}`);
+  }
+
+  // ── Custom properties ─────────────────────────────────────────────────────
+
+  /** Every field with this ticket's answer — one call renders the whole form. */
+  ticketFieldAnswers(ticketId: string): Promise<TicketFieldAnswer[]> {
+    return this.api.get<TicketFieldAnswer[]>(`/api/tickets/${ticketId}/fields`);
+  }
+
+  /** Keyed by field id. An empty value clears the answer. */
+  saveTicketFieldAnswers(
+    ticketId: string,
+    values: Record<string, string | null>,
+  ): Promise<TicketFieldAnswer[]> {
+    return this.api.put<TicketFieldAnswer[]>(`/api/tickets/${ticketId}/fields`, { values });
+  }
+
+  // ── Registers (agents read, admins write) ─────────────────────────────────
+
+  assets(search?: string, includeInactive = false): Promise<Asset[]> {
+    return this.api.get<Asset[]>('/api/assets', { search, includeInactive });
+  }
+
+  createAsset(body: Partial<Asset> & { name: string }): Promise<Asset> {
+    return this.api.post<Asset>('/api/assets', body);
+  }
+
+  updateAsset(
+    id: string,
+    body: {
+      name?: string;
+      kind?: string | null;
+      tag?: string | null;
+      location?: string | null;
+      assignedToId?: string | null;
+      clearAssignee?: boolean;
+      notes?: string | null;
+      isActive?: boolean;
+    },
+  ): Promise<Asset> {
+    return this.api.put<Asset>(`/api/assets/${id}`, body);
+  }
+
+  deleteAsset(id: string): Promise<void> {
+    return this.api.delete<void>(`/api/assets/${id}`);
+  }
+
+  services(includeInactive = false): Promise<BusinessService[]> {
+    return this.api.get<BusinessService[]>('/api/services', { includeInactive });
+  }
+
+  createService(body: { name: string; description?: string | null; ownerTeamId?: string | null }) {
+    return this.api.post<BusinessService>('/api/services', body);
+  }
+
+  updateService(
+    id: string,
+    body: {
+      name?: string;
+      description?: string | null;
+      ownerTeamId?: string | null;
+      clearOwner?: boolean;
+      sortOrder?: number;
+      isActive?: boolean;
+    },
+  ): Promise<BusinessService> {
+    return this.api.put<BusinessService>(`/api/services/${id}`, body);
+  }
+
+  deleteService(id: string): Promise<void> {
+    return this.api.delete<void>(`/api/services/${id}`);
+  }
+
+  ticketFields(includeInactive = false): Promise<TicketField[]> {
+    return this.api.get<TicketField[]>('/api/ticket-fields', { includeInactive });
+  }
+
+  createTicketField(body: {
+    label: string;
+    type: string;
+    helpText?: string | null;
+    options?: string | null;
+    allowNewOptions: boolean;
+    isRequired: boolean;
+  }): Promise<TicketField> {
+    return this.api.post<TicketField>('/api/ticket-fields', body);
+  }
+
+  /** The key and the type are not editable — there is no honest migration for either. */
+  updateTicketField(
+    id: string,
+    body: {
+      label?: string;
+      helpText?: string | null;
+      options?: string | null;
+      allowNewOptions?: boolean;
+      isRequired?: boolean;
+      sortOrder?: number;
+      isActive?: boolean;
+    },
+  ): Promise<TicketField> {
+    return this.api.put<TicketField>(`/api/ticket-fields/${id}`, body);
+  }
+
+  deleteTicketField(id: string): Promise<void> {
+    return this.api.delete<void>(`/api/ticket-fields/${id}`);
   }
 
   // ── Related work ──────────────────────────────────────────────────────────

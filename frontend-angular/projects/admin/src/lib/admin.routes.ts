@@ -27,6 +27,10 @@ export const adminRoutes: Routes = [
     loadComponent: () => import('./ticket-layout-settings').then((m) => m.TicketLayoutSettings),
   },
   {
+    path: 'settings/catalogue',
+    loadComponent: () => import('./catalogue-settings').then((m) => m.CatalogueSettings),
+  },
+  {
     path: 'settings/statuses',
     loadComponent: () => import('./ticket-status-settings').then((m) => m.TicketStatusSettings),
   },

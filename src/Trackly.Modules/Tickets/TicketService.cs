@@ -341,11 +341,14 @@ public class TicketService(
     {
         var ticket = await VisibleTickets(actor)
             .Include(t => t.Category)
+            .Include(t => t.SubCategory)
             .Include(t => t.Requester)
             .Include(t => t.Assignee)
             .Include(t => t.Watchers).ThenInclude(w => w.Agent)
             .Include(t => t.TicketTags).ThenInclude(tt => tt.Tag)
             .Include(t => t.Team)
+            .Include(t => t.SubTeam)
+            .Include(t => t.Problem)
             .Include(t => t.ResolvedBy)
             .SingleOrDefaultAsync(t => t.Id == ticketId, ct);
         // Problem grouping and tags are internal — never expose them to a customer.
@@ -470,15 +473,21 @@ public class TicketService(
             });
         }
 
-        // Automation may change priority/team/tags before SLA is computed.
-        await automation.RunOnCreateAsync(ticket, ct);
-        await sla.ApplyOnCreateAsync(ticket, ct);
-
-        // Queued after automation so the opening entry describes the ticket as
-        // it actually came out, not as it was posted. Same SaveChanges as the
-        // ticket itself — the log commits with what it describes or not at all.
+        // Queued BEFORE automation runs, so "raised this ticket" is the first
+        // line of the history rather than turning up underneath the rules that
+        // fired on it. Entries are ordered by the moment they were queued and
+        // these are all within the same millisecond, so insertion order is the
+        // only thing keeping the story straight.
+        //
+        // Same SaveChanges as the ticket itself — the log commits with what it
+        // describes, or not at all.
         activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
             TicketActivityType.Created, ticket.Subject);
+
+        // Automation may change priority/team/tags before SLA is computed. Its
+        // own entries are written with a null actor and read as "Trackly".
+        await automation.RunOnCreateAsync(ticket, ct);
+        await sla.ApplyOnCreateAsync(ticket, ct);
 
         await db.SaveChangesAsync(ct);
         await notifications.OnTicketCreatedAsync(ticket.Id, ct);
@@ -618,6 +627,16 @@ public class TicketService(
                 ticket.ResolutionNote = note;
                 ticket.ResolutionLink = CleanLink(request.ResolutionLink);
                 ticket.ResolvedById = actor.UserId;
+
+                // Optional, unlike the note. Demanding two paragraphs to close a
+                // ticket is how you get "." in both — the internal one is the
+                // record that has to exist, and this is the courtesy that is
+                // worth having when somebody takes the time.
+                var summary = request.ResolutionSummary?.Trim();
+                if (summary is { Length: > MaxResolutionNoteLength })
+                    throw new ArgumentException(
+                        $"Keep the customer summary under {MaxResolutionNoteLength} characters.");
+                ticket.ResolutionSummary = string.IsNullOrWhiteSpace(summary) ? null : summary;
             }
 
             // Set together, always — the category is what every rule reads, and
@@ -665,7 +684,13 @@ public class TicketService(
                 {
                     ticket.ResolutionNote = null;
                     ticket.ResolutionLink = null;
+                    ticket.ResolutionSummary = null;
                     ticket.ResolvedById = null;
+
+                    // The SLA markers go with it. A ticket that breached, was
+                    // closed, and is reopened a month later would otherwise run
+                    // its whole second life with nobody ever told it was late.
+                    SlaBreachService.ClearMarkers(ticket);
                 }
             }
         }
@@ -707,6 +732,11 @@ public class TicketService(
         {
             ticket.CategoryId = null;
             ticket.Category = null;
+            // The narrower answer goes with it: a sub-category whose parent is
+            // gone is a label with nothing above it, and leaving it would show a
+            // ticket filed under a category it is no longer in.
+            ticket.SubCategoryId = null;
+            ticket.SubCategory = null;
             activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
                 TicketActivityType.Category, wasCategory, null);
         }
@@ -716,15 +746,47 @@ public class TicketService(
                 c => c.WorkspaceId == actor.WorkspaceId && c.Id == request.CategoryId, ct);
             if (chosen is null)
                 throw new ArgumentException("Unknown category.");
+            if (chosen.ParentId is not null)
+                throw new ArgumentException("Pick a top-level category here, and its sub-category below.");
+
+            // Changing the parent invalidates whatever was chosen under the old
+            // one. Cleared first so the block below can set the new pair, and so
+            // an agent who only changes the parent is left in a valid state
+            // rather than with a mismatched pair.
+            if (chosen.Id != ticket.CategoryId)
+            {
+                ticket.SubCategoryId = null;
+                ticket.SubCategory = null;
+            }
             ticket.CategoryId = request.CategoryId;
             activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
                 TicketActivityType.Category, wasCategory, chosen.Name);
+        }
+
+        if (request.ClearSubCategory)
+        {
+            ticket.SubCategoryId = null;
+            ticket.SubCategory = null;
+        }
+        else if (request.SubCategoryId is not null)
+        {
+            var sub = await db.Categories.SingleOrDefaultAsync(
+                c => c.WorkspaceId == actor.WorkspaceId && c.Id == request.SubCategoryId, ct);
+            if (sub is null) throw new ArgumentException("Unknown sub-category.");
+            // Enforced here rather than trusted from the form: the pair is what
+            // every report reads, and a sub-category under the wrong parent is a
+            // row that will never add up.
+            if (sub.ParentId != ticket.CategoryId)
+                throw new ArgumentException($"\"{sub.Name}\" does not belong to the chosen category.");
+            ticket.SubCategoryId = sub.Id;
         }
 
         if (request.ClearTeam)
         {
             ticket.TeamId = null;
             ticket.Team = null;
+            ticket.SubTeamId = null;
+            ticket.SubTeam = null;
             activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
                 TicketActivityType.Team, wasTeam, null);
         }
@@ -734,6 +796,11 @@ public class TicketService(
                 t => t.WorkspaceId == actor.WorkspaceId && t.Id == request.TeamId, ct);
             if (team is null)
                 throw new ArgumentException("Unknown team.");
+            if (team.ParentId is not null)
+                throw new ArgumentException("Pick a department here, and its sub-department below.");
+
+            ticket.SubTeamId = null;
+            ticket.SubTeam = null;
             ticket.TeamId = request.TeamId;
             activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
                 TicketActivityType.Team, wasTeam, team.Name);
@@ -750,6 +817,21 @@ public class TicketService(
                     AssignedBy = actor.UserId,
                 });
             }
+        }
+
+        if (request.ClearSubTeam)
+        {
+            ticket.SubTeamId = null;
+            ticket.SubTeam = null;
+        }
+        else if (request.SubTeamId is not null)
+        {
+            var sub = await db.Teams.SingleOrDefaultAsync(
+                t => t.WorkspaceId == actor.WorkspaceId && t.Id == request.SubTeamId, ct);
+            if (sub is null) throw new ArgumentException("Unknown sub-department.");
+            if (sub.ParentId != ticket.TeamId)
+                throw new ArgumentException($"\"{sub.Name}\" does not belong to the chosen department.");
+            ticket.SubTeamId = sub.Id;
         }
 
         if (request.Unassign)
@@ -1445,6 +1527,7 @@ public class TicketService(
         t.Id, t.Subject, t.Description, t.Status, t.StatusCategory, statusName,
         t.Priority, t.Channel,
         CategoryDto.From(t.Category),
+        CategoryDto.From(t.SubCategory),
         UserSummaryDto.From(t.Requester),
         t.GuestName, t.GuestEmail,
         UserSummaryDto.From(t.Assignee),
@@ -1452,9 +1535,14 @@ public class TicketService(
         isAgentOrAdmin
             ? t.TicketTags.Select(tt => new TagDto(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList()
             : new List<TagDto>(),
+        // The problem this ticket belongs to is internal grouping, and its title
+        // usually describes an outage affecting other customers.
         isAgentOrAdmin ? t.ProblemId : null,
+        isAgentOrAdmin ? t.Problem?.Title : null,
         isAgentOrAdmin ? t.TeamId : null,
         isAgentOrAdmin ? t.Team?.Name : null,
+        isAgentOrAdmin ? t.SubTeamId : null,
+        isAgentOrAdmin ? t.SubTeam?.Name : null,
         isAgentOrAdmin ? t.FirstResponseDueAt : null,
         isAgentOrAdmin ? t.ResolveDueAt : null,
         isAgentOrAdmin ? t.FirstResponseAt : null,
@@ -1462,6 +1550,9 @@ public class TicketService(
         // the root cause or the work item it was fixed under.
         isAgentOrAdmin ? t.ResolutionNote : null,
         isAgentOrAdmin ? t.ResolutionLink : null,
+        // The exception, and the reason the field exists: this one is WRITTEN for
+        // the customer, so it goes to everyone.
+        t.ResolutionSummary,
         isAgentOrAdmin ? UserSummaryDto.From(t.ResolvedBy) : null,
         isAgentOrAdmin ? t.ResolvedAt : null,
         t.CreatedAt, t.UpdatedAt);

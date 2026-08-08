@@ -17,7 +17,8 @@ public class GuestService(
     TicketService ticketService,
     NotificationService notifications,
     SlaService sla,
-    AutomationService automation)
+    AutomationService automation,
+    ActivityLog activity)
 {
     private const int MaxSendsPer15Minutes = 3;
     private const int MaxCodeAttempts = 5;
@@ -150,6 +151,11 @@ public class GuestService(
         db.Tickets.Add(ticket);
         token.ConsumedAt = now;
 
+        // Null actor: a guest has no user row. The entry reads as "Trackly", and
+        // the ticket's own guest name is what answers "who raised this".
+        activity.Happened(ticket.WorkspaceId, ticket.Id, null,
+            TicketActivityType.Created, ticket.Subject);
+
         var assigneeId = await ticketService.PickRoundRobinAssigneeAsync(ticket.WorkspaceId, null, ct);
         if (assigneeId is not null)
         {
@@ -260,6 +266,10 @@ public class GuestService(
         };
         db.Comments.Add(comment);
         ticket.UpdatedAt = DateTime.UtcNow;
+        // Null actor: the guest holds a magic-link token, not an account. The
+        // agents reading the feed know the customer replied because that is what
+        // "replied" with no name against it means on a guest ticket.
+        activity.Happened(ticket.WorkspaceId, ticket.Id, null, TicketActivityType.Replied);
         await db.SaveChangesAsync(ct);
 
         // A guest reply is a customer-side reply → notify the assignee + watchers.

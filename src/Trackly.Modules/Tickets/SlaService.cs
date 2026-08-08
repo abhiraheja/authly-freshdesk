@@ -10,19 +10,43 @@ namespace Trackly.Modules.Tickets;
 // a single comparable timestamp). Admin CRUD lives here too.
 public class SlaService(TracklyDbContext db)
 {
+    /// <summary>
+    /// The workspace's open hours, cached for the life of this scoped service.
+    ///
+    /// One request can recompute deadlines more than once — changing a priority
+    /// and resolving in the same save touches this twice — and the schedule
+    /// cannot change mid-request. Reading it once is the difference between one
+    /// query and several for an answer that is identical every time.
+    /// </summary>
+    private readonly Dictionary<Guid, BusinessCalendar> calendars = new();
+
+    private async Task<BusinessCalendar> CalendarAsync(Guid workspaceId, CancellationToken ct)
+    {
+        if (calendars.TryGetValue(workspaceId, out var cached)) return cached;
+
+        var hours = await db.BusinessHours
+            .Include(h => h.Days)
+            .Include(h => h.Holidays)
+            .SingleOrDefaultAsync(h => h.WorkspaceId == workspaceId, ct);
+
+        var calendar = BusinessCalendar.For(hours);
+        calendars[workspaceId] = calendar;
+        return calendar;
+    }
+
     // ---- Applying SLA to tickets --------------------------------------------
 
     public async Task ApplyOnCreateAsync(Ticket ticket, CancellationToken ct)
     {
         var policy = await PolicyAsync(ticket.WorkspaceId, ticket.Priority, ct);
-        SetDueDates(ticket, policy, ticket.CreatedAt);
+        SetDueDates(ticket, policy, ticket.CreatedAt, await CalendarAsync(ticket.WorkspaceId, ct));
     }
 
     public async Task OnPriorityChangedAsync(Ticket ticket, CancellationToken ct)
     {
         var policy = await PolicyAsync(ticket.WorkspaceId, ticket.Priority, ct);
         // Recompute from the creation baseline; keep a met first-response as met.
-        SetDueDates(ticket, policy, ticket.CreatedAt);
+        SetDueDates(ticket, policy, ticket.CreatedAt, await CalendarAsync(ticket.WorkspaceId, ct));
     }
 
     /// <summary>
@@ -56,7 +80,21 @@ public class SlaService(TracklyDbContext db)
         ticket.FirstResponseAt ??= DateTime.UtcNow;
     }
 
-    private static void SetDueDates(Ticket ticket, SlaPolicy? policy, DateTime baseline)
+    /// <summary>
+    /// Stamps the two deadlines, counting only the hours the desk is open.
+    ///
+    /// The calendar is what makes the number a promise the team can keep: a
+    /// ticket raised at 17:55 on Friday with a four-hour target is due mid-Monday
+    /// morning rather than breached before anyone is back at their desk. A
+    /// workspace with business hours off gets plain wall-clock arithmetic, and
+    /// the calendar does that itself so there is no branch here.
+    ///
+    /// **Both deadlines are stored as UTC instants**, not as remaining minutes.
+    /// Everything downstream — the list's SLA column, the sort, the breach sweep
+    /// — is then one indexed comparison rather than a calculation per row.
+    /// </summary>
+    private static void SetDueDates(
+        Ticket ticket, SlaPolicy? policy, DateTime baseline, BusinessCalendar calendar)
     {
         if (policy is null)
         {
@@ -65,8 +103,12 @@ public class SlaService(TracklyDbContext db)
             return;
         }
         if (ticket.FirstResponseAt is null)
-            ticket.FirstResponseDueAt = policy.FirstResponseMinutes is int fr ? baseline.AddMinutes(fr) : null;
-        ticket.ResolveDueAt = policy.ResolveMinutes is int rr ? baseline.AddMinutes(rr) : null;
+            ticket.FirstResponseDueAt = policy.FirstResponseMinutes is int fr
+                ? calendar.AddWorkingMinutes(baseline, fr)
+                : null;
+        ticket.ResolveDueAt = policy.ResolveMinutes is int rr
+            ? calendar.AddWorkingMinutes(baseline, rr)
+            : null;
     }
 
     private Task<SlaPolicy?> PolicyAsync(Guid workspaceId, string priority, CancellationToken ct)
@@ -135,8 +177,9 @@ public class SlaService(TracklyDbContext db)
                         && t.ResolveDueAt == null)
             .ToListAsync(ct);
 
+        var calendar = await CalendarAsync(workspaceId, ct);
         foreach (var ticket in uncovered)
-            SetDueDates(ticket, policy, ticket.CreatedAt);
+            SetDueDates(ticket, policy, ticket.CreatedAt, calendar);
     }
 
     public async Task<bool> DeleteAsync(Actor actor, string priority, CancellationToken ct)

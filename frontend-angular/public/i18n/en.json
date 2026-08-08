@@ -68,7 +68,8 @@
       "statuses": "Statuses & workflow",
       "mentioned": "Mentioning me",
       "watching": "Watching",
-      "active": "Active"
+      "active": "Active",
+      "catalogue": "Registers"
     }
   },
   "palette": {
@@ -173,10 +174,14 @@
       "minutes": "m",
       "timeHint": "Optional. Added to this ticket's log under your name.",
       "confirmResolve": "Resolve",
-      "confirmClose": "Close ticket"
+      "confirmClose": "Close ticket",
+      "summary": "What should the customer be told?",
+      "summaryHint": "Optional, and the only part of this the customer ever sees. Plain words — no root cause, no ticket numbers.",
+      "summaryPlaceholder": "We restarted the payments service. Your invoice has been emailed and should arrive within a few minutes."
     },
     "resolution": {
-      "heading": "Resolution"
+      "heading": "Resolution",
+      "customerSaw": "What the customer was told"
     },
     "time": {
       "heading": "Time spent",
@@ -238,7 +243,9 @@
       "requesterSelf": "Leave blank if you don't know the customer yet — you can link one from the ticket later.",
       "department": "Department",
       "noDepartment": "No department",
-      "noCategory": "No category"
+      "noCategory": "No category",
+      "subDepartment": "Sub-department",
+      "subCategory": "Sub-category"
     },
     "detail": {
       "properties": "Properties",
@@ -264,6 +271,7 @@
       "tabConversation": "Conversation",
       "tabNotes": "Internal notes",
       "tabAttachments": "Attachments",
+      "tabActivity": "Activity",
       "noAttachments": "No files on this ticket.",
       "noNotes": "No internal notes yet.",
       "slaTimer": "SLA timer",
@@ -305,7 +313,10 @@
       "placeholderPrivate": "A note only you can read. Nobody else sees it, not even an admin.",
       "slaStopped": "The clock stopped when this ticket was resolved.",
       "slaMet": "Resolved within target",
-      "slaMissed": "Resolved after target"
+      "slaMissed": "Resolved after target",
+      "tabRelated": "Related",
+      "tabTasks": "Tasks",
+      "tabAssets": "Assets"
     },
     "noCustomer": "No customer",
     "links": {
@@ -321,11 +332,108 @@
         "message": "{{link}} will no longer be listed on this ticket."
       }
     },
+    "activity": {
+      "empty": "Nothing recorded yet. This ticket was raised before Trackly started keeping a history.",
+      "loadFailed": "Couldn't load the activity",
+      "system": "Trackly",
+      "verbs": {
+        "created": "raised this ticket",
+        "status": "changed the status",
+        "priority": "changed the priority",
+        "assignee": "changed the assignee",
+        "team": "changed the department",
+        "category": "changed the category",
+        "subject": "changed the subject",
+        "requester": "changed the customer",
+        "watcher_added": "added a watcher",
+        "watcher_removed": "removed a watcher",
+        "replied": "replied to the customer",
+        "noted": "added a private note",
+        "attachment_added": "attached a file",
+        "link_added": "added related work",
+        "link_removed": "removed related work",
+        "time_logged": "logged time",
+        "problem_linked": "linked a problem",
+        "problem_unlinked": "unlinked the problem",
+        "resolved": "resolved this ticket",
+        "reopened": "reopened this ticket"
+      }
+    },
     "filters": {
       "heading": "Filters",
       "none": "Nothing to filter by yet.",
       "showAll": "Show all {{count}}",
       "showLess": "Show less"
+    },
+    "relations": {
+      "title": "Related tickets",
+      "empty": "Nothing linked to this ticket yet.",
+      "loadFailed": "Couldn't load the linked tickets",
+      "searchPlaceholder": "Search tickets by subject…",
+      "searchLabel": "Find a ticket to link",
+      "kindLabel": "Relationship",
+      "remove": "Remove link",
+      "kinds": {
+        "relates": "Relates to",
+        "duplicates": "Duplicates",
+        "duplicated_by": "Duplicated by",
+        "blocks": "Blocks",
+        "blocked_by": "Blocked by",
+        "caused_by": "Caused by",
+        "causes": "Causes"
+      }
+    },
+    "tasks": {
+      "title": "Tasks",
+      "add": "Add",
+      "addPlaceholder": "What needs doing?",
+      "assignLabel": "Assign this task to",
+      "openCount": "{{count}} open"
+    },
+    "responders": {
+      "title": "Responders",
+      "hint": "People working this alongside the assignee. They are notified like watchers.",
+      "empty": "Nobody else is on this ticket.",
+      "add": "Add",
+      "pick": "Choose an agent…",
+      "rolePlaceholder": "What are they doing? (optional)",
+      "remove": "Remove responder"
+    },
+    "assets": {
+      "title": "Assets",
+      "empty": "No assets linked to this ticket.",
+      "searchPlaceholder": "Search assets by name or tag…",
+      "remove": "Unlink asset",
+      "otherTickets": "{{count}} other tickets"
+    },
+    "services": {
+      "title": "Impacted services",
+      "hint": "What this ticket has taken down or degraded, and for whom.",
+      "empty": "No services recorded as impacted.",
+      "add": "Add",
+      "pick": "Choose a service…",
+      "levelLabel": "How bad",
+      "impactPlaceholder": "What is broken, and for whom?",
+      "owner": "Owned by {{team}}",
+      "remove": "Clear impact",
+      "levels": {
+        "down": "Down",
+        "degraded": "Degraded",
+        "minor": "Minor"
+      }
+    },
+    "fields": {
+      "title": "More properties",
+      "none": "This workspace has not added any properties yet.",
+      "retired": "Retired",
+      "unsaved": "Unsaved changes",
+      "saved": "Properties saved"
+    },
+    "associations": {
+      "title": "Problem",
+      "hint": "The underlying cause this ticket is one symptom of. Resolving the problem can resolve them all at once.",
+      "none": "Not linked to a problem",
+      "open": "Open problem"
     }
   },
   "status": {
@@ -556,6 +664,80 @@
       "sameStatus": "Staying put is always allowed.",
       "impliedByAny": "Already allowed from any status.",
       "cellLabel": "{{from}} to {{to}}"
+    },
+    "catalogue": {
+      "title": "Registers",
+      "subtitle": "The assets, services and properties this workspace tracks on its tickets.",
+      "tabAssets": "Assets",
+      "tabServices": "Services",
+      "tabFields": "Ticket properties",
+      "add": "Add",
+      "usedBy": "on {{count}} tickets",
+      "openIncidents": "{{count}} open",
+      "noAssets": "No assets yet. Add the machines, licences and equipment you support.",
+      "noServices": "No services yet. Add what your customers depend on — Payments, Email, the VPN.",
+      "noFields": "No custom properties yet.",
+      "assetName": "Name",
+      "assetKind": "Kind",
+      "assetTag": "Tag or serial",
+      "serviceName": "Service",
+      "owner": "Owned by",
+      "fieldLabel": "Label",
+      "fieldType": "Type",
+      "required": "Required",
+      "options": "Choices",
+      "optionsPlaceholder": "One per line",
+      "allowNew": "Let agents type a new value, and remember it",
+      "choiceCount": "{{count}} choices",
+      "fieldsHint": "Trackly's own properties — status, priority, department, category — are built in because the product reasons about them. These are yours: they are stored, shown and searched, but no rule acts on them.",
+      "deleteAsset": "Delete \"{{name}}\"?",
+      "deleteField": "Delete \"{{name}}\"?",
+      "deleteFieldHint": "The field and every answer to it are removed. Retiring keeps the answers and takes it off the form.",
+      "types": {
+        "text": "Text",
+        "select": "Dropdown",
+        "radio": "Radio buttons",
+        "checkbox": "Checkbox"
+      }
+    },
+    "hours": {
+      "title": "Business hours",
+      "enable": "Use business hours",
+      "onHint": "SLA clocks only run while the desk is open. A ticket raised after hours is due from the next working morning.",
+      "offHint": "Clocks run round the clock. A four-hour target means four real hours, whatever the day or time.",
+      "timeZone": "Time zone",
+      "timeZoneHint": "IANA name — Asia/Kolkata, Europe/London. This decides what \"9am\" means.",
+      "closed": "Closed",
+      "opens": "opens",
+      "closes": "closes",
+      "invalid": "Check the times on {{days}} — the closing time has to be after the opening one.",
+      "holidays": "Holidays",
+      "noHolidays": "No holidays set.",
+      "holidayDate": "Date",
+      "holidayName": "Name (optional)",
+      "addHoliday": "Add",
+      "removeHoliday": "Remove holiday",
+      "existingHint": "Deadlines already stamped on tickets are left alone. This changes what NEW tickets get.",
+      "saved": "Business hours saved",
+      "days": {
+        "0": "Sunday",
+        "1": "Monday",
+        "2": "Tuesday",
+        "3": "Wednesday",
+        "4": "Thursday",
+        "5": "Friday",
+        "6": "Saturday"
+      }
+    },
+    "scorecard": {
+      "title": "SLA scorecard",
+      "agent": "Agent",
+      "resolved": "Resolved",
+      "firstResponse": "First response",
+      "resolution": "Resolution",
+      "attainment": "Attainment",
+      "empty": "Nothing resolved in the last 30 days.",
+      "hint": "The last 30 days, counted from tickets each agent finished. Met / measurable — a ticket with no policy is neither met nor missed."
     }
   },
   "customers": {
@@ -615,7 +797,9 @@
       "mention": "{{actor}} mentioned you",
       "watching": "{{actor}} updated a ticket you watch",
       "assigned": "{{actor}} assigned a ticket to you",
-      "reply": "{{actor}} replied"
+      "reply": "{{actor}} replied",
+      "sla_warning": "An SLA is about to run out",
+      "sla_breached": "An SLA has been missed"
     }
   }
 }

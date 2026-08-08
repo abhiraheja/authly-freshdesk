@@ -1158,6 +1158,88 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 **flags, not ids**: they resolve to the caller server-side, so there is no shape
 of request that could ask for somebody else's mentions.
 
+### Two-level taxonomies, and the resolution split
+
+**Departments and categories each gained a `parent_id`, and the ticket gained a
+second column for the narrower answer.** Not one column pointing at the leaf:
+every rule, report and filter already reading `category_id` keeps meaning "the
+top-level answer", and none of them had to learn about a tree.
+
+Two levels, never three. A third means an agent navigating a hierarchy to file a
+ticket, and it is reliably where a taxonomy starts disagreeing with itself.
+
+The pair is validated on write — a sub-category whose parent is not the ticket's
+category is refused — and clearing the parent clears the child, because a
+sub-category with nothing above it is a label. Routing still reads `team_id`
+only: narrowing to a sub-department labels the ticket and never changes who it
+lands on.
+
+Names are unique **within a parent**, not across the workspace: "Access" is a
+legitimate sub-category of both Hardware and Software. The old workspace-wide
+unique indexes were dropped for this.
+
+**`tickets.resolution_summary` is the customer's half of the resolution.** The
+internal note is engineering detail — "stale connection pool, patched in #4821" —
+which is the right record for the team and the wrong thing to send a customer.
+The summary is the one part of the resolution that reaches every surface;
+everything beside it stays agent-only (invariant 5). It is **optional** while the
+note is required: demanding two paragraphs to close a ticket is how you get "."
+in both.
+
+### The activity log
+
+`GET /api/tickets/{id}/activity` — agent/admin only, oldest first. Rows are
+written by `ActivityLog`, which **queues and never saves**: the caller commits
+them in the same `SaveChanges` as the change they describe. An entry that landed
+while its change rolled back is worse than no entry — it is a log that lies, and
+a log nobody trusts is one nobody reads. Same rule as `NotificationFeed`, so one
+mutation queues both and saves once.
+
+Two rules that keep the feed readable:
+
+- **A no-op is not recorded.** Saving a form re-sends every field, so without
+  this one "Save" would stamp a row for priority, category, team and assignee
+  whether or not any of them moved.
+- **The assignee is logged once, against the value the ticket ended up with.**
+  Choosing a department round-robins an assignee and an explicit assignee in the
+  same request overrides it; two rows would describe a state that never existed.
+
+A status change into or out of a terminal category writes **two** rows — the
+status move and a `resolved`/`reopened` event. Deliberate: those are what a
+manager scans for, and finding them otherwise would mean knowing which of the
+workspace's status names happen to be terminal.
+
+Written by every path that mutates a ticket:
+
+| Service | Entries |
+|---|---|
+| `TicketService` | create, property changes, replies and notes, watchers, related work, time |
+| `AutomationService` | priority, status, department + the assignee it routes to, notes — **null actor** |
+| `InboundEmailService` | ticket created from a cold email, and each emailed reply |
+| `ChannelInboundService` | ticket created from Slack/WhatsApp/Teams, and each inbound message |
+| `ChatService` | ticket created when a chat ends |
+| `GuestService` | guest-submitted ticket, and each guest reply |
+| `ProblemService` | problem link/unlink, and both entries per ticket on bulk-resolve |
+| `AttachmentService` | files on the ticket (not on a reply — that reply has its own entry) |
+
+**The SLA clock writes nothing, on purpose.** Everything it does is a
+consequence of something already in the feed: `ApplyOnCreate` is part of
+creation, `OnPriorityChanged` follows a logged priority change, `OnStatusChanged`
+pauses or resumes because of a logged status change, and `OnAgentReply` follows a
+logged reply. Entries for those would double every line. `AdoptUncoveredAsync` is
+the one independent case — an admin saving a policy backfills deadlines onto
+existing tickets — and it is left out because writing a row onto hundreds of
+tickets at once would bury each feed under something that is not about that
+ticket.
+
+**Ticket creation queues `created` BEFORE automation runs.** Entries are ordered
+by `created_at` and everything in one request lands inside the same millisecond,
+so insertion order is the only thing keeping the story straight — queued after,
+"raised this ticket" would appear underneath the rules that fired on it.
+
+`actor_id` is null for automation, guests and chat visitors, and the feed renders
+those as **Trackly**. Not a fallback: nobody with an account did it.
+
 ### Statuses and the workflow
 
 `PUT /workflow` **replaces** every transition in one call. A matrix screen edits
@@ -1551,6 +1633,213 @@ CREATE INDEX ON ticket_time_entries (workspace_id, user_id);
 -- ticket's references and outlive any one resolution, so neither replaces the
 -- other. The resolve dialog copies its link in here so both lists agree.
 --
+-- The ticket's audit trail, behind the Activity tab.
+--
+-- STORES WHAT CHANGED, NEVER A SENTENCE. A row holds a type and two labels and
+-- the client builds the wording. Trackly ships in two languages; a row that
+-- already read "changed status to Open" would be frozen in whichever one the
+-- person making the change happened to have selected.
+--
+-- THE LABELS ARE CAPTURED AS THEY READ AT THE TIME, which is why they are plain
+-- text and not foreign keys. An audit trail records what happened: renaming a
+-- status to "QA" must not rewrite last month's entries into changes nobody made,
+-- and deleting a category must not blank the rows that mention it. The actor is
+-- the exception — an id, rendered live, because a person's name changing is a
+-- fact about them rather than about the ticket.
+--
+-- Agent-facing (invariant 5): the feed records THAT a private note was written,
+-- never its words, and never reaches a customer or guest surface at all.
+CREATE TABLE ticket_activities (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    ticket_id    UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    -- NULL = Trackly did it: automation, an inbound email, the SLA clock.
+    -- SET NULL rather than CASCADE: removing an agent must not erase the changes
+    -- they made.
+    actor_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+    type         TEXT NOT NULL,   -- created | status | priority | assignee | …
+    from_label   TEXT,            -- NULL for one-sided events
+    to_label     TEXT,            -- the "after", or the detail of a one-sided event
+    created_at   TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX ON ticket_activities (ticket_id, created_at);
+
+-- TICKET-TO-TICKET LINKS. Stored ONCE and read from both ends: the inverse of a
+-- kind is a pure function (TicketRelationKind.Inverse), so "A duplicates B" is
+-- shown on B as "duplicated by A" with no second row that could fall out of
+-- step. Two rows for one fact is how a pair goes half-broken when one is deleted.
+--
+-- related_ticket_id is NO ACTION, not CASCADE: two cascade paths from tickets
+-- into one table is a schema PostgreSQL will not create. TicketRelationService
+-- .ClearIncomingAsync exists for that, and must run before a ticket is deleted.
+CREATE TABLE ticket_relations (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id      UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    ticket_id         UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    related_ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE NO ACTION,
+    kind              TEXT NOT NULL,   -- relates | duplicates | blocks | caused_by | …
+    created_by_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at        TIMESTAMPTZ DEFAULT now()
+);
+CREATE UNIQUE INDEX ON ticket_relations (ticket_id, related_ticket_id, kind);
+
+-- A CHECKLIST, not sub-tickets. A sub-ticket has its own requester, SLA, status
+-- vocabulary and inbox, and none of that is wanted for "call the vendor".
+--
+-- NOTHING BLOCKS ON THEM. An open task does not stop the ticket being resolved:
+-- a hard block means a ticket nobody can close because of an item somebody added
+-- and forgot, and the usual escape is deleting the task, which loses the record.
+CREATE TABLE ticket_tasks (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id    UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    ticket_id       UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    title           TEXT NOT NULL,
+    assignee_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+    due_at          TIMESTAMPTZ,
+    -- NULL = open. One column carrying both the flag and the timestamp, so they
+    -- cannot contradict each other.
+    completed_at    TIMESTAMPTZ,
+    completed_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    sort_order      INTEGER NOT NULL DEFAULT 0,
+    created_by_id   UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+-- RESPONDERS ARE NOT WATCHERS. A watcher is reading; a responder is doing.
+-- Merging them means either notifying every bystander as though they owed the
+-- customer an answer, or leaving the second engineer on an incident with no way
+-- to say they are on it. Adding a responder ALSO writes a watcher row, so being
+-- on the ticket means not missing the next reply; removing one leaves the
+-- watcher row, because "take me off this" is a different statement.
+--
+-- Still exactly one assignee: "everyone is responsible" is how a ticket ends up
+-- with nobody answering it.
+CREATE TABLE ticket_responders (
+    ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    agent_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role      TEXT,                     -- "network side", "vendor liaison" — free text
+    added_by  UUID,
+    added_at  TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (ticket_id, agent_id)
+);
+
+-- THE ASSET REGISTER. Deliberately thin — a real CMDB has relationships,
+-- lifecycle states and discovery, and a bad one is worse than none because
+-- people put data in it and then cannot trust it. What Trackly needs is "which
+-- machine is this ticket about" and "what else has been raised about it".
+CREATE TABLE assets (
+    id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id   UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name           TEXT NOT NULL,
+    kind           TEXT,               -- free text; the next workspace's list differs
+    tag            TEXT,               -- serial / asset tag
+    location       TEXT,
+    assigned_to_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    notes          TEXT,
+    is_active      BOOLEAN NOT NULL DEFAULT true,   -- retire, never delete once used
+    created_at     TIMESTAMPTZ DEFAULT now(),
+    updated_at     TIMESTAMPTZ DEFAULT now()
+);
+-- Sparse: many assets have no tag, but a tag that IS set must identify exactly
+-- one thing or it is not an asset tag.
+CREATE UNIQUE INDEX ON assets (workspace_id, tag) WHERE tag IS NOT NULL;
+
+CREATE TABLE ticket_assets (
+    ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    asset_id  UUID NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+    added_by  UUID,
+    added_at  TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (ticket_id, asset_id)
+);
+
+-- THE SERVICE CATALOGUE. An asset is a thing you own; a service is a thing you
+-- promise. "Payments is down" and "this laptop is broken" are different
+-- sentences with different audiences, and a workspace counts them separately.
+--
+-- Named business_services because the codebase is full of *Service classes and a
+-- domain entity sharing that suffix would be misread on every import line.
+CREATE TABLE business_services (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    name          TEXT NOT NULL,
+    description   TEXT,
+    owner_team_id UUID REFERENCES teams(id) ON DELETE SET NULL,
+    is_active     BOOLEAN NOT NULL DEFAULT true,
+    sort_order    INTEGER NOT NULL DEFAULT 0,
+    created_at    TIMESTAMPTZ DEFAULT now(),
+    updated_at    TIMESTAMPTZ DEFAULT now()
+);
+CREATE UNIQUE INDEX ON business_services (workspace_id, name);
+
+-- `impact` is what makes the row worth having. "Payments" says almost nothing;
+-- "Payments — card captures failing for EU customers since 09:40" is the
+-- sentence whoever writes the status page needs, written once instead of three
+-- times in the thread. Upserted, not appended: the first note in an incident is
+-- a guess, and refining it is an edit.
+CREATE TABLE ticket_impacted_services (
+    ticket_id  UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    service_id UUID NOT NULL REFERENCES business_services(id) ON DELETE CASCADE,
+    impact     TEXT,
+    level      TEXT NOT NULL DEFAULT 'degraded',   -- down | degraded | minor
+    added_by   UUID,
+    added_at   TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (ticket_id, service_id)
+);
+
+-- THE WORKSPACE'S OWN TICKET PROPERTIES.
+--
+-- Trackly's properties are columns because the product reasons about them — SLA
+-- clocks, routing, counts, permissions. Anything a workspace invents cannot be
+-- reasoned about by code that has never heard of it, so it lives here as data
+-- and NOTHING acts on it: it is stored, shown and searched, and that is the
+-- trade for being able to invent it.
+--
+-- `key` is derived from the label once and NEVER edited: it is what every stored
+-- answer points at. The TYPE is not editable either — a text field becoming a
+-- checkbox would leave a column of sentences that render as neither ticked nor
+-- unticked, and there is no honest migration for that.
+CREATE TABLE ticket_fields (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id      UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    key               TEXT NOT NULL,
+    label             TEXT NOT NULL,
+    type              TEXT NOT NULL DEFAULT 'text',   -- text | select | radio | checkbox
+    help_text         TEXT,
+    -- Newline-separated, not JSON: an admin edits this in a textarea and a
+    -- malformed array is a field nobody can fill in.
+    options           TEXT,
+    -- A select that accepts a value not on the list and REMEMBERS it. Without
+    -- this, filling in a ticket means stopping to ask an admin to add "Mumbai"
+    -- to a list of offices, and the field gets left blank instead.
+    allow_new_options BOOLEAN NOT NULL DEFAULT true,
+    -- Only ever enforced for an agent editing a ticket. A required custom field
+    -- can never block an inbound email or a chat transcript from becoming a
+    -- ticket: the customer has no idea it exists.
+    is_required       BOOLEAN NOT NULL DEFAULT false,
+    sort_order        INTEGER NOT NULL DEFAULT 0,
+    is_active         BOOLEAN NOT NULL DEFAULT true,
+    created_at        TIMESTAMPTZ DEFAULT now(),
+    updated_at        TIMESTAMPTZ DEFAULT now()
+);
+CREATE UNIQUE INDEX ON ticket_fields (workspace_id, key);
+
+-- A row per ANSWERED field, not a JSON blob on the ticket: this is what lets a
+-- value be filtered and counted in SQL, and stops one malformed write corrupting
+-- every other answer.
+--
+-- AN EMPTY ANSWER IS NO ROW. Clearing a field deletes it, so "never answered"
+-- and "answered with nothing" cannot drift into two states that look identical
+-- on screen and behave differently in a query. A checkbox is the exception:
+-- unticked is a real answer and stores "false".
+CREATE TABLE ticket_field_values (
+    ticket_id  UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    field_id   UUID NOT NULL REFERENCES ticket_fields(id) ON DELETE CASCADE,
+    value      TEXT NOT NULL,
+    updated_at TIMESTAMPTZ DEFAULT now(),
+    PRIMARY KEY (ticket_id, field_id)
+);
+CREATE INDEX ON ticket_field_values (field_id, value);
+
 -- Agent-facing: engineering references, on the same footing as a private note
 -- (invariant 5). Never projected onto a customer or guest surface.
 CREATE TABLE ticket_links (

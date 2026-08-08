@@ -74,6 +74,17 @@ public static class TicketActivityType
     public const string TimeLogged = "time_logged";
     public const string ProblemLinked = "problem_linked";
     public const string ProblemUnlinked = "problem_unlinked";
+    public const string TaskAdded = "task_added";
+    public const string TaskCompleted = "task_completed";
+    public const string TaskReopened = "task_reopened";
+    public const string TaskRemoved = "task_removed";
+    public const string ResponderAdded = "responder_added";
+    public const string ResponderRemoved = "responder_removed";
+    public const string AssetAdded = "asset_added";
+    public const string AssetRemoved = "asset_removed";
+    public const string ServiceImpacted = "service_impacted";
+    public const string ServiceRecovered = "service_recovered";
+    public const string FieldChanged = "field_changed";
 
     /// <summary>
     /// The ticket ended. Separate from <see cref="Status"/> even though a status

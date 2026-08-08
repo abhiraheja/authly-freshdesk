@@ -62,7 +62,14 @@ public static class NotificationType
     /// <summary>A reply landed on a ticket assigned to you.</summary>
     public const string Reply = "reply";
 
-    public static readonly string[] All = [Mention, Watching, Assigned, Reply];
+    /// <summary>An SLA deadline is close and there is still time to act.</summary>
+    public const string SlaWarning = "sla_warning";
+
+    /// <summary>An SLA deadline has passed. Sent once, never repeated.</summary>
+    public const string SlaBreached = "sla_breached";
+
+    public static readonly string[] All =
+        [Mention, Watching, Assigned, Reply, SlaWarning, SlaBreached];
 }
 
 /// <summary>

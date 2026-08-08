@@ -24,6 +24,7 @@ public class ChatService(
     TicketService ticketService,
     SlaService sla,
     AutomationService automation,
+    ActivityLog activity,
     NotificationService notifications)
 {
     public async Task<ChatStartResult?> StartAsync(string workspaceSlug, string? name, string? email, CancellationToken ct)
@@ -142,6 +143,13 @@ public class ChatService(
         ticket.GuestEmail = session.VisitorEmail;
         ticket.GuestTokenHash = TokenUtils.Sha256Hex(TokenUtils.GenerateToken());
         db.Tickets.Add(ticket);
+
+        // Null actor: a chat visitor is a guest, so there is no user row to
+        // credit and the entry reads as "Trackly". Queued before automation, so
+        // the history opens with the chat becoming a ticket rather than with the
+        // rules that fired on it.
+        activity.Happened(session.WorkspaceId, ticket.Id, null,
+            TicketActivityType.Created, ticket.Subject);
 
         var assigneeId = session.AgentId ?? await ticketService.PickRoundRobinAssigneeAsync(session.WorkspaceId, null, ct);
         if (assigneeId is not null)

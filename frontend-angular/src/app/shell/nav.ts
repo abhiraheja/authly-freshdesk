@@ -77,6 +77,7 @@ export const NAV: readonly NavGroup[] = [
     items: [
       { labelKey: 'nav.items.configuration', icon: 'sliders-horizontal', route: '/admin/settings/configuration' },
       { labelKey: 'nav.items.statuses', icon: 'circle', route: '/admin/settings/statuses' },
+      { labelKey: 'nav.items.catalogue', icon: 'clipboard-list', route: '/admin/settings/catalogue' },
       { labelKey: 'nav.items.ticketLayout', icon: 'panel-left-close', route: '/admin/settings/ticket-layout' },
       { labelKey: 'nav.items.analytics', icon: 'bar-chart-3', route: '/admin/analytics' },
       { labelKey: 'nav.items.announcements', icon: 'megaphone', route: '/admin/announcements' },

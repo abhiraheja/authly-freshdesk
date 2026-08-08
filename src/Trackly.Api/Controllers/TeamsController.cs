@@ -11,7 +11,8 @@ namespace Trackly.Api.Controllers;
 [Authorize(Policy = "AgentOrAdmin")]
 public class TeamsController(TeamService teams) : ControllerBase
 {
-    public record CreateTeamRequest(string Name);
+    /// <param name="ParentId">Set to create a sub-department under an existing one.</param>
+    public record CreateTeamRequest(string Name, Guid? ParentId = null);
     public record AddMemberRequest(Guid UserId);
 
     [HttpGet]
@@ -21,7 +22,7 @@ public class TeamsController(TeamService teams) : ControllerBase
     [HttpPost]
     [Authorize(Policy = "Admin")]
     public async Task<IActionResult> Create([FromBody] CreateTeamRequest req, CancellationToken ct)
-        => StatusCode(StatusCodes.Status201Created, await teams.CreateAsync(User.GetActor(), req.Name, ct));
+        => StatusCode(StatusCodes.Status201Created, await teams.CreateAsync(User.GetActor(), req.Name, req.ParentId, ct));
 
     [HttpPut("{id:guid}")]
     [Authorize(Policy = "Admin")]

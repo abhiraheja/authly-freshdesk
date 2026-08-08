@@ -13,6 +13,7 @@ import {
   Spinner,
   ToastService,
 } from '@trackly/ui';
+import { BusinessHoursSettings } from './business-hours-settings';
 
 /** Most urgent first — an SLA table is read top-down looking for the tight one. */
 const PRIORITIES = ['urgent', 'high', 'medium', 'low'] as const;
@@ -46,6 +47,7 @@ const PRIORITIES = ['urgent', 'high', 'medium', 'low'] as const;
     InputDirective,
     SkeletonDirective,
     Spinner,
+    BusinessHoursSettings,
   ],
   template: `
     <div class="mx-auto max-w-[720px]">
@@ -137,6 +139,11 @@ const PRIORITIES = ['urgent', 'high', 'medium', 'low'] as const;
       } @else {
         <span tkSkeleton class="h-64 w-full"></span>
       }
+
+      <!-- Business hours and the scorecard sit under the targets, in that
+           order: the targets are the promise, the hours are what makes it
+           keepable, and the scorecard is how well it was kept. -->
+      <tk-admin-business-hours class="mt-5 block" />
     </div>
   `,
 })

@@ -39,6 +39,7 @@ public class ChannelInboundService(
     TicketService ticketService,
     SlaService sla,
     AutomationService automation,
+    ActivityLog activity,
     NotificationService notifications)
 {
     // Verify the webhook signature and resolve the workspace for a provider.
@@ -113,6 +114,13 @@ public class ChannelInboundService(
         }
         db.Tickets.Add(ticket);
 
+        // Before automation, so the history opens with the message arriving
+        // rather than with the rules that fired on it. Null actor for a sender
+        // Trackly has no user row for — the entry reads as "Trackly", which is
+        // exactly what happened.
+        activity.Happened(workspaceId, ticket.Id, matchedUser?.Id,
+            TicketActivityType.Created, ticket.Subject);
+
         var assigneeId = await ticketService.PickRoundRobinAssigneeAsync(workspaceId, null, ct);
         if (assigneeId is not null)
         {
@@ -161,6 +169,9 @@ public class ChannelInboundService(
         db.Comments.Add(comment);
         ticket.UpdatedAt = DateTime.UtcNow;
         if (authoredByAgent) sla.OnAgentReply(ticket);
+        // Same SaveChanges as the comment, so the duplicate check below rolls
+        // this back with it rather than recording a reply that never landed.
+        activity.Happened(workspaceId, ticket.Id, matchedUser?.Id, TicketActivityType.Replied);
         db.InboundChannelEvents.Add(NewEvent(workspaceId, provider, extId));
 
         if (!await TrySaveAsync(ct))
