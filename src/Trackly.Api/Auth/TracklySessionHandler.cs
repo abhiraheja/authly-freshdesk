@@ -37,6 +37,7 @@ public class TracklySessionHandler(
     : AuthenticationHandler<AuthenticationSchemeOptions>(options, logger, encoder)
 {
     public const string WorkspaceIdClaim = "trackly:workspace_id";
+    public const string MustChangePasswordClaim = "trackly:must_change_password";
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
@@ -58,6 +59,11 @@ public class TracklySessionHandler(
             new(ClaimTypes.Role, session.User.Role),
             new(WorkspaceIdClaim, session.WorkspaceId.ToString()),
         };
+        // Read from the user row on every request, not baked into the session, so
+        // an admin resetting someone's password takes effect on their next call
+        // rather than whenever their session happens to expire.
+        if (session.User.MustChangePassword)
+            claims.Add(new Claim(MustChangePasswordClaim, "true"));
         if (session.User.Email is not null)
             claims.Add(new Claim(ClaimTypes.Email, session.User.Email));
         if (session.User.Name is not null)

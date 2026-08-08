@@ -14,6 +14,12 @@ export interface User {
   /** API path to their photo, or null for the initials fallback. */
   avatarUrl: string | null;
   workspace: Workspace;
+  /**
+   * They are on a temporary password an admin handed them. Route to the
+   * change-password screen — but note the API enforces this independently, so
+   * ignoring the flag produces 403s rather than access.
+   */
+  mustChangePassword: boolean;
 }
 
 /**
@@ -24,6 +30,15 @@ export interface User {
  * workspace, so there is nothing to create and nothing to choose between.
  */
 export type VerifyResponse = { status: 'ok'; user: User };
+
+/** What the sign-in page should offer. Read before anyone has signed in. */
+export interface LoginMethods {
+  /** No workspace exists yet — the visitor belongs on /setup. */
+  needsSetup: boolean;
+  passwordLoginEnabled: boolean;
+  emailLoginEnabled: boolean;
+  sso: { providerName: string; protocol: 'oidc' | 'saml'; startUrl: string } | null;
+}
 
 /** This installation's SSO entry point, if one is configured. */
 export interface SsoDiscovery {

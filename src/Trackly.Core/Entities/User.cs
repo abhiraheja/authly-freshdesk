@@ -33,6 +33,23 @@ public class User
     /// </summary>
     public Dictionary<string, string> CustomFields { get; set; } = new();
     public string Role { get; set; } = TracklyRoles.Customer;
+
+    /// <summary>
+    /// PBKDF2 hash from <see cref="Trackly.Core.Interfaces.IPasswordHasher"/>, or
+    /// null for someone who has never been given one — an SSO user, or a customer
+    /// who only ever signs in with an emailed code. Null means "cannot sign in
+    /// with a password", never "any password will do".
+    /// </summary>
+    public string? PasswordHash { get; set; }
+
+    /// <summary>
+    /// Set when an admin hands out a temporary password. Until the user replaces
+    /// it, the API refuses every request except reading their own profile and
+    /// changing the password — the temporary one travelled over chat or a phone
+    /// call, so it is a credential someone else has seen.
+    /// </summary>
+    public bool MustChangePassword { get; set; }
+
     public bool IsActive { get; set; } = true;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

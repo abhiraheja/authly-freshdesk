@@ -1,5 +1,5 @@
 import type { Routes } from '@angular/router';
-import { guestGuard, setupGuard } from '@trackly/core';
+import { authGuard, guestGuard, setupGuard } from '@trackly/core';
 
 /**
  * Mounted by the host at the app root, outside the shell — these are
@@ -20,6 +20,14 @@ export const authRoutes: Routes = [
     path: 'setup',
     canActivate: [setupGuard],
     loadComponent: () => import('./setup').then((m) => m.Setup),
+  },
+  {
+    // Outside the shell, like the other auth screens: someone on a temporary
+    // password cannot use the app yet, so wrapping this in the app chrome would
+    // put a navigation menu around a door they cannot open.
+    path: 'account/password',
+    canActivate: [authGuard],
+    loadComponent: () => import('./change-password').then((m) => m.ChangePassword),
   },
   {
     // Magic-link landing. The token is NEVER consumed on load — only the confirm

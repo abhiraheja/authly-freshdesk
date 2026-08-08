@@ -83,6 +83,24 @@ type Phase = 'email' | 'code';
               (ngModelChange)="email.set($event)"
             />
 
+            <!-- Password is the primary credential on a self-hosted install: it
+                 is the only one that works before SMTP is configured, and SMTP
+                 is configured from inside Trackly. Hidden only when the admin
+                 has turned it off, or on a customer-branded surface. -->
+            @if (passwordAvailable()) {
+              <label tkLabel for="password" class="mt-5">{{ 'login.password' | transloco }}</label>
+              <input
+                #passwordInput
+                tkInput
+                id="password"
+                name="password"
+                type="password"
+                autocomplete="current-password"
+                [ngModel]="password()"
+                (ngModelChange)="password.set($event)"
+              />
+            }
+
             @if (error(); as message) {
               <tk-alert tone="danger" class="mt-4">{{ message }}</tk-alert>
             }
@@ -93,18 +111,34 @@ type Phase = 'email' | 'code';
               size="lg"
               class="mt-5 w-full"
               [style.background]="accent()"
-              [disabled]="!isValidEmail() || busy()"
+              [disabled]="!canSubmit() || busy()"
             >
               @if (busy()) {
                 <tk-spinner [size]="16" />
               }
-              {{ (checkingSso() ? 'login.checkingSso' : 'login.continue') | transloco }}
+              {{ submitLabelKey() | transloco }}
             </button>
           </form>
 
-          <p class="mt-4 text-meta leading-relaxed text-muted-foreground">
-            {{ 'login.magicLinkHint' | transloco }}
-          </p>
+          <!-- The second way in, and the only one when no password is set: an
+               emailed code. Useless before SMTP exists, so it never replaces the
+               password field — it sits under it. -->
+          @if (emailAvailable()) {
+            <p class="mt-5 text-body text-muted-foreground">
+              @if (passwordAvailable()) {
+                <button
+                  type="button"
+                  class="font-semibold text-primary hover:underline disabled:opacity-50"
+                  [disabled]="!isValidEmail() || busy()"
+                  (click)="send()"
+                >
+                  {{ 'login.emailMeACode' | transloco }}
+                </button>
+              } @else {
+                {{ 'login.magicLinkHint' | transloco }}
+              }
+            </p>
+          }
         }
 
         <!-- ─────────── 2. Code ─────────── -->
@@ -212,14 +246,42 @@ export class Login {
   protected readonly accent = computed(() => this.branding.value()?.primaryColor ?? null);
   protected readonly brandName = computed(() => this.branding.value()?.workspaceName ?? 'Trackly');
 
+  /**
+   * Which methods to offer. Branded (customer-facing) logins skip SSO — the IdP
+   * knows staff, not customers — but still read the toggles.
+   */
+  protected readonly methods = resource({
+    params: () => ({ slug: this.workspaceSlug() }),
+    loader: ({ params }) => this.auth.loginMethods(params.slug),
+  });
+
   protected readonly phase = signal<Phase>('email');
   protected readonly email = signal('');
+  protected readonly password = signal('');
   protected readonly code = signal('');
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly checkingSso = signal(false);
 
   protected readonly isValidEmail = computed(() => /.+@.+\..+/.test(this.email()));
+
+  /**
+   * Defaults to true while the methods call is in flight, so the password field
+   * does not appear a beat after the form — a field that pops in under the
+   * cursor is worse than one that turns out to be unnecessary.
+   */
+  protected readonly passwordAvailable = computed(() => this.methods.value()?.passwordLoginEnabled ?? true);
+  protected readonly emailAvailable = computed(() => this.methods.value()?.emailLoginEnabled ?? true);
+
+  protected readonly canSubmit = computed(() => {
+    if (!this.isValidEmail()) return false;
+    return this.passwordAvailable() ? this.password().length > 0 : true;
+  });
+
+  protected readonly submitLabelKey = computed(() => {
+    if (this.checkingSso()) return 'login.checkingSso';
+    return this.passwordAvailable() ? 'login.signInAction' : 'login.continue';
+  });
 
   /** One key per whole sentence; the workspace name travels as a parameter. */
   protected readonly headlineKey = computed(() =>
@@ -274,27 +336,42 @@ export class Login {
   }
 
   protected async begin(): Promise<void> {
-    if (!this.isValidEmail() || this.busy()) return;
+    if (!this.canSubmit() || this.busy()) return;
     this.error.set(null);
 
     // A branded login is a customer-facing surface; customers are not the people
-    // an IdP knows about, so it stays on the magic link.
-    if (!this.workspaceSlug()) {
+    // an IdP knows about, so it stays off SSO.
+    const sso = this.workspaceSlug() ? null : this.methods.value()?.sso;
+    if (sso?.startUrl) {
       this.checkingSso.set(true);
       this.busy.set(true);
-      try {
-        const discovery = await this.auth.discoverSso();
-        if (discovery?.startUrl) {
-          window.location.href = discovery.startUrl;
-          return;
-        }
-      } finally {
-        this.checkingSso.set(false);
-        this.busy.set(false);
-      }
+      window.location.href = sso.startUrl;
+      return;
+    }
+
+    if (this.passwordAvailable()) {
+      await this.signInWithPassword();
+      return;
     }
 
     await this.send();
+  }
+
+  private async signInWithPassword(): Promise<void> {
+    this.busy.set(true);
+    this.error.set(null);
+    try {
+      const { user } = await this.auth.passwordLogin({
+        email: this.email(),
+        password: this.password(),
+        workspaceSlug: this.workspaceSlug(),
+      });
+      await this.complete(user);
+    } catch (err) {
+      this.error.set(errorMessage(err, this.transloco.translate('login.passwordFailed')));
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   protected async send(): Promise<void> {
@@ -331,6 +408,15 @@ export class Login {
   /** Adopts the session and routes by role, honouring where the user was headed. */
   private async complete(user: User): Promise<void> {
     this.session.set(user);
+    // A temporary password gets replaced before anything else. The API refuses
+    // every other endpoint until it is, so sending them anywhere else would just
+    // produce a screen full of 403s.
+    if (user.mustChangePassword) {
+      await this.router.navigate(['/account/password'], {
+        queryParams: this.returnUrl() ? { returnUrl: this.returnUrl() } : undefined,
+      });
+      return;
+    }
     await this.router.navigateByUrl(this.returnUrl() ?? homePathFor(user));
   }
 }

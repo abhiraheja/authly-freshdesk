@@ -78,6 +78,34 @@ import { AuthLayout } from './auth-layout';
         />
         <p class="mt-1.5 text-meta text-muted-foreground">{{ 'setup.emailHint' | transloco }}</p>
 
+        <label tkLabel for="password" class="mt-5">{{ 'setup.password' | transloco }}</label>
+        <input
+          tkInput
+          id="password"
+          name="password"
+          type="password"
+          autocomplete="new-password"
+          [ngModel]="password()"
+          (ngModelChange)="password.set($event)"
+        />
+        <p class="mt-1.5 text-meta text-muted-foreground">
+          {{ 'setup.passwordHint' | transloco: { min: minLength } }}
+        </p>
+
+        <label tkLabel for="confirm" class="mt-5">{{ 'setup.confirmPassword' | transloco }}</label>
+        <input
+          tkInput
+          id="confirm"
+          name="confirm"
+          type="password"
+          autocomplete="new-password"
+          [ngModel]="confirm()"
+          (ngModelChange)="confirm.set($event)"
+        />
+        @if (mismatch()) {
+          <p class="mt-1.5 text-meta text-danger">{{ 'password.mismatch' | transloco }}</p>
+        }
+
         <label tkLabel for="name" class="mt-5">{{ 'setup.name' | transloco }}</label>
         <input
           tkInput
@@ -110,14 +138,27 @@ export class Setup {
   private readonly router = inject(Router);
   private readonly transloco = inject(TranslocoService);
 
+  /** Kept in step with PasswordPolicy on the server; the server is the authority. */
+  protected readonly minLength = 12;
+
   protected readonly organisation = signal('');
   protected readonly email = signal('');
+  protected readonly password = signal('');
+  protected readonly confirm = signal('');
   protected readonly name = signal('');
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
 
+  protected readonly mismatch = computed(
+    () => this.confirm().length > 0 && this.password() !== this.confirm(),
+  );
+
   protected readonly isValid = computed(
-    () => this.organisation().trim().length > 0 && /.+@.+\..+/.test(this.email()),
+    () =>
+      this.organisation().trim().length > 0 &&
+      /.+@.+\..+/.test(this.email()) &&
+      this.password().length >= this.minLength &&
+      this.password() === this.confirm(),
   );
 
   private readonly organisationInput = viewChild<ElementRef<HTMLInputElement>>('organisationInput');
@@ -139,6 +180,7 @@ export class Setup {
       const { user } = await this.auth.setup({
         organisationName: this.organisation().trim(),
         email: this.email().trim(),
+        password: this.password(),
         name: this.name().trim() || undefined,
       });
       this.session.set(user);

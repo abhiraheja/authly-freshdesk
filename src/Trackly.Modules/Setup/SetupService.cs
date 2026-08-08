@@ -1,17 +1,19 @@
 using Microsoft.EntityFrameworkCore;
 using Trackly.Core.Entities;
+using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
 using Trackly.Modules.Auth;
 
 namespace Trackly.Modules.Setup;
 
-public record SetupRequest(string OrganisationName, string Email, string? Name);
+public record SetupRequest(string OrganisationName, string Email, string Password, string? Name);
 
 public enum SetupStatus
 {
     Success,
     AlreadySetUp,   // a workspace exists — this endpoint is single-use
     InvalidRequest,
+    WeakPassword,
 }
 
 public record SetupResult(SetupStatus Status, User? User = null, string? SessionToken = null);
@@ -30,7 +32,7 @@ public record SetupResult(SetupStatus Status, User? User = null, string? Session
 /// That is why this is not just onboarding step 1 reused, and why it must stay
 /// unreachable the moment a workspace exists.
 /// </summary>
-public class SetupService(TracklyDbContext db, AuthService auth)
+public class SetupService(TracklyDbContext db, AuthService auth, IPasswordHasher passwords)
 {
     /// <summary>
     /// The single workspace's slug.
@@ -53,6 +55,11 @@ public class SetupService(TracklyDbContext db, AuthService auth)
         var email = request.Email.Trim().ToLowerInvariant();
         if (organisation.Length == 0 || !email.Contains('@'))
             return new SetupResult(SetupStatus.InvalidRequest);
+        // A password is required here, not optional: it is the only credential
+        // that works before SMTP exists, and this is the one chance to collect it
+        // while the operator is standing in front of the screen.
+        if (!PasswordPolicy.IsAcceptable(request.Password))
+            return new SetupResult(SetupStatus.WeakPassword);
 
         // Checked up front so the ordinary "someone already set this up" case
         // answers without throwing. It is not what makes this safe — see below.
@@ -66,6 +73,7 @@ public class SetupService(TracklyDbContext db, AuthService auth)
             Email = email,
             Name = string.IsNullOrWhiteSpace(request.Name) ? null : request.Name.Trim(),
             Role = TracklyRoles.Admin,
+            PasswordHash = passwords.Hash(request.Password),
             LastLoginAt = DateTime.UtcNow,
         };
         db.Workspaces.Add(workspace);

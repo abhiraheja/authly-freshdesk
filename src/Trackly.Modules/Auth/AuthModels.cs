@@ -27,3 +27,21 @@ public record VerifyResult(
     User? User = null,
     string? SessionToken = null,
     string? Email = null);
+
+public record PasswordLoginRequest(string? Email, string? Password, string? WorkspaceSlug);
+
+public enum PasswordLoginStatus
+{
+    Success,
+    InvalidCredentials,       // unknown email, no password set, or wrong password — deliberately one outcome
+    UserInactive,
+    PasswordLoginDisabled,
+    NotSetUp,
+}
+
+public record PasswordLoginResult(
+    PasswordLoginStatus Status,
+    User? User = null,
+    string? SessionToken = null);
+
+public enum ChangePasswordStatus { Success, InvalidCredentials, WeakPassword }

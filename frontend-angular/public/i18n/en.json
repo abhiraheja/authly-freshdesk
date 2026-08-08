@@ -105,7 +105,11 @@
       "statResponse": "median first response",
       "statCsat": "CSAT",
       "statChannels": "channels, one inbox"
-    }
+    },
+    "password": "Password",
+    "signInAction": "Sign in",
+    "emailMeACode": "Email me a sign-in code instead",
+    "passwordFailed": "That email and password do not match."
   },
   "dashboard": {
     "welcome": "Welcome back",
@@ -860,6 +864,26 @@
     "panel": {
       "title": "One workspace. Yours.",
       "body": "Trackly runs on your own infrastructure. No tenant to pick, no domain to verify — set a name and start taking tickets."
+    },
+    "password": "Password",
+    "passwordHint": "At least {{min}} characters. This is how you sign in from now on.",
+    "confirmPassword": "Confirm password"
+  },
+  "password": {
+    "title": "Change your password",
+    "subtitle": "Choose something only you know.",
+    "forcedTitle": "Set your own password",
+    "forcedSubtitle": "You signed in with a temporary password someone else issued. Replace it before you continue.",
+    "current": "Current password",
+    "new": "New password",
+    "confirm": "Confirm new password",
+    "rule": "At least {{min}} characters.",
+    "mismatch": "Those two don't match.",
+    "submit": "Save password",
+    "failed": "Could not change the password.",
+    "panel": {
+      "title": "Your account, your key.",
+      "body": "Trackly stores only a hash — nobody, including an administrator, can read your password back."
     }
   }
 }

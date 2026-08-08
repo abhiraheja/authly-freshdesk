@@ -5,18 +5,23 @@ using Trackly.Api.Auth;
 using Trackly.Core.Entities;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
+using Trackly.Modules.Auth;
 
 namespace Trackly.Api.Controllers;
 
 [ApiController]
 [Route("api/users")]
 [Authorize]
-public class UsersController(TracklyDbContext db, IWorkspaceFileStorage storage) : ControllerBase
+public class UsersController(
+    TracklyDbContext db,
+    IWorkspaceFileStorage storage,
+    IPasswordHasher passwords) : ControllerBase
 {
     private const long MaxAvatarBytes = 1024 * 1024; // 1 MB — matches the logo cap
     private static readonly string[] AllowedAvatarTypes = ["image/png", "image/jpeg", "image/webp"];
 
     [HttpGet("me")]
+    [AllowWhilePasswordChangeRequired]   // the SPA reads this to decide what to show
     public async Task<IActionResult> Me(CancellationToken ct)
     {
         var user = await db.Users
@@ -71,8 +76,9 @@ public class UsersController(TracklyDbContext db, IWorkspaceFileStorage storage)
     // a conflict they have to go and resolve. A duplicate row would be the worse
     // outcome — two histories for one customer.
     //
-    // No password is set because Trackly has none: the customer signs in with a
-    // magic link whenever they first come to the portal.
+    // No password is set: a customer signs in with an emailed code whenever they
+    // first come to the portal. Staff accounts are different — see POST members
+    // below, which hands out a temporary password.
     [HttpPost]
     [Authorize(Policy = "AgentOrAdmin")]
     public async Task<IActionResult> Create([FromBody] CustomerRequest request, CancellationToken ct)
@@ -307,5 +313,143 @@ public class UsersController(TracklyDbContext db, IWorkspaceFileStorage storage)
         user.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         return Ok(new { user.Id, user.Name, user.Email, user.Role, user.IsActive });
+    }
+
+    // ---- Staff accounts and passwords ---------------------------------------
+
+    /// <summary>
+    /// The admin Members screen. Unlike <c>GET /api/users</c> — which feeds
+    /// assignee pickers and therefore only lists active people — this returns
+    /// deactivated accounts too, because reactivating one is a thing an admin
+    /// comes here to do.
+    /// </summary>
+    [HttpGet("members")]
+    [Authorize(Policy = "Admin")]
+    public async Task<IActionResult> Members(CancellationToken ct)
+    {
+        var rows = await db.Users
+            .Where(u => u.WorkspaceId == User.GetWorkspaceId())
+            .OrderBy(u => u.Role == TracklyRoles.Customer)   // staff first
+            .ThenBy(u => u.Name ?? u.Email)
+            .Select(u => new
+            {
+                u.Id, u.Name, u.Email, u.Role, u.IsActive, u.LastLoginAt,
+                u.MustChangePassword, u.AvatarStorageKey,
+                // Whether they *can* sign in with a password — never the hash.
+                HasPassword = u.PasswordHash != null,
+            })
+            .ToListAsync(ct);
+
+        return Ok(rows.Select(u => new
+        {
+            u.Id, u.Name, u.Email, u.Role, u.IsActive, u.LastLoginAt,
+            u.MustChangePassword, u.HasPassword,
+            AvatarUrl = UserAvatar.UrlFor(u.Id, u.AvatarStorageKey),
+        }));
+    }
+
+    public record AddMemberRequest(string? Email, string? Name, string? Role, string? Password);
+
+    /// <summary>
+    /// Creates an agent or admin and hands back a password for the admin to pass
+    /// on themselves.
+    ///
+    /// **This exists because invitations are emails.** On a self-hosted install
+    /// SMTP is configured from inside Trackly, so until that is done an invite
+    /// has nowhere to go — and "add your first agent" would be impossible. Here
+    /// the admin reads the password out over a call or a chat, and the recipient
+    /// is forced to replace it on first sign-in.
+    /// </summary>
+    [HttpPost("members")]
+    [Authorize(Policy = "Admin")]
+    public async Task<IActionResult> AddMember([FromBody] AddMemberRequest request, CancellationToken ct)
+    {
+        var email = request.Email?.Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains('@'))
+            return BadRequest(new { error = "A valid email address is required." });
+
+        var role = request.Role ?? TracklyRoles.Agent;
+        if (!TracklyRoles.All.Contains(role))
+            return BadRequest(new { error = "Role must be customer, agent or admin." });
+
+        // Supplied or generated, but always checked — an admin typing a weak one
+        // by hand is the same exposure as a weak one anywhere else.
+        var password = string.IsNullOrWhiteSpace(request.Password)
+            ? PasswordPolicy.GenerateTemporary()
+            : request.Password;
+        if (!PasswordPolicy.IsAcceptable(password))
+            return BadRequest(new { error = PasswordPolicy.Describe() });
+
+        var workspaceId = User.GetWorkspaceId();
+        var user = await db.Users
+            .SingleOrDefaultAsync(u => u.WorkspaceId == workspaceId && u.Email == email, ct);
+
+        if (user is null)
+        {
+            user = new Trackly.Core.Entities.User { WorkspaceId = workspaceId, Email = email };
+            db.Users.Add(user);
+        }
+        else if (user.PasswordHash is not null)
+        {
+            // Promoting an existing customer to staff is fine; silently replacing
+            // a password they already chose is not.
+            return Conflict(new { error = "That person already has an account. Reset their password instead." });
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Name))
+            user.Name = request.Name.Trim();
+        user.Role = role;
+        user.IsActive = true;
+        user.PasswordHash = passwords.Hash(password);
+        user.MustChangePassword = true;
+        user.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        // The only time this password is ever readable. It is not stored in
+        // plaintext and cannot be shown again — a second look means a reset.
+        return Ok(new
+        {
+            user.Id, user.Email, user.Name, user.Role,
+            temporaryPassword = password,
+        });
+    }
+
+    public record ResetPasswordRequest(string? Password);
+
+    /// <summary>
+    /// Admin reset. The recovery path when someone is locked out and email either
+    /// is not configured or is not working — which, on a self-hosted box with no
+    /// support desk behind it, is the difference between a bad afternoon and a
+    /// database restore.
+    /// </summary>
+    [HttpPost("{id:guid}/password")]
+    [Authorize(Policy = "Admin")]
+    public async Task<IActionResult> ResetPassword(
+        Guid id, [FromBody] ResetPasswordRequest request, CancellationToken ct)
+    {
+        var user = await db.Users.SingleOrDefaultAsync(
+            u => u.WorkspaceId == User.GetWorkspaceId() && u.Id == id, ct);
+        if (user is null)
+            return NotFound();
+
+        var password = string.IsNullOrWhiteSpace(request.Password)
+            ? PasswordPolicy.GenerateTemporary()
+            : request.Password;
+        if (!PasswordPolicy.IsAcceptable(password))
+            return BadRequest(new { error = PasswordPolicy.Describe() });
+
+        user.PasswordHash = passwords.Hash(password);
+        // An admin resetting their OWN password is choosing it, not receiving it
+        // from someone else, so there is nothing to force them to replace.
+        user.MustChangePassword = user.Id != User.GetUserId();
+        user.UpdatedAt = DateTime.UtcNow;
+
+        // Every existing session for that user goes. A reset is what you do when
+        // you think somebody else is in the account.
+        await db.Sessions.Where(s => s.UserId == user.Id && s.UserId != User.GetUserId())
+            .ExecuteDeleteAsync(ct);
+        await db.SaveChangesAsync(ct);
+
+        return Ok(new { user.Id, user.Email, temporaryPassword = password, mustChange = user.MustChangePassword });
     }
 }

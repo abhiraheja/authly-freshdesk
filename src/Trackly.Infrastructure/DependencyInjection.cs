@@ -43,6 +43,7 @@ public static class DependencyInjection
         services.AddSingleton<StorageProviderCache>();
         services.AddScoped<IWorkspaceFileStorage, WorkspaceFileStorage>();
         services.AddSingleton<ISecretProtector, AesGcmSecretProtector>();
+        services.AddSingleton<IPasswordHasher, Pbkdf2PasswordHasher>();
 
         // OIDC (discovery/JWKS caching lives inside the singleton client).
         services.AddHttpClient("oidc");

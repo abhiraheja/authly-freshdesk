@@ -42,6 +42,15 @@ public class EmailConfig
     public int PollIntervalSeconds { get; set; } = 60;
     public DateTime? LastPolledAt { get; set; }
 
+    /// <summary>
+    /// When a test message was last delivered successfully. This is the only
+    /// evidence that outbound email actually works, and turning off password
+    /// sign-in depends on it: without proof, "email code only" is a guess that
+    /// locks everyone out. Cleared whenever the settings change, because the
+    /// proof was about the old ones.
+    /// </summary>
+    public DateTime? LastVerifiedAt { get; set; }
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 

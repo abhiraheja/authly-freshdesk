@@ -27,7 +27,13 @@ using Trackly.Api.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilter>());
+builder.Services.AddControllers(options =>
+{
+    options.Filters.Add<ApiExceptionFilter>();
+    // Global: a temporary password must be replaced before the session can do
+    // anything else. Opt out per action with [AllowWhilePasswordChangeRequired].
+    options.Filters.Add<MustChangePasswordFilter>();
+});
 builder.Services.AddOpenApi();
 builder.Services.AddTracklyInfrastructure(builder.Configuration);
 builder.Services.AddScoped<AuthService>();

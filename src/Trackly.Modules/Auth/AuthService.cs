@@ -6,7 +6,11 @@ using Trackly.Infrastructure.Data;
 
 namespace Trackly.Modules.Auth;
 
-public class AuthService(TracklyDbContext db, IEmailSender emailSender, IConfiguration configuration)
+public class AuthService(
+    TracklyDbContext db,
+    IEmailSender emailSender,
+    IConfiguration configuration,
+    IPasswordHasher passwords)
 {
     private const int MaxSendsPer15Minutes = 3;
     private const int MaxCodeAttempts = 5;
@@ -136,6 +140,75 @@ public class AuthService(TracklyDbContext db, IEmailSender emailSender, IConfigu
                         && t.RequesterId == null
                         && t.GuestEmail == user.Email)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RequesterId, user.Id), ct);
+    }
+
+    // ---- Password sign-in ---------------------------------------------------
+
+    /// <summary>
+    /// Email + password. The credential that still works when SMTP does not,
+    /// which on a self-hosted install is the state every deployment starts in.
+    /// </summary>
+    public async Task<PasswordLoginResult> SignInWithPasswordAsync(
+        PasswordLoginRequest request, string? ipAddress, string? userAgent, CancellationToken ct)
+    {
+        var email = NormalizeEmail(request.Email ?? "");
+
+        var workspace = await db.ResolveWorkspaceAsync(request.WorkspaceSlug, ct);
+        if (workspace is null)
+            return new PasswordLoginResult(PasswordLoginStatus.NotSetUp);
+        if (!workspace.PasswordLoginEnabled)
+            return new PasswordLoginResult(PasswordLoginStatus.PasswordLoginDisabled);
+
+        var user = await db.Users.SingleOrDefaultAsync(
+            u => u.WorkspaceId == workspace.Id && u.Email == email, ct);
+
+        // One outcome for "no such account", "no password set" and "wrong
+        // password". Distinguishing them would turn this endpoint into a way to
+        // ask whether an address has an account here.
+        if (user?.PasswordHash is null || !passwords.Verify(request.Password ?? "", user.PasswordHash))
+            return new PasswordLoginResult(PasswordLoginStatus.InvalidCredentials);
+        if (!user.IsActive)
+            return new PasswordLoginResult(PasswordLoginStatus.UserInactive);
+
+        // Raising the iteration count later costs nothing: each password is
+        // upgraded here, on its owner's next sign-in, while the plaintext is
+        // briefly in hand.
+        if (passwords.NeedsRehash(user.PasswordHash))
+            user.PasswordHash = passwords.Hash(request.Password!);
+
+        user.LastLoginAt = DateTime.UtcNow;
+        var sessionToken = CreateSession(user, workspace.Id, ipAddress, userAgent);
+        await db.SaveChangesAsync(ct);
+        await LinkGuestTicketsAsync(user, ct);
+
+        user.Workspace = workspace;
+        return new PasswordLoginResult(PasswordLoginStatus.Success, user, sessionToken);
+    }
+
+    /// <summary>
+    /// Self-service change. Requires the current password even though the caller
+    /// already holds a session — a session can be a borrowed laptop, and this is
+    /// the request that would lock its owner out.
+    /// </summary>
+    public async Task<ChangePasswordStatus> ChangePasswordAsync(
+        Guid userId, string currentPassword, string newPassword, CancellationToken ct)
+    {
+        var user = await db.Users.SingleOrDefaultAsync(u => u.Id == userId, ct);
+        if (user is null)
+            return ChangePasswordStatus.InvalidCredentials;
+
+        // Someone who has never had a password (SSO, or emailed codes only) can
+        // set one without proving a previous one they never had.
+        if (user.PasswordHash is not null && !passwords.Verify(currentPassword ?? "", user.PasswordHash))
+            return ChangePasswordStatus.InvalidCredentials;
+        if (!PasswordPolicy.IsAcceptable(newPassword))
+            return ChangePasswordStatus.WeakPassword;
+
+        user.PasswordHash = passwords.Hash(newPassword);
+        user.MustChangePassword = false;
+        user.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return ChangePasswordStatus.Success;
     }
 
     // ---- Sessions ----------------------------------------------------------

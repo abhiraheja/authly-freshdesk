@@ -1,14 +1,51 @@
 import { Injectable, inject } from '@angular/core';
 import { ApiService } from '../api/api.service';
-import type { SsoDiscovery, User, VerifyResponse } from './auth.models';
+import type { LoginMethods, SsoDiscovery, User, VerifyResponse } from './auth.models';
 
 /**
- * Passwordless auth. Trackly has no password endpoint and never will — the only
- * ways in are a magic link + 6-digit code, or a workspace's configured SSO.
+ * Three ways in: email + password, an emailed link/6-digit code, or SSO.
+ *
+ * Password is the primary one on a self-hosted install, because the other two
+ * cannot work on a fresh database — SMTP and SSO are both configured from
+ * inside Trackly. An admin may turn passwords off later, but only once email or
+ * SSO is proven to work (see LoginSettingsController).
  */
 @Injectable({ providedIn: 'root' })
 export class AuthApi {
   private readonly api = inject(ApiService);
+
+  /**
+   * Which sign-in methods this installation offers.
+   *
+   * Falls back to "password and email, no SSO" if the call fails: the sign-in
+   * page must still render something usable when the API is having a bad moment,
+   * and offering a method that turns out to be off is a clear error message —
+   * offering nothing is a dead end.
+   */
+  async loginMethods(workspaceSlug?: string): Promise<LoginMethods> {
+    try {
+      return await this.api.get<LoginMethods>(
+        '/api/public/login-methods',
+        workspaceSlug ? { workspace: workspaceSlug } : undefined,
+      );
+    } catch {
+      return { needsSetup: false, passwordLoginEnabled: true, emailLoginEnabled: true, sso: null };
+    }
+  }
+
+  /**
+   * Email + password.
+   *
+   * The primary way in on a self-hosted install: it is the only credential that
+   * works before SMTP is configured, and SMTP is configured from inside Trackly.
+   */
+  passwordLogin(params: { email: string; password: string; workspaceSlug?: string }): Promise<{ user: User }> {
+    return this.api.post<{ user: User }>('/api/auth/password/login', params);
+  }
+
+  changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    return this.api.post<void>('/api/auth/password/change', { currentPassword, newPassword });
+  }
 
   /** Emails a sign-in link and a 6-digit code. `workspaceSlug` scopes it to one workspace. */
   sendMagicLink(email: string, workspaceSlug?: string): Promise<void> {
@@ -49,7 +86,12 @@ export class AuthApi {
    * No email round trip on purpose — SMTP is configured from inside the admin UI,
    * so on a fresh install there is no way to deliver a link yet.
    */
-  setup(params: { organisationName: string; email: string; name?: string }): Promise<{ user: User }> {
+  setup(params: {
+    organisationName: string;
+    email: string;
+    password: string;
+    name?: string;
+  }): Promise<{ user: User }> {
     return this.api.post<{ user: User }>('/api/setup', params);
   }
 

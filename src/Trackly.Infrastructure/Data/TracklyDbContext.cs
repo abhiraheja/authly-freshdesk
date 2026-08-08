@@ -74,6 +74,12 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.ToTable("workspaces");
             e.HasIndex(w => w.Slug).IsUnique();
             e.Property(w => w.EmailLoginEnabled).HasDefaultValue(true);
+            // Must be true, and must be declared here rather than only on the
+            // entity: without it the migration adds the column defaulting to
+            // false, which turns password sign-in OFF for every existing
+            // workspace — locking out an installation whose email is not yet
+            // proven to work. The default is what backfills existing rows.
+            e.Property(w => w.PasswordLoginEnabled).HasDefaultValue(true);
             e.Property(w => w.AiEnabled).HasDefaultValue(true);
         });
 

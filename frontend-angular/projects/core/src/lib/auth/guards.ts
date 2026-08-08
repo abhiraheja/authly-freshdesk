@@ -13,9 +13,16 @@ export const authGuard: CanActivateFn = async (_route, state) => {
   const router = inject(Router);
 
   const user = await session.ensureLoaded();
-  if (user) return true;
+  if (user === null) return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
 
-  return router.createUrlTree(['/login'], { queryParams: { returnUrl: state.url } });
+  // A temporary password must be replaced first. The API refuses everything else
+  // anyway, so without this the app would render a shell full of failed
+  // requests. Not a security control — that lives in MustChangePasswordFilter.
+  if (user.mustChangePassword && !state.url.startsWith('/account/password')) {
+    return router.createUrlTree(['/account/password'], { queryParams: { returnUrl: state.url } });
+  }
+
+  return true;
 };
 
 /**

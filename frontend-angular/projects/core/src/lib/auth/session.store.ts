@@ -96,6 +96,17 @@ export class SessionStore {
     }
   }
 
+  /**
+   * Re-reads the session from the server, replacing what is cached.
+   *
+   * For changes only the server can decide — chiefly `mustChangePassword`, which
+   * the change-password screen exists to clear and must not simply assume.
+   */
+  async reload(): Promise<User | null> {
+    this.clear();
+    return this.ensureLoaded();
+  }
+
   /** Drops the cached session so the next `ensureLoaded()` refetches. */
   clear(): void {
     this._user.set(null);

@@ -75,9 +75,68 @@ public class EmailSettingsController(TracklyDbContext db, ISecretProtector secre
         config.MailboxPasswordEncrypted = ApplySecret(config.MailboxPasswordEncrypted, req.MailboxPassword);
         config.PollIntervalSeconds = Math.Clamp(req.PollIntervalSeconds ?? config.PollIntervalSeconds, 30, 3600);
 
+        // Any change invalidates the proof: the last successful test was about
+        // the previous settings, and turning off password sign-in leans on this
+        // flag. Re-test after editing.
+        config.LastVerifiedAt = null;
+
         config.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
         return Ok(ToResponse(config));
+    }
+
+    /// <summary>
+    /// Sends a real message to the caller and records that it worked.
+    ///
+    /// This is the only evidence Trackly has that outbound email functions, and
+    /// <see cref="LoginSettingsController"/> requires it before password sign-in
+    /// can be turned off. A configuration that merely *looks* complete is not
+    /// enough — the failure mode it guards against is nobody being able to log in.
+    /// </summary>
+    [HttpPost("api/admin/settings/email/test")]
+    public async Task<IActionResult> TestEmail(
+        [FromServices] IWorkspaceEmailSender sender, CancellationToken ct)
+    {
+        var to = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
+        if (string.IsNullOrWhiteSpace(to))
+            return BadRequest(new { ok = false, error = "Your account has no email address to send a test to." });
+
+        var config = await GetOrCreateConfigAsync(ct);
+
+        // Same resolution the real notification path uses: the workspace's own
+        // relay when it has one, otherwise the shared/deployment relay. Testing
+        // anything else would prove the wrong thing.
+        SmtpSettings? smtp = null;
+        if (config is { UseSharedSmtp: false, SmtpHost: { Length: > 0 } host })
+        {
+            var password = config.SmtpPasswordEncrypted is { Length: > 0 } enc ? secrets.Unprotect(enc) : null;
+            smtp = new SmtpSettings(host, config.SmtpPort ?? 587, config.SmtpUser, password, config.SmtpUseStartTls);
+        }
+
+        try
+        {
+            await sender.SendAsync(smtp, new EmailMessage(
+                to,
+                "Trackly email test",
+                """
+                This is a test message from Trackly.
+
+                If you are reading it, outbound email works and sign-in codes,
+                invitations and ticket notifications can reach people.
+                """,
+                FromEmail: config.FromEmail,
+                FromName: config.FromName), ct);
+        }
+        catch (Exception ex)
+        {
+            // Reported, not thrown: a failed test is an answer to the question the
+            // admin asked, and the message is the useful part of it.
+            return Ok(new { ok = false, error = ex.Message });
+        }
+
+        config.LastVerifiedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return Ok(new { ok = true, sentTo = to, verifiedAt = config.LastVerifiedAt });
     }
 
     // ---- Notification settings ----------------------------------------------
@@ -140,6 +199,7 @@ public class EmailSettingsController(TracklyDbContext db, ISecretProtector secre
     private static object ToResponse(EmailConfig c) => new
     {
         useSharedSmtp = c.UseSharedSmtp,
+        lastVerifiedAt = c.LastVerifiedAt,
         smtpHost = c.SmtpHost,
         smtpPort = c.SmtpPort,
         smtpUser = c.SmtpUser,
