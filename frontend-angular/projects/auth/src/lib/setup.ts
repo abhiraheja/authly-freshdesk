@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   ElementRef,
   computed,
   effect,
@@ -124,11 +123,12 @@ export class Setup {
   private readonly organisationInput = viewChild<ElementRef<HTMLInputElement>>('organisationInput');
 
   constructor() {
-    const focus = effect(() => {
-      this.organisationInput()?.nativeElement.focus();
-      focus.destroy();
+    // Same shape as the login screen: the microtask lets the view settle before
+    // the focus lands.
+    effect(() => {
+      const input = this.organisationInput();
+      queueMicrotask(() => input?.nativeElement.focus());
     });
-    inject(DestroyRef).onDestroy(() => focus.destroy());
   }
 
   protected async submit(): Promise<void> {

@@ -44,15 +44,20 @@ export function roleGuard(...roles: UserRole[]): CanActivateFn {
  * signed in should land on your home, not ask you to sign in again.
  */
 export const guestGuard: CanActivateFn = async () => {
+  // Every inject() up here, before the first await. The injection context only
+  // exists for the synchronous part of the guard, so resolving a dependency
+  // after an await throws NG0203 at runtime — which nothing in the build or the
+  // type-checker will tell you about.
   const session = inject(SessionStore);
   const router = inject(Router);
+  const auth = inject(AuthApi);
 
   const user = await session.ensureLoaded();
   if (user) return router.createUrlTree([homePathFor(user)]);
 
   // A brand-new install has nothing to sign in to yet. Sending them to /setup
   // beats a sign-in form that can only ever fail.
-  return (await inject(AuthApi).needsSetup()) ? router.createUrlTree(['/setup']) : true;
+  return (await auth.needsSetup()) ? router.createUrlTree(['/setup']) : true;
 };
 
 /**
@@ -64,6 +69,8 @@ export const guestGuard: CanActivateFn = async () => {
  */
 export const setupGuard: CanActivateFn = async () => {
   const router = inject(Router);
-  if (await inject(AuthApi).needsSetup()) return true;
+  const auth = inject(AuthApi);
+
+  if (await auth.needsSetup()) return true;
   return router.createUrlTree(['/login']);
 };
