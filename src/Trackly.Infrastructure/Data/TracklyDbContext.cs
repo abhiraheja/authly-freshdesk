@@ -29,6 +29,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<TicketImpactedService> TicketImpactedServices => Set<TicketImpactedService>();
     public DbSet<TicketField> TicketFields => Set<TicketField>();
     public DbSet<TicketFieldValue> TicketFieldValues => Set<TicketFieldValue>();
+    public DbSet<TicketPin> TicketPins => Set<TicketPin>();
     public DbSet<BusinessHours> BusinessHours => Set<BusinessHours>();
     public DbSet<BusinessHourDay> BusinessHourDays => Set<BusinessHourDay>();
     public DbSet<BusinessHoliday> BusinessHolidays => Set<BusinessHoliday>();
@@ -202,6 +203,15 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
                 .OnDelete(DeleteBehavior.NoAction);
             e.HasOne(t => t.SubTeam).WithMany().HasForeignKey(t => t.SubTeamId)
                 .OnDelete(DeleteBehavior.NoAction);
+            // SetNull: the flag is a fact about the ticket and outlives whoever
+            // raised it — losing the flag because somebody left would quietly
+            // demote a ticket the team had marked.
+            e.HasOne(t => t.FlaggedBy).WithMany().HasForeignKey(t => t.FlaggedById)
+                .OnDelete(DeleteBehavior.SetNull);
+            // Partial: flagged tickets are a handful out of the whole table, and
+            // the list filters on exactly this.
+            e.HasIndex(t => new { t.WorkspaceId, t.FlaggedAt })
+                .HasFilter("flagged_at IS NOT NULL");
             // SetNull, not Cascade: deactivating and removing an agent must not
             // take the resolution of every ticket they ever closed with them.
             e.HasOne(t => t.ResolvedBy).WithMany().HasForeignKey(t => t.ResolvedById)
@@ -271,6 +281,21 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             // outlives the agent's account.
             e.HasOne(x => x.CreatedBy).WithMany().HasForeignKey(x => x.CreatedById)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<TicketPin>(e =>
+        {
+            e.ToTable("ticket_pins");
+            e.HasKey(p => new { p.TicketId, p.AgentId });
+            // "My pins, newest first" — the only query that does not start from a
+            // ticket, and what the list sorts by.
+            e.HasIndex(p => new { p.AgentId, p.PinnedAt });
+            e.HasOne(p => p.Ticket).WithMany(t => t.Pins).HasForeignKey(p => p.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Cascade: a pin is one person's bookmark and means nothing without
+            // them. Unlike a time entry it is not a record of work.
+            e.HasOne(p => p.Agent).WithMany().HasForeignKey(p => p.AgentId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<BusinessHours>(e =>

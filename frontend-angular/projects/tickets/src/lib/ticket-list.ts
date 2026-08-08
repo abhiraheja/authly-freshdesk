@@ -181,6 +181,8 @@ function orUndefined(values: string[]): string[] | undefined {
           <tk-option value="mine" [label]="'tickets.assignedToMe' | transloco" />
           <tk-option value="mentioned" [label]="'nav.items.mentioned' | transloco" />
           <tk-option value="watching" [label]="'nav.items.watching' | transloco" />
+          <tk-option value="pinned" [label]="'nav.items.pinned' | transloco" />
+          <tk-option value="flagged" [label]="'nav.items.flagged' | transloco" />
         </tk-select>
 
         <tk-select
@@ -307,19 +309,51 @@ function orUndefined(values: string[]): string[] | undefined {
                   <tr class="cursor-pointer" (click)="open(ticket)">
                     <td>
                       <span class="flex items-start gap-2.5">
+                        <!-- Pinning from the list is the point of pinning: it is
+                             where an agent decides what to keep in front of them,
+                             and making them open each ticket to do it would mean
+                             nobody does. stopPropagation because the row itself
+                             navigates. -->
+                        <button
+                          type="button"
+                          class="mt-0.5 shrink-0 rounded hover:text-warning-ink disabled:opacity-40"
+                          [class.text-warning-ink]="ticket.isPinned"
+                          [class.text-muted-foreground/40]="!ticket.isPinned"
+                          [attr.aria-pressed]="ticket.isPinned"
+                          [attr.aria-label]="(ticket.isPinned ? 'tickets.pin.unpin' : 'tickets.pin.pin') | transloco"
+                          [title]="(ticket.isPinned ? 'tickets.pin.unpin' : 'tickets.pin.pin') | transloco"
+                          [disabled]="pinning()"
+                          (click)="$event.stopPropagation(); togglePin(ticket)"
+                        >
+                          <tk-icon name="pin" [size]="14" [filled]="ticket.isPinned" />
+                        </button>
                         <tk-icon
                           [name]="channelIcon(ticket.channel)"
                           [size]="16"
                           class="mt-0.5 text-muted-foreground"
                         />
                         <span class="min-w-0">
-                          <a
-                            class="block max-w-[260px] truncate font-semibold hover:text-primary"
-                            [routerLink]="['/dashboard/tickets', ticket.id]"
-                            (click)="$event.stopPropagation()"
-                          >
-                            {{ ticket.subject }}
-                          </a>
+                          <span class="flex items-center gap-1.5">
+                            <!-- The flag rides next to the subject rather than in
+                                 a column of its own: it is rare, so a column
+                                 would be empty on every row but one. -->
+                            @if (ticket.flaggedAt) {
+                              <tk-icon
+                                name="flag"
+                                [size]="13"
+                                filled
+                                class="shrink-0 text-danger"
+                                [title]="ticket.flagReason ?? ('tickets.flag.flagged' | transloco)"
+                              />
+                            }
+                            <a
+                              class="block max-w-[260px] truncate font-semibold hover:text-primary"
+                              [routerLink]="['/dashboard/tickets', ticket.id]"
+                              (click)="$event.stopPropagation()"
+                            >
+                              {{ ticket.subject }}
+                            </a>
+                          </span>
                           <span class="block text-meta text-muted-foreground">
                             #{{ ticket.id.slice(0, 8) }} · {{ ticket.channel }}
                           </span>
@@ -513,6 +547,29 @@ export class TicketList {
 
   protected readonly filtersOpen = signal(false);
 
+  /** One flag for the whole table — two rows cannot be mid-pin at once anyway. */
+  protected readonly pinning = signal(false);
+
+  /**
+   * Pins or unpins, then reloads.
+   *
+   * `reload()` rather than changing `params`: the sort puts pinned rows on top,
+   * so the row moves — and swapping the list for a skeleton to do it would make
+   * every pin flash the whole table.
+   */
+  protected async togglePin(ticket: TicketSummary): Promise<void> {
+    if (this.pinning()) return;
+    this.pinning.set(true);
+    try {
+      await this.api.setPinned(ticket.id, !ticket.isPinned);
+    } catch (error) {
+      this.toast.error(errorMessage(error));
+    } finally {
+      this.tickets.reload();
+      this.pinning.set(false);
+    }
+  }
+
   protected readonly sort = computed<TicketSort>(() => {
     const value = this.sortParam();
     return SORTS.includes(value as TicketSort) ? (value as TicketSort) : 'updated';
@@ -562,6 +619,8 @@ export class TicketList {
       unassigned: assignees.includes(UNASSIGNED_FACET) || undefined,
       mentioned: view === 'mentioned' || undefined,
       watching: view === 'watching' || undefined,
+      pinned: view === 'pinned' || undefined,
+      flagged: view === 'flagged' || undefined,
       search: this.q() || undefined,
     } satisfies TicketListParams;
   });
@@ -655,6 +714,10 @@ export class TicketList {
         return 'nav.items.mentioned';
       case 'watching':
         return 'nav.items.watching';
+      case 'pinned':
+        return 'nav.items.pinned';
+      case 'flagged':
+        return 'nav.items.flagged';
       case '':
         return 'tickets.title';
       default:

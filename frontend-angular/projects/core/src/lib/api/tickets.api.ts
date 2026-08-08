@@ -165,6 +165,14 @@ export interface TicketSummary {
   guestEmail: string | null;
   assignee: UserSummary | null;
   commentCount: number;
+  /**
+   * YOUR pin, not anybody else's — a private bookmark that sorts this to the top
+   * of your own list. False on customer surfaces, where it means nothing.
+   */
+  isPinned: boolean;
+  /** Flagged for the whole team; null when it is not. Shared, unlike a pin. */
+  flaggedAt: string | null;
+  flagReason: string | null;
   tags: Tag[];
   firstResponseDueAt: string | null;
   resolveDueAt: string | null;
@@ -581,6 +589,10 @@ export interface TicketListParams {
    * answer, so there is no shape of request that could ask it.
    */
   mentioned?: boolean;
+  /** Your own pins. */
+  pinned?: boolean;
+  /** Flagged by anyone — a flag belongs to the team. */
+  flagged?: boolean;
   /** Tickets the signed-in agent watches. Same reasoning as `mentioned`. */
   watching?: boolean;
   page?: number;
@@ -883,6 +895,25 @@ export class TicketsApi {
 
   deleteTime(ticketId: string, entryId: string): Promise<void> {
     return this.api.delete<void>(`/api/tickets/${ticketId}/time/${entryId}`);
+  }
+
+  // ── Pin and flag ──────────────────────────────────────────────────────────
+
+  /**
+   * A pin is yours alone. There is no agent id because there is no such thing as
+   * pinning a ticket to somebody else's list.
+   */
+  setPinned(ticketId: string, pinned: boolean): Promise<void> {
+    return pinned
+      ? this.api.put<void>(`/api/tickets/${ticketId}/pin`, {})
+      : this.api.delete<void>(`/api/tickets/${ticketId}/pin`);
+  }
+
+  /** A flag is the team's. Anyone can raise it and anyone can clear it. */
+  setFlagged(ticketId: string, flagged: boolean, reason?: string | null): Promise<void> {
+    return flagged
+      ? this.api.put<void>(`/api/tickets/${ticketId}/flag`, { reason })
+      : this.api.delete<void>(`/api/tickets/${ticketId}/flag`);
   }
 
   // ── Activity ──────────────────────────────────────────────────────────────

@@ -2378,3 +2378,42 @@ tr:focus-within .row-actions {
 .lightbox-action:hover {
   background: rgb(255 255 255 / 0.2);
 }
+
+/* ── Pin / flag toggle ─────────────────────────────────────────────────────
+   A plain icon button. The FILL is what carries on/off — a solid shape beside an
+   outline is unmistakable — and the colour is the second signal. The first cut
+   was colour alone on an outline, which nobody could see; the second added a
+   tinted pill and a word, which was three signals for one bit of state. This is
+   the middle. */
+.mark-toggle {
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.5rem;
+  color: rgb(var(--muted-foreground));
+  cursor: pointer;
+  transition: background-color 0.12s, color 0.12s;
+}
+
+.mark-toggle:hover:not(:disabled) {
+  background: rgb(var(--accent));
+  color: rgb(var(--foreground));
+}
+
+.mark-toggle:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* Amber for a pin — a bookmark, not an alarm. */
+.mark-toggle.is-pin,
+.mark-toggle.is-pin:hover:not(:disabled) {
+  color: rgb(var(--warning-ink));
+}
+
+/* Red for a flag: this one IS a call for attention. */
+.mark-toggle.is-flag,
+.mark-toggle.is-flag:hover:not(:disabled) {
+  color: rgb(var(--danger));
+}

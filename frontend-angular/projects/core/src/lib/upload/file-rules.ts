@@ -17,6 +17,20 @@ export const MAX_IMAGE_BYTES = 1024 * 1024;
 /** What the avatar and logo endpoints accept, as an `accept` attribute. */
 export const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp';
 
+/**
+ * What a ticket attachment may be — **must match `UploadPolicy.Allowed`**.
+ *
+ * Extensions rather than MIME types: the browser's guess at a type varies by OS
+ * and is empty often enough that a type-based `accept` silently hides files the
+ * server would have taken. The server checks the extension too, so the two agree
+ * on the same fact.
+ *
+ * This is a courtesy — it greys out the wrong files in the OS dialog. Dragging
+ * one in bypasses it, and the API is what refuses.
+ */
+export const ATTACHMENT_ACCEPT =
+  '.csv,.doc,.docx,.jpeg,.jpg,.mov,.mp3,.mp4,.pdf,.png,.txt,.wav,.xls,.xlsx';
+
 /** Why a file was turned away. Maps to `upload.rejected.*` translation keys. */
 export type FileRejection = 'empty' | 'tooLarge' | 'wrongType';
 

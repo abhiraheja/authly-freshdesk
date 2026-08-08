@@ -92,6 +92,24 @@ public class Ticket
     public DateTime? SlaWarningSentAt { get; set; }
     public DateTime? SlaBreachSentAt { get; set; }
 
+    /// <summary>
+    /// Flagged for the whole team. Null means not flagged — one column carrying
+    /// both the state and when it happened, so they cannot contradict.
+    ///
+    /// **Shared, unlike a pin.** Anyone can flag and anyone can clear it, because
+    /// "this matters" is a statement about the ticket rather than about the
+    /// person looking at it. It is deliberately NOT priority: priority drives SLA
+    /// clocks and routing, so raising it to get attention changes deadlines and
+    /// distorts every report built on them. A flag changes nothing but what the
+    /// list shows.
+    /// </summary>
+    public DateTime? FlaggedAt { get; set; }
+    public Guid? FlaggedById { get; set; }
+    public User? FlaggedBy { get; set; }
+
+    /// <summary>Why it was flagged. Optional — the flag is the point, this is the courtesy.</summary>
+    public string? FlagReason { get; set; }
+
     // Set each time the ticket transitions into Resolved; cleared on reopen.
     // Drives resolution-time and SLA-attainment analytics (Phase 7C).
     public DateTime? ResolvedAt { get; set; }
@@ -148,6 +166,7 @@ public class Ticket
     public ICollection<TicketAsset> Assets { get; set; } = new List<TicketAsset>();
     public ICollection<TicketImpactedService> ImpactedServices { get; set; } = new List<TicketImpactedService>();
     public ICollection<TicketFieldValue> FieldValues { get; set; } = new List<TicketFieldValue>();
+    public ICollection<TicketPin> Pins { get; set; } = new List<TicketPin>();
 }
 
 public static class TicketPriority

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, booleanAttribute, input } from '@angular/core';
 
 /** Every icon Trackly renders. Adding one means adding a `@case` below. */
 export type IconName =
@@ -73,6 +73,8 @@ export type IconName =
   | 'arrow-left'
   | 'lock'
   | 'tag'
+  | 'pin'
+  | 'flag'
   | 'rocket'
   // Related work
   | 'link'
@@ -116,7 +118,7 @@ export type IconName =
       [attr.width]="size()"
       [attr.height]="size()"
       viewBox="0 0 24 24"
-      fill="none"
+      [attr.fill]="filled() ? 'currentColor' : 'none'"
       stroke="currentColor"
       [attr.stroke-width]="strokeWidth()"
       stroke-linecap="round"
@@ -199,6 +201,8 @@ export type IconName =
         @case ('arrow-left') { <path d="m12 19-7-7 7-7"/><path d="M19 12H5"/> }
         @case ('lock') { <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/> }
         @case ('tag') { <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/> }
+        @case ('pin') { <path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/> }
+        @case ('flag') { <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" x2="4" y1="22" y2="15"/> }
         @case ('rocket') { <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91 0z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/> }
 
         <!-- Related work -->
@@ -233,4 +237,14 @@ export class Icon {
   /** 16 inline with body text · 18 in nav and buttons · 20 in icon buttons · 28 in empty states. */
   readonly size = input(18);
   readonly strokeWidth = input(1.75);
+
+  /**
+   * Fills the shape instead of outlining it.
+   *
+   * For an icon that is also a STATE — a pin that is pinned, a flag that is
+   * raised. A colour change alone is weak feedback on a 15px outline: the stroke
+   * is a couple of pixels and half the users never notice it moved. A solid shape
+   * reads as on/off from across the room, which is what a toggle has to do.
+   */
+  readonly filled = input(false, { transform: booleanAttribute });
 }

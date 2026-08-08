@@ -112,6 +112,36 @@ public class TicketsController(TicketService tickets, AttachmentService attachme
         return removed ? NoContent() : NotFound();
     }
 
+    // ---- Pin and flag ----
+    //
+    // Two different things. A PIN is this agent's own bookmark: it sorts to the
+    // top of their list and nobody else can see or clear it. A FLAG is a
+    // statement to the team, visible to everyone and clearable by anyone.
+
+    public record FlagRequest(string? Reason);
+
+    /// <summary>PUT/DELETE rather than a toggle: clicking twice must not un-pin.</summary>
+    [HttpPut("{id:guid}/pin")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> Pin(Guid id, CancellationToken ct)
+        => await tickets.SetPinnedAsync(User.GetActor(), id, true, ct) ? NoContent() : NotFound();
+
+    [HttpDelete("{id:guid}/pin")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> Unpin(Guid id, CancellationToken ct)
+        => await tickets.SetPinnedAsync(User.GetActor(), id, false, ct) ? NoContent() : NotFound();
+
+    [HttpPut("{id:guid}/flag")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> Flag(Guid id, [FromBody] FlagRequest? request, CancellationToken ct)
+        => await tickets.SetFlaggedAsync(User.GetActor(), id, true, request?.Reason, ct)
+            ? NoContent() : NotFound();
+
+    [HttpDelete("{id:guid}/flag")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> Unflag(Guid id, CancellationToken ct)
+        => await tickets.SetFlaggedAsync(User.GetActor(), id, false, null, ct) ? NoContent() : NotFound();
+
     // ---- Activity ----
 
     /// <summary>

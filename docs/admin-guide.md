@@ -17,7 +17,7 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 3. [Access & identity](#3-access--identity)
    - 3.1 Passwordless login · 3.2 Members & roles · 3.3 SSO (OIDC/SAML) · 3.4 Domains & login routing
 4. [Ticketing](#4-ticketing)
-   - 4.1 Tickets & the agent workspace · 4.2 Statuses & workflow · 4.3 Registers · 4.4 Categories · 4.5 Customer portal · 4.6 Guest submission
+   - 4.1 Tickets & the agent workspace · 4.2 Pinning & flagging · 4.3 Statuses & workflow · 4.4 Registers · 4.5 Categories · 4.6 Customer portal · 4.7 Guest submission
 5. [Agent productivity](#5-agent-productivity)
    - 5.1 Canned responses · 5.2 Tags · 5.3 Teams & routing · 5.4 Problems
 6. [SLA policies](#6-sla-policies)
@@ -149,14 +149,14 @@ lookups — deployment concern.)
 ### 4.1 Tickets & the agent workspace
 
 **What it is.** The heart of Trackly. A ticket has a **subject/description**, a
-**status** (whatever your workspace has defined — see §4.2), a **priority**
+**status** (whatever your workspace has defined — see §4.3), a **priority**
 (low / medium / high / urgent), an optional **department** and **category**, an
 **assignee**, **watchers**, **tags**, **attachments**, and a threaded
 conversation.
 
 **Department and category are different things.** The department (a *team*,
 §5.3) is who the ticket is routed to — IT Support, Facilities. The category
-(§4.4) is what it is about — Billing, Hardware. The ticket list shows both, in
+(§4.5) is what it is about — Billing, Hardware. The ticket list shows both, in
 their own columns.
 **Where:** agents work in **Tickets** (a three-pane workspace: list · conversation
 · details).
@@ -193,7 +193,34 @@ Two things about it are worth knowing before you use it:
   open and pending tickets (team routing applies where configured, §5.3). You
   cannot pick one at creation; reassign afterwards from the details pane.
 
-### 4.2 Statuses & workflow
+### 4.2 Pinning and flagging
+
+**Two ways to say a ticket matters, and they are not the same thing.**
+
+**Pin** (amber) — *yours alone*. It sorts the ticket to the top of **your** list
+whatever sort you have chosen, and no colleague can see it or clear it. A
+bookmark: *I am coming back to this.* Pin from the ticket header or straight from
+the list; click again to unpin. Nothing is written to the activity log, because a
+private bookmark recorded in a log everyone reads is neither private nor useful.
+
+**Flag** (red) — *the team's*. Anyone can raise it, anyone can clear it, everyone
+sees it, and the reason shows in the tooltip. It **is** written to the activity
+log, because "who decided this mattered, and when" is exactly what that log is
+for.
+
+Both are saved views in the sidebar: **Pinned** shows yours, **Flagged** shows
+the workspace's.
+
+> **A flag is deliberately not priority.** Priority drives SLA clocks and
+> routing, so raising it to get attention moves deadlines and distorts every
+> report built on them. A flag changes nothing except what the list shows — which
+> is what "look at this" should cost.
+
+> **A flag does not reorder anybody's list.** Forcing every flagged ticket to the
+> top of every agent's queue would make flagging an act of shouting, and the
+> first response to that is for everyone to stop reading flags.
+
+### 4.3 Statuses & workflow
 
 **Where:** Admin → Statuses & workflow (`/admin/settings/statuses`). Admin only.
 
@@ -257,7 +284,7 @@ rules and problem bulk-resolve set a status directly and are **not** checked
 against the workflow: those are your own rules acting, not somebody
 freehand-editing a ticket.
 
-### 4.3 Registers: assets, services & your own properties
+### 4.4 Registers: assets, services & your own properties
 
 **Where:** Admin → Registers (`/admin/settings/catalogue`). Agents read all three;
 only admins change what is on them.
@@ -296,7 +323,7 @@ _These are your properties, not Trackly's: they are stored, shown and searched,
 but no SLA, automation rule or report acts on them. That is the trade for being
 able to invent them._
 
-### 4.4 Categories
+### 4.5 Categories
 
 **What it is.** An organising dimension for tickets (e.g. Billing, Technical).
 Categories are per-workspace and used for filtering, automation, and reporting.
@@ -306,7 +333,7 @@ Admins create them via the API (`POST /api/categories`) or they arrive with demo
 data; automation can also route by category (§7). _(There is no dedicated
 category-management screen yet — this is a known gap.)_
 
-### 4.5 Customer portal
+### 4.6 Customer portal
 
 **What it is.** A signed-in space where your customers see **their own** tickets
 and replies, branded as your workspace.
@@ -315,7 +342,7 @@ and replies, branded as your workspace.
 **Set up.** Nothing beyond branding (§10). Customers reach it after signing in
 (magic link) or from links in notification emails.
 
-### 4.6 Guest submission
+### 4.7 Guest submission
 
 **What it is.** Anyone can raise a ticket without an account via a branded submit
 form; they verify with a one-time code and get a private **tracking link** to

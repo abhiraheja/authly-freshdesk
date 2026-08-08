@@ -50,6 +50,16 @@ public class AttachmentsController(AttachmentService attachments) : ControllerBa
         Response.Headers.CacheControl = "private, max-age=86400";
         Response.Headers.Vary = "Cookie";
 
-        return File(content, meta.ContentType, meta.FileName);
+        // Without this the browser may ignore the Content-Type below and guess
+        // from the bytes — which hands the decision back to whoever uploaded the
+        // file, and is precisely what the downgrade is there to prevent.
+        Response.Headers.XContentTypeOptions = "nosniff";
+
+        // The stored type came from the uploader and nothing has checked it
+        // against the bytes, so anything not known-safe is served as
+        // octet-stream. `fileDownloadName` also sets Content-Disposition:
+        // attachment, so nothing here is ever rendered in Trackly's origin.
+        var safeType = UploadPolicy.SafeContentType(meta.FileName, meta.ContentType);
+        return File(content, safeType, meta.FileName);
     }
 }

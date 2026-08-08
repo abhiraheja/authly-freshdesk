@@ -50,6 +50,10 @@ public class ProblemService(
                 t.GuestName, t.GuestEmail,
                 UserSummaryDto.From(t.Assignee),
                 t.Comments.Count(),
+                // Not the viewer's pin: this list is the problem's tickets, and
+                // a pin is one agent's bookmark on their own queue.
+                false,
+                t.FlaggedAt, t.FlagReason,
                 t.TicketTags.Select(tt => new TagDto(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList(),
                 t.FirstResponseDueAt, t.ResolveDueAt, t.FirstResponseAt,
                 t.CreatedAt, t.UpdatedAt))

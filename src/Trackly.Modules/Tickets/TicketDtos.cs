@@ -54,6 +54,14 @@ public record TicketSummaryDto(
     string? GuestEmail,
     UserSummaryDto? Assignee,
     int CommentCount,
+    /// <summary>
+    /// The CALLING agent's own pin. Personal — never another agent's, and never
+    /// sent to a customer surface, where it would be somebody else's bookmark.
+    /// </summary>
+    bool IsPinned,
+    /// <summary>Flagged for the whole team; null when it is not.</summary>
+    DateTime? FlaggedAt,
+    string? FlagReason,
     IReadOnlyList<TagDto> Tags,
     DateTime? FirstResponseDueAt,
     DateTime? ResolveDueAt,
@@ -78,6 +86,13 @@ public record TicketDetailDto(
     string? GuestName,
     string? GuestEmail,
     UserSummaryDto? Assignee,
+    // Mirrors TicketSummaryDto. The client's TicketDetail type EXTENDS its
+    // summary type, so leaving these off here compiled clean and shipped a
+    // field that was always undefined — the pin looked broken on the ticket
+    // screen while working perfectly in the list.
+    bool IsPinned,
+    DateTime? FlaggedAt,
+    string? FlagReason,
     IReadOnlyList<WatcherDto> Watchers,
     IReadOnlyList<TagDto> Tags,
     Guid? ProblemId,
@@ -272,6 +287,13 @@ public record TicketListQuery(
     // mentions?" would be asking to read someone else's inbox.
     bool Mentioned = false,
     bool Watching = false,
+    /// <summary>The caller's own pins. Same rule as above: never somebody else's.</summary>
+    bool Pinned = false,
+    /// <summary>
+    /// Flagged by anyone. This one is NOT scoped to the caller — a flag belongs
+    /// to the team, so "flagged" means flagged, not "flagged by me".
+    /// </summary>
+    bool Flagged = false,
     /// <summary>One of <see cref="TicketSort"/>. Anything else falls back to Updated.</summary>
     string? Sort = null,
     bool Desc = true,

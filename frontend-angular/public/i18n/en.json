@@ -69,7 +69,9 @@
       "mentioned": "Mentioning me",
       "watching": "Watching",
       "active": "Active",
-      "catalogue": "Registers"
+      "catalogue": "Registers",
+      "pinned": "Pinned",
+      "flagged": "Flagged"
     }
   },
   "palette": {
@@ -356,7 +358,9 @@
         "problem_linked": "linked a problem",
         "problem_unlinked": "unlinked the problem",
         "resolved": "resolved this ticket",
-        "reopened": "reopened this ticket"
+        "reopened": "reopened this ticket",
+        "flagged": "flagged this ticket",
+        "unflagged": "cleared the flag"
       }
     },
     "filters": {
@@ -436,6 +440,17 @@
       "hint": "The underlying cause this ticket is one symptom of. Resolving the problem can resolve them all at once.",
       "none": "Not linked to a problem",
       "open": "Open problem"
+    },
+    "pin": {
+      "pin": "Pin for me",
+      "unpin": "Unpin",
+      "hint": "Only you see this. Pinned tickets stay at the top of your list."
+    },
+    "flag": {
+      "flag": "Flag for the team",
+      "unflag": "Clear the flag",
+      "flagged": "Flagged",
+      "reasonPrompt": "Why does this ticket need attention? (optional)"
     }
   },
   "status": {

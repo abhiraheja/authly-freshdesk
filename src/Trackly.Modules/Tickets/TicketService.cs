@@ -80,6 +80,13 @@ public class TicketService(
                 m => m.TicketId == t.Id && m.UserId == actor.UserId));
         if (query.Watching && agent)
             tickets = tickets.Where(t => t.Watchers.Any(w => w.AgentId == actor.UserId));
+        if (query.Pinned && agent)
+            tickets = tickets.Where(t => db.TicketPins.Any(
+                p => p.TicketId == t.Id && p.AgentId == actor.UserId));
+        // Not scoped to the caller, unlike the three above: a flag belongs to the
+        // team, so "flagged" means flagged by anyone.
+        if (query.Flagged && agent)
+            tickets = tickets.Where(t => t.FlaggedAt != null);
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
@@ -103,7 +110,7 @@ public class TicketService(
         var pageSize = Math.Clamp(query.PageSize, 1, 100);
         var page = Math.Max(query.Page, 1);
 
-        var items = await Sorted(tickets, query)
+        var items = await Sorted(tickets, query, actor.UserId)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .Select(t => new TicketSummaryDto(
@@ -123,6 +130,13 @@ public class TicketService(
                 t.GuestName, t.GuestEmail,
                 UserSummaryDto.From(t.Assignee),
                 t.Comments.Count(c => !c.IsInternal || actor.IsAgentOrAdmin),
+                // The viewer's OWN pin. A customer surface gets false — a pin is
+                // an agent's bookmark and means nothing to the person who raised
+                // the ticket.
+                actor.IsAgentOrAdmin
+                    && db.TicketPins.Any(p => p.TicketId == t.Id && p.AgentId == actor.UserId),
+                actor.IsAgentOrAdmin ? t.FlaggedAt : null,
+                actor.IsAgentOrAdmin ? t.FlagReason : null,
                 // Tags are agent-facing metadata — never on customer surfaces.
                 actor.IsAgentOrAdmin
                     ? t.TicketTags.Select(tt => new TagDto(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList()
@@ -144,23 +158,43 @@ public class TicketService(
     /// several at once — can swap places between page 1 and page 2, so one is
     /// shown twice and another is never shown at all.
     /// </summary>
-    private IQueryable<Ticket> Sorted(IQueryable<Ticket> tickets, TicketListQuery query)
+    /// <summary>
+    /// Applies the sort, always with pins on top and a tie-break on id.
+    ///
+    /// **Pinned first, whatever the chosen sort.** A pin says "keep this in front
+    /// of me", and a pin that vanished the moment somebody sorted by priority
+    /// would not be worth setting. It is the agent's OWN pins — the join is on
+    /// their id — so one person tidying their list never reorders anybody else's.
+    ///
+    /// The flag is deliberately NOT in the sort. It is a property of the ticket
+    /// that everybody can see and filter on; forcing every flagged ticket to the
+    /// top of every agent's list would make flagging an act of shouting, and the
+    /// first response to that is for everyone to stop reading flags.
+    /// </summary>
+    private IQueryable<Ticket> Sorted(IQueryable<Ticket> tickets, TicketListQuery query, Guid viewerId)
     {
         var desc = query.Desc;
+
+        // The PRIMARY key of the sort, with everything below chained onto it.
+        // False sorts before true, so "is pinned" lands on top. Inlined for the
+        // same reason as the status name and priority rank below: a helper method
+        // here puts a reference to this service in the expression tree.
+        var pinned = tickets.OrderBy(
+            t => !db.TicketPins.Any(p => p.TicketId == t.Id && p.AgentId == viewerId));
 
         IOrderedQueryable<Ticket> ordered = query.Sort switch
         {
             TicketSort.Created => desc
-                ? tickets.OrderByDescending(t => t.CreatedAt)
-                : tickets.OrderBy(t => t.CreatedAt),
+                ? pinned.ThenByDescending(t => t.CreatedAt)
+                : pinned.ThenBy(t => t.CreatedAt),
 
             TicketSort.Subject => desc
-                ? tickets.OrderByDescending(t => t.Subject)
-                : tickets.OrderBy(t => t.Subject),
+                ? pinned.ThenByDescending(t => t.Subject)
+                : pinned.ThenBy(t => t.Subject),
 
             TicketSort.Status => desc
-                ? tickets.OrderByDescending(t => t.Status)
-                : tickets.OrderBy(t => t.Status),
+                ? pinned.ThenByDescending(t => t.Status)
+                : pinned.ThenBy(t => t.Status),
 
             // The workspace's own order, not the alphabet: "high" sorting above
             // "urgent" is the kind of wrong that makes a queue useless. The rank
@@ -170,13 +204,13 @@ public class TicketService(
             // method here puts a call to this service in the expression tree,
             // which EF cannot translate.
             TicketSort.Priority => desc
-                ? tickets.OrderByDescending(t => db.TicketOptions
+                ? pinned.ThenByDescending(t => db.TicketOptions
                     .Where(o => o.WorkspaceId == t.WorkspaceId
                                 && o.Kind == TicketOptionKind.Priority
                                 && o.Value == t.Priority)
                     .Select(o => (int?)o.SortOrder)
                     .FirstOrDefault() ?? int.MaxValue)
-                : tickets.OrderBy(t => db.TicketOptions
+                : pinned.ThenBy(t => db.TicketOptions
                     .Where(o => o.WorkspaceId == t.WorkspaceId
                                 && o.Kind == TicketOptionKind.Priority
                                 && o.Value == t.Priority)
@@ -188,12 +222,12 @@ public class TicketService(
             // floating it to the top of a due-date sort would bury the ones that
             // do.
             TicketSort.Due => desc
-                ? tickets.OrderBy(t => t.ResolveDueAt == null).ThenByDescending(t => t.ResolveDueAt)
-                : tickets.OrderBy(t => t.ResolveDueAt == null).ThenBy(t => t.ResolveDueAt),
+                ? pinned.ThenBy(t => t.ResolveDueAt == null).ThenByDescending(t => t.ResolveDueAt)
+                : pinned.ThenBy(t => t.ResolveDueAt == null).ThenBy(t => t.ResolveDueAt),
 
             _ => desc
-                ? tickets.OrderByDescending(t => t.UpdatedAt)
-                : tickets.OrderBy(t => t.UpdatedAt),
+                ? pinned.ThenByDescending(t => t.UpdatedAt)
+                : pinned.ThenBy(t => t.UpdatedAt),
         };
 
         return ordered.ThenBy(t => t.Id);
@@ -356,7 +390,13 @@ public class TicketService(
 
         // The status row carries the label; the ticket only carries the value.
         var status = await statuses.ResolveAsync(actor.WorkspaceId, ticket.Status, ct);
-        return ToDetail(ticket, status?.Name ?? ticket.Status, actor.IsAgentOrAdmin);
+        // Only asked for an agent: a customer has no pins, and the row would
+        // never exist for them.
+        var isPinned = actor.IsAgentOrAdmin
+            && await db.TicketPins.AnyAsync(
+                p => p.TicketId == ticketId && p.AgentId == actor.UserId, ct);
+
+        return ToDetail(ticket, status?.Name ?? ticket.Status, actor.IsAgentOrAdmin, isPinned);
     }
 
     // ---- Create + round-robin assignment ------------------------------------
@@ -1127,6 +1167,87 @@ public class TicketService(
 
     // ---- Related work ---------------------------------------------------------
     //
+    // ---- Pin and flag ------------------------------------------------------------
+
+    /// <summary>
+    /// Pins or unpins for the CALLING agent only.
+    ///
+    /// No id for whose pin it is, on purpose: there is no such thing as pinning
+    /// a ticket to somebody else's list, and an endpoint that took an agent id
+    /// would be an endpoint for reordering a colleague's queue.
+    /// </summary>
+    public async Task<bool> SetPinnedAsync(Actor actor, Guid ticketId, bool pinned, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin) throw new UnauthorizedAccessException();
+        if (!await TicketExistsAsync(actor, ticketId, ct)) return false;
+
+        var existing = await db.TicketPins
+            .SingleOrDefaultAsync(p => p.TicketId == ticketId && p.AgentId == actor.UserId, ct);
+
+        if (pinned && existing is null)
+            db.TicketPins.Add(new TicketPin { TicketId = ticketId, AgentId = actor.UserId });
+        else if (!pinned && existing is not null)
+            db.TicketPins.Remove(existing);
+        else
+            return true;   // already in the wanted state; saying so would be pedantic
+
+        // No activity entry. A pin is one person's private bookmark, and writing
+        // it into a log every agent reads would make it neither private nor
+        // worth having.
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    /// <summary>
+    /// Flags or clears the flag, for the whole team.
+    ///
+    /// Anyone can do either. A flag that only its author could clear becomes a
+    /// permanent mark the moment they go on leave, and the team stops trusting
+    /// what the flag means.
+    /// </summary>
+    public async Task<bool> SetFlaggedAsync(
+        Actor actor, Guid ticketId, bool flagged, string? reason, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin) throw new UnauthorizedAccessException();
+
+        var ticket = await db.Tickets
+            .SingleOrDefaultAsync(t => t.Id == ticketId && t.WorkspaceId == actor.WorkspaceId, ct);
+        if (ticket is null) return false;
+
+        var was = ticket.FlaggedAt is not null;
+
+        if (flagged)
+        {
+            // Re-flagging an already-flagged ticket edits the reason rather than
+            // re-stamping who and when: the first person to raise it is the one
+            // the team should be asking about it.
+            ticket.FlagReason = Trim(reason) is { Length: > 200 } long_ ? long_[..200] : Trim(reason);
+            if (!was)
+            {
+                ticket.FlaggedAt = DateTime.UtcNow;
+                ticket.FlaggedById = actor.UserId;
+            }
+        }
+        else
+        {
+            ticket.FlaggedAt = null;
+            ticket.FlaggedById = null;
+            ticket.FlagReason = null;
+        }
+
+        // Unlike a pin, this IS logged: it is a shared statement about the
+        // ticket, and "who decided this mattered, and when" is exactly what the
+        // feed exists to answer.
+        if (was != flagged)
+            activity.Happened(actor.WorkspaceId, ticketId, actor.UserId,
+                flagged ? TicketActivityType.Flagged : TicketActivityType.Unflagged,
+                flagged ? ticket.FlagReason : null);
+
+        ticket.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
     /// <summary>
     /// The ticket's audit trail, or null when the caller cannot see the ticket.
     ///
@@ -1523,7 +1644,8 @@ public class TicketService(
 
     // ---- Mapping -----------------------------------------------------------------
 
-    private static TicketDetailDto ToDetail(Ticket t, string statusName, bool isAgentOrAdmin) => new(
+    private static TicketDetailDto ToDetail(
+        Ticket t, string statusName, bool isAgentOrAdmin, bool isPinned) => new(
         t.Id, t.Subject, t.Description, t.Status, t.StatusCategory, statusName,
         t.Priority, t.Channel,
         CategoryDto.From(t.Category),
@@ -1531,6 +1653,11 @@ public class TicketService(
         UserSummaryDto.From(t.Requester),
         t.GuestName, t.GuestEmail,
         UserSummaryDto.From(t.Assignee),
+        // Passed in rather than read off the ticket: whose pin it is, is a
+        // question about the CALLER, and the entity has no idea who is asking.
+        isAgentOrAdmin && isPinned,
+        isAgentOrAdmin ? t.FlaggedAt : null,
+        isAgentOrAdmin ? t.FlagReason : null,
         t.Watchers.Select(w => new WatcherDto(UserSummaryDto.From(w.Agent)!, w.AddedAt)).ToList(),
         isAgentOrAdmin
             ? t.TicketTags.Select(tt => new TagDto(tt.Tag.Id, tt.Tag.Name, tt.Tag.Color)).ToList()

@@ -1855,6 +1855,18 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("first_response_due_at");
 
+                    b.Property<string>("FlagReason")
+                        .HasColumnType("text")
+                        .HasColumnName("flag_reason");
+
+                    b.Property<DateTime?>("FlaggedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("flagged_at");
+
+                    b.Property<Guid?>("FlaggedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("flagged_by_id");
+
                     b.Property<string>("GuestEmail")
                         .HasColumnType("text")
                         .HasColumnName("guest_email");
@@ -1966,6 +1978,9 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.HasIndex("CategoryId")
                         .HasDatabaseName("ix_tickets_category_id");
 
+                    b.HasIndex("FlaggedById")
+                        .HasDatabaseName("ix_tickets_flagged_by_id");
+
                     b.HasIndex("ProblemId")
                         .HasDatabaseName("ix_tickets_problem_id");
 
@@ -1986,6 +2001,10 @@ namespace Trackly.Infrastructure.Data.Migrations
 
                     b.HasIndex("WorkspaceId", "AssigneeId")
                         .HasDatabaseName("ix_tickets_workspace_id_assignee_id");
+
+                    b.HasIndex("WorkspaceId", "FlaggedAt")
+                        .HasDatabaseName("ix_tickets_workspace_id_flagged_at")
+                        .HasFilter("flagged_at IS NOT NULL");
 
                     b.HasIndex("WorkspaceId", "RequesterId")
                         .HasDatabaseName("ix_tickets_workspace_id_requester_id");
@@ -2353,6 +2372,29 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_ticket_options_workspace_id_kind_value");
 
                     b.ToTable("ticket_options", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketPin", b =>
+                {
+                    b.Property<Guid>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<Guid>("AgentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("agent_id");
+
+                    b.Property<DateTime>("PinnedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("pinned_at");
+
+                    b.HasKey("TicketId", "AgentId")
+                        .HasName("pk_ticket_pins");
+
+                    b.HasIndex("AgentId", "PinnedAt")
+                        .HasDatabaseName("ix_ticket_pins_agent_id_pinned_at");
+
+                    b.ToTable("ticket_pins", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketRelation", b =>
@@ -3715,6 +3757,12 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull)
                         .HasConstraintName("fk_tickets_categories_category_id");
 
+                    b.HasOne("Trackly.Core.Entities.User", "FlaggedBy")
+                        .WithMany()
+                        .HasForeignKey("FlaggedById")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_tickets_users_flagged_by_id");
+
                     b.HasOne("Trackly.Core.Entities.Problem", "Problem")
                         .WithMany()
                         .HasForeignKey("ProblemId")
@@ -3761,6 +3809,8 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("Assignee");
 
                     b.Navigation("Category");
+
+                    b.Navigation("FlaggedBy");
 
                     b.Navigation("Problem");
 
@@ -3940,6 +3990,27 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasConstraintName("fk_ticket_options_workspaces_workspace_id");
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.TicketPin", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "Agent")
+                        .WithMany()
+                        .HasForeignKey("AgentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_pins_users_agent_id");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany("Pins")
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_ticket_pins_tickets_ticket_id");
+
+                    b.Navigation("Agent");
+
+                    b.Navigation("Ticket");
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.TicketRelation", b =>
@@ -4308,6 +4379,8 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("ImpactedServices");
 
                     b.Navigation("Links");
+
+                    b.Navigation("Pins");
 
                     b.Navigation("Responders");
 

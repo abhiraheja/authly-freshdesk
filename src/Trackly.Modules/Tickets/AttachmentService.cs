@@ -17,6 +17,12 @@ public class AttachmentService(TracklyDbContext db, IWorkspaceFileStorage storag
         if (sizeBytes is <= 0 or > MaxSizeBytes)
             throw new ArgumentException("File must be between 1 byte and 10 MB.");
 
+        // Checked here rather than in the controller, so it holds for every
+        // caller: the agent composer, the guest upload and the inbound email
+        // pipeline all land on this method.
+        if (UploadPolicy.Reject(fileName) is { } refusal)
+            throw new ArgumentException(refusal);
+
         var ticket = await db.Tickets
             .Where(t => t.WorkspaceId == actor.WorkspaceId && t.Id == ticketId)
             .Where(t => actor.IsAgentOrAdmin || t.RequesterId == actor.UserId)

@@ -101,6 +101,13 @@ public class GuestController(GuestService guestService) : ControllerBase
         if (result is null)
             return NotFound();
         var (meta, content) = result.Value;
-        return File(content, meta.ContentType, meta.FileName);
+
+        // Same downgrade as the agent-facing download. If anything, it matters
+        // more here: this endpoint is reachable with only a magic-link token, so
+        // a file served under a type its uploader chose would execute in the
+        // branded origin a customer trusts.
+        Response.Headers.XContentTypeOptions = "nosniff";
+        var safeType = UploadPolicy.SafeContentType(meta.FileName, meta.ContentType);
+        return File(content, safeType, meta.FileName);
     }
 }

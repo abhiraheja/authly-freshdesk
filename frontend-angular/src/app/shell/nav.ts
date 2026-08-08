@@ -50,6 +50,10 @@ export const NAV: readonly NavGroup[] = [
       // attention without being yours.
       { labelKey: 'nav.items.mentioned', icon: 'at-sign', route: '/dashboard/tickets', params: { view: 'mentioned' }, countKey: 'mentioningMe' },
       { labelKey: 'nav.items.watching', icon: 'eye', route: '/dashboard/tickets', params: { view: 'watching' }, countKey: 'watchedByMe' },
+      // Pinned is mine alone; flagged is the team's. Together because both
+      // answer "what should I look at", from the two different directions.
+      { labelKey: 'nav.items.pinned', icon: 'pin', route: '/dashboard/tickets', params: { view: 'pinned' } },
+      { labelKey: 'nav.items.flagged', icon: 'flag', route: '/dashboard/tickets', params: { view: 'flagged' } },
       // An "Unassigned" view belongs here too, but `GET /api/tickets` has no way
       // to express it — `assigneeId` only matches a specific agent. Adding the
       // row before the API can filter would give a view that silently shows the

@@ -85,6 +85,8 @@ public static class TicketActivityType
     public const string ServiceImpacted = "service_impacted";
     public const string ServiceRecovered = "service_recovered";
     public const string FieldChanged = "field_changed";
+    public const string Flagged = "flagged";
+    public const string Unflagged = "unflagged";
 
     /// <summary>
     /// The ticket ended. Separate from <see cref="Status"/> even though a status

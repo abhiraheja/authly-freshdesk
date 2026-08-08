@@ -12,7 +12,7 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe } from '@jsverse/transloco';
-import { MAX_ATTACHMENT_BYTES, TicketsApi, errorMessage } from '@trackly/core';
+import { ATTACHMENT_ACCEPT, MAX_ATTACHMENT_BYTES, TicketsApi, errorMessage } from '@trackly/core';
 import {
   Alert,
   Button,
@@ -196,7 +196,8 @@ import {
               <tk-file-picker
                 multiple
                 [(files)]="files"
-                [maxBytes]="maxUploadBytes"
+                [accept]="attachmentAccept"
+              [maxBytes]="maxUploadBytes"
                 [disabled]="saving()"
                 [progress]="uploadProgress()"
               />
@@ -262,6 +263,8 @@ export class TicketNew {
 
   /** Exposed for the template — picker rules are constants, not state. */
   protected readonly maxUploadBytes = MAX_ATTACHMENT_BYTES;
+  /** Greys out the wrong files in the OS dialog. The API is what refuses. */
+  protected readonly attachmentAccept = ATTACHMENT_ACCEPT;
 
   /** Percent for the bar, or null when nothing is on the wire. */
   protected readonly uploadProgress = signal<number | null>(null);

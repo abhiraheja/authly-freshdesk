@@ -14,6 +14,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
+  ATTACHMENT_ACCEPT,
   MAX_ATTACHMENT_BYTES,
   PRIORITY_TONE,
   STATUS_TONE,
@@ -166,6 +167,42 @@ const CHANNEL_ICON: Record<string, IconName> = {
               </div>
 
               <div class="flex shrink-0 items-center gap-2">
+                <!-- Pin and flag look alike and are not. The pin is yours: it
+                     sorts this to the top of YOUR list and no colleague sees it.
+                     The flag is the team's. Kept side by side so the difference
+                     is learned once, from the tooltips, rather than guessed. -->
+                <!-- The FILL is what makes on/off readable — a solid shape next
+                     to an outline is unmistakable, where a colour change on the
+                     outline alone was two stroked pixels nobody noticed. The
+                     colour is the second signal; the tooltip says what a click
+                     will do. No pill, no label: this is a toggle, not an
+                     announcement. -->
+                <button
+                  type="button"
+                  class="mark-toggle"
+                  [class.is-pin]="data.isPinned"
+                  [attr.aria-pressed]="data.isPinned"
+                  [title]="(data.isPinned ? 'tickets.pin.unpin' : 'tickets.pin.pin') | transloco"
+                  [attr.aria-label]="(data.isPinned ? 'tickets.pin.unpin' : 'tickets.pin.pin') | transloco"
+                  [disabled]="marking()"
+                  (click)="togglePin(data.isPinned)"
+                >
+                  <tk-icon name="pin" [size]="17" [filled]="data.isPinned" />
+                </button>
+
+                <button
+                  type="button"
+                  class="mark-toggle"
+                  [class.is-flag]="!!data.flaggedAt"
+                  [attr.aria-pressed]="!!data.flaggedAt"
+                  [title]="flagTitle()"
+                  [attr.aria-label]="(data.flaggedAt ? 'tickets.flag.unflag' : 'tickets.flag.flag') | transloco"
+                  [disabled]="marking()"
+                  (click)="toggleFlag(!!data.flaggedAt)"
+                >
+                  <tk-icon name="flag" [size]="17" [filled]="!!data.flaggedAt" />
+                </button>
+
                 <!-- Only the moves the workflow allows, plus the one it is in.
                      The server refuses anything else, so offering more would be
                      offering a click that fails. -->
@@ -417,6 +454,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
               headless
               multiple
               [(files)]="files"
+              [accept]="attachmentAccept"
               [maxBytes]="maxUploadBytes"
               [disabled]="sending()"
               [progress]="uploadProgress()"
@@ -513,6 +551,8 @@ export class TicketDetail {
   protected readonly body = signal('');
   protected readonly files = signal<File[]>([]);
   protected readonly maxUploadBytes = MAX_ATTACHMENT_BYTES;
+  /** Greys out the wrong files in the OS dialog. The API is what refuses. */
+  protected readonly attachmentAccept = ATTACHMENT_ACCEPT;
   protected readonly uploadProgress = signal<number | null>(null);
   protected readonly sendError = signal<string | null>(null);
   protected readonly sending = signal(false);
@@ -776,6 +816,57 @@ export class TicketDetail {
    * The panels own their own data; this is for the fields that live ON the
    * ticket — the problem association is the one so far.
    */
+  /** One flag guarding both buttons — they are next to each other and both write. */
+  protected readonly marking = signal(false);
+
+  /**
+   * The flag's tooltip carries the reason and who raised it.
+   *
+   * A flag with no explanation is a red icon somebody has to go and ask about,
+   * and the whole point is to save that conversation.
+   */
+  protected flagTitle(): string {
+    const ticket = this.ticket.value();
+    if (!ticket?.flaggedAt) return this.transloco.translate('tickets.flag.flag');
+    return ticket.flagReason
+      ? `${this.transloco.translate('tickets.flag.flagged')}: ${ticket.flagReason}`
+      : this.transloco.translate('tickets.flag.unflag');
+  }
+
+  protected async togglePin(pinned: boolean): Promise<void> {
+    await this.mark(() => this.api.setPinned(this.id(), !pinned));
+  }
+
+  /**
+   * Raising a flag asks why; clearing one does not.
+   *
+   * `prompt` rather than a dialog: this is one optional line, and a modal for it
+   * would be more machinery than the field is worth. If flags grow options —
+   * severity, an assignee — it becomes a dialog then, not before.
+   */
+  protected async toggleFlag(flagged: boolean): Promise<void> {
+    if (flagged) {
+      await this.mark(() => this.api.setFlagged(this.id(), false));
+      return;
+    }
+    const reason = window.prompt(this.transloco.translate('tickets.flag.reasonPrompt')) ?? '';
+    await this.mark(() => this.api.setFlagged(this.id(), true, reason.trim() || null));
+  }
+
+  private async mark(action: () => Promise<unknown>): Promise<void> {
+    this.marking.set(true);
+    try {
+      await action();
+    } catch (error) {
+      this.toast.error(errorMessage(error));
+    } finally {
+      // Reloaded either way: on failure the icon on screen would otherwise show
+      // a state the server never took.
+      this.reloadTicket();
+      this.marking.set(false);
+    }
+  }
+
   protected reloadTicket(): void {
     this.ticket.reload();
     this.activityVersion.update((v) => v + 1);
