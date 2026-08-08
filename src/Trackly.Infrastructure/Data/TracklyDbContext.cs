@@ -628,9 +628,20 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
         modelBuilder.Entity<SsoConnection>(e =>
         {
             e.ToTable("sso_connections");
-            // One active SSO connection per workspace (switchable).
-            e.HasIndex(c => c.WorkspaceId).IsUnique();
+            // Several providers per workspace — "Continue with Google" and
+            // "Continue with Microsoft" are two rows. Ordered for the sign-in page.
+            e.HasIndex(c => new { c.WorkspaceId, c.SortOrder });
+            // …but only one of each well-known provider. Two corporate IdPs is a
+            // real setup, so the custom kinds are excluded from the constraint;
+            // two Googles is always a mistake.
+            e.HasIndex(c => new { c.WorkspaceId, c.Provider })
+                .IsUnique()
+                .HasFilter("provider NOT IN ('oidc', 'saml')");
+            e.Property(c => c.Provider).HasDefaultValue(SsoProviderKind.Oidc);
             e.Property(c => c.Status).HasDefaultValue(SsoStatus.Pending);
+            e.Property(c => c.IsEnabled).HasDefaultValue(true);
+            e.Property(c => c.ShowOnStaffLogin).HasDefaultValue(true);
+            e.Property(c => c.ShowOnCustomerLogin).HasDefaultValue(false);
             e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

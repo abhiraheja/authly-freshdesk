@@ -27,15 +27,20 @@ public class SamlController(
     private string SpEntityId(SsoConnection conn, string slug) =>
         conn.SpEntityId is { Length: > 0 } id ? id : $"{ApiBaseUrl}/saml/{slug}";
 
+    /// <param name="connection">
+    /// Which SAML connection to start. Omitted by links written before a
+    /// workspace could have more than one, which fall through to its first.
+    /// </param>
     [HttpGet("api/auth/saml")]
     [EnableRateLimiting("auth")]
-    public async Task<IActionResult> Start([FromQuery] string workspace, CancellationToken ct)
+    public async Task<IActionResult> Start(
+        [FromQuery] string workspace, [FromQuery] Guid? connection, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(workspace))
             return BadRequest(new { error = "workspace is required." });
 
-        var conn = await sso.GetConnectionAsync(workspace, SsoProtocol.Saml, ct);
-        if (conn is null)
+        var conn = await sso.ResolveConnectionAsync(workspace, connection, SsoProtocol.Saml, ct);
+        if (conn is null || conn.Protocol != SsoProtocol.Saml)
             return Redirect($"{FrontendBaseUrl}/login?sso_error={Uri.EscapeDataString("SSO is not configured.")}");
 
         Saml2Configuration config;
@@ -101,10 +106,11 @@ public class SamlController(
 
     // SP metadata the admin hands to their IdP.
     [HttpGet("api/auth/saml/metadata")]
-    public async Task<IActionResult> Metadata([FromQuery] string workspace, CancellationToken ct)
+    public async Task<IActionResult> Metadata(
+        [FromQuery] string workspace, [FromQuery] Guid? connection, CancellationToken ct)
     {
-        var conn = await sso.GetConnectionAsync(workspace, SsoProtocol.Saml, ct);
-        if (conn is null)
+        var conn = await sso.ResolveConnectionAsync(workspace, connection, SsoProtocol.Saml, ct);
+        if (conn is null || conn.Protocol != SsoProtocol.Saml)
             return NotFound();
 
         var entityId = SpEntityId(conn, workspace);

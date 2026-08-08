@@ -18,6 +18,16 @@ public interface IOidcClient
         CancellationToken cancellationToken = default);
 }
 
-public record OidcClientConfig(string DiscoveryEndpoint, string ClientId, string? ClientSecret);
+public record OidcClientConfig(
+    string DiscoveryEndpoint,
+    string ClientId,
+    string? ClientSecret,
+    // Provider-specific, so it comes from the catalogue rather than being hard-coded
+    // in the client — Entra and Google agree on these three, an in-house IdP may not.
+    string Scopes = "openid profile email",
+    // Appended to the authorize redirect. A multi-tenant IdP on a shared host
+    // needs a tenant hint here: it belongs to the request, not to the discovery
+    // document, which is the same for every tenant on that host.
+    IReadOnlyDictionary<string, string>? ExtraAuthorizeParameters = null);
 
 public record OidcUserInfo(string Subject, string? Email, string? Name, IReadOnlyList<string> Groups);

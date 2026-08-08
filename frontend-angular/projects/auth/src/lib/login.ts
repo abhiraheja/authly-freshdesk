@@ -23,21 +23,26 @@ import {
   homePathFor,
   type User,
 } from '@trackly/core';
-import { Alert, Button, Icon, InputDirective, LabelDirective, Spinner } from '@trackly/ui';
+import type { SsoLoginProvider } from '@trackly/core';
+import { Alert, Button, Icon, InputDirective, LabelDirective, ProviderMark, Spinner } from '@trackly/ui';
 import { AuthLayout } from './auth-layout';
 
 type Phase = 'email' | 'code';
 
 /**
- * Passwordless sign-in, in two phases on one screen: enter an email → enter the
- * 6-digit code from the email.
+ * Sign-in. Three ways in, on one screen: a button per configured identity
+ * provider, email + password, and an emailed 6-digit code (the second phase).
  *
- * If this installation has SSO configured we hand off to the IdP instead of
- * sending a link. A workspace-branded login (`?workspace=slug`) skips that — it
- * is a customer-facing surface — and wears the workspace's brand, forced to
- * light mode (invariant 6).
+ * **The providers are buttons, not a redirect.** SSO used to be a fork inside
+ * submit: one connection per workspace meant "has SSO" was a yes/no, and typing
+ * an email just bounced you to the IdP. A workspace can now offer several, so
+ * the choice has to be visible — and the password field stops disappearing on
+ * installations that configured SSO for a subset of their people.
  *
- * Trackly has no password field and never will.
+ * Which providers appear is the server's call, from the workspace slug: a
+ * branded login (`?workspace=slug`) is a customer-facing surface, so it gets the
+ * customer-facing providers, wears the workspace's brand and is forced to light
+ * mode (invariant 6).
  */
 @Component({
   selector: 'tk-login',
@@ -51,6 +56,7 @@ type Phase = 'email' | 'code';
     Icon,
     InputDirective,
     LabelDirective,
+    ProviderMark,
     Spinner,
   ],
   template: `
@@ -69,7 +75,41 @@ type Phase = 'email' | 'code';
           </h1>
           <p class="mt-2 text-[15px] text-muted-foreground">{{ subhead() }}</p>
 
-          <form class="mt-8" (ngSubmit)="begin()">
+          <!-- One button per configured provider. The server has already picked
+               which belong on this surface, so a branded customer login shows the
+               customer-facing ones and Trackly's own shows the staff ones. -->
+          @if (providers().length) {
+            <div class="mt-8 space-y-2">
+              @for (provider of providers(); track provider.id) {
+                <button
+                  tkButton
+                  variant="outline"
+                  size="lg"
+                  type="button"
+                  class="w-full"
+                  [disabled]="busy()"
+                  (click)="startSso(provider)"
+                >
+                  <tk-provider-mark [name]="provider.provider" [size]="18" />
+                  {{ 'login.continueWith' | transloco: { provider: provider.providerName } }}
+                </button>
+              }
+            </div>
+
+            @if (nativeAvailable()) {
+              <div class="my-6 flex items-center gap-3" aria-hidden="true">
+                <span class="h-px flex-1 bg-border"></span>
+                <span class="text-meta text-muted-foreground">{{ 'login.or' | transloco }}</span>
+                <span class="h-px flex-1 bg-border"></span>
+              </div>
+            }
+          }
+
+          <!-- An admin can switch both native methods off once SSO is proven to
+               work. Rendering a dead email box under the provider buttons would
+               invite people to type into something with nothing behind it. -->
+          @if (nativeAvailable()) {
+          <form [class]="providers().length ? '' : 'mt-8'" (ngSubmit)="begin()">
             <label tkLabel for="email">{{ 'login.workEmail' | transloco }}</label>
             <input
               #emailInput
@@ -138,6 +178,9 @@ type Phase = 'email' | 'code';
                 {{ 'login.magicLinkHint' | transloco }}
               }
             </p>
+          }
+          } @else if (error(); as message) {
+            <tk-alert tone="danger" class="mt-6">{{ message }}</tk-alert>
           }
         }
 
@@ -247,21 +290,37 @@ export class Login {
   protected readonly brandName = computed(() => this.branding.value()?.workspaceName ?? 'Trackly');
 
   /**
-   * Which methods to offer. Branded (customer-facing) logins skip SSO — the IdP
-   * knows staff, not customers — but still read the toggles.
+   * Which methods to offer.
+   *
+   * The workspace slug travels with the call because it is also the audience:
+   * the server returns the customer-facing providers for a branded surface and
+   * the staff ones otherwise, so this screen never has to decide which buttons a
+   * customer is allowed to see.
    */
   protected readonly methods = resource({
     params: () => ({ slug: this.workspaceSlug() }),
     loader: ({ params }) => this.auth.loginMethods(params.slug),
   });
 
+  /** Already filtered for this surface by the server — render them all. */
+  protected readonly providers = computed(() => this.methods.value()?.ssoProviders ?? []);
+
   protected readonly phase = signal<Phase>('email');
   protected readonly email = signal('');
   protected readonly password = signal('');
   protected readonly code = signal('');
-  protected readonly error = signal<string | null>(null);
+  private readonly localError = signal<string | null>(null);
+
+  /**
+   * A local failure, or the reason the provider sent us back.
+   *
+   * Every SSO dead end — a refused domain, an expired state, an IdP that said no
+   * — redirects here with `?sso_error=`. Nothing read it before, so a failed
+   * provider sign-in landed on a sign-in page that looked perfectly ordinary and
+   * said nothing about what had just gone wrong.
+   */
+  protected readonly error = computed(() => this.localError() ?? this.query()?.get('sso_error') ?? null);
   protected readonly busy = signal(false);
-  protected readonly checkingSso = signal(false);
 
   protected readonly isValidEmail = computed(() => /.+@.+\..+/.test(this.email()));
 
@@ -273,15 +332,21 @@ export class Login {
   protected readonly passwordAvailable = computed(() => this.methods.value()?.passwordLoginEnabled ?? true);
   protected readonly emailAvailable = computed(() => this.methods.value()?.emailLoginEnabled ?? true);
 
+  /**
+   * Whether the email form is worth showing at all. Both native methods can be
+   * off once SSO is proven — invariant 8 allows exactly that — and then the
+   * providers are the entire sign-in page.
+   */
+  protected readonly nativeAvailable = computed(() => this.passwordAvailable() || this.emailAvailable());
+
   protected readonly canSubmit = computed(() => {
     if (!this.isValidEmail()) return false;
     return this.passwordAvailable() ? this.password().length > 0 : true;
   });
 
-  protected readonly submitLabelKey = computed(() => {
-    if (this.checkingSso()) return 'login.checkingSso';
-    return this.passwordAvailable() ? 'login.signInAction' : 'login.continue';
-  });
+  protected readonly submitLabelKey = computed(() =>
+    this.passwordAvailable() ? 'login.signInAction' : 'login.continue',
+  );
 
   /** One key per whole sentence; the workspace name travels as a parameter. */
   protected readonly headlineKey = computed(() =>
@@ -331,23 +396,27 @@ export class Login {
 
   protected backToEmail(): void {
     this.code.set('');
-    this.error.set(null);
+    this.localError.set(null);
     this.phase.set('email');
+  }
+
+  /**
+   * Hands off to the IdP.
+   *
+   * A full-page navigation, not a fetch: the whole point of the redirect dance is
+   * that the browser visits the provider, and the session cookie comes back from
+   * Trackly's own callback rather than from anything this page holds.
+   */
+  protected startSso(provider: SsoLoginProvider): void {
+    if (this.busy()) return;
+    this.busy.set(true);
+    this.localError.set(null);
+    window.location.href = provider.startUrl;
   }
 
   protected async begin(): Promise<void> {
     if (!this.canSubmit() || this.busy()) return;
-    this.error.set(null);
-
-    // A branded login is a customer-facing surface; customers are not the people
-    // an IdP knows about, so it stays off SSO.
-    const sso = this.workspaceSlug() ? null : this.methods.value()?.sso;
-    if (sso?.startUrl) {
-      this.checkingSso.set(true);
-      this.busy.set(true);
-      window.location.href = sso.startUrl;
-      return;
-    }
+    this.localError.set(null);
 
     if (this.passwordAvailable()) {
       await this.signInWithPassword();
@@ -359,7 +428,7 @@ export class Login {
 
   private async signInWithPassword(): Promise<void> {
     this.busy.set(true);
-    this.error.set(null);
+    this.localError.set(null);
     try {
       const { user } = await this.auth.passwordLogin({
         email: this.email(),
@@ -368,7 +437,7 @@ export class Login {
       });
       await this.complete(user);
     } catch (err) {
-      this.error.set(errorMessage(err, this.transloco.translate('login.passwordFailed')));
+      this.localError.set(errorMessage(err, this.transloco.translate('login.passwordFailed')));
     } finally {
       this.busy.set(false);
     }
@@ -376,13 +445,13 @@ export class Login {
 
   protected async send(): Promise<void> {
     this.busy.set(true);
-    this.error.set(null);
+    this.localError.set(null);
     try {
       await this.auth.sendMagicLink(this.email(), this.workspaceSlug());
       this.code.set('');
       this.phase.set('code');
     } catch (err) {
-      this.error.set(errorMessage(err, this.transloco.translate('login.sendFailed')));
+      this.localError.set(errorMessage(err, this.transloco.translate('login.sendFailed')));
     } finally {
       this.busy.set(false);
     }
@@ -390,7 +459,7 @@ export class Login {
 
   protected async verify(): Promise<void> {
     this.busy.set(true);
-    this.error.set(null);
+    this.localError.set(null);
     try {
       const result = await this.auth.verify({
         email: this.email(),
@@ -399,7 +468,7 @@ export class Login {
       });
       await this.complete(result.user);
     } catch (err) {
-      this.error.set(errorMessage(err, this.transloco.translate('login.codeFailed')));
+      this.localError.set(errorMessage(err, this.transloco.translate('login.codeFailed')));
     } finally {
       this.busy.set(false);
     }

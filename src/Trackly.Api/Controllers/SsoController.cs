@@ -9,6 +9,10 @@ namespace Trackly.Api.Controllers;
 // Public SSO endpoints. No session auth — the flow itself authenticates the user.
 // State/nonce/PKCE correlation is server-side (sso_login_states), so no
 // cross-site cookie is needed during the redirect dance.
+//
+// One callback serves OIDC and OAuth 2.0: `state` identifies the connection, and
+// the connection decides how the code is exchanged. That also keeps the redirect
+// URI an admin registers at the IdP down to a single, unchanging URL.
 [ApiController]
 public class SsoController(SsoLoginService sso, IConfiguration configuration) : ControllerBase
 {
@@ -21,14 +25,19 @@ public class SsoController(SsoLoginService sso, IConfiguration configuration) : 
         return $"{apiBase.TrimEnd('/')}/api/auth/sso/callback";
     }
 
+    /// <param name="connection">
+    /// Which provider to start. Omitted by links written before a workspace could
+    /// have more than one, which then fall through to its first enabled provider.
+    /// </param>
     [HttpGet("api/auth/sso")]
     [EnableRateLimiting("auth")]
-    public async Task<IActionResult> Start([FromQuery] string workspace, CancellationToken ct)
+    public async Task<IActionResult> Start(
+        [FromQuery] string workspace, [FromQuery] Guid? connection, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(workspace))
             return BadRequest(new { error = "workspace is required." });
 
-        var result = await sso.StartOidcAsync(workspace, CallbackUri(), ct);
+        var result = await sso.StartAsync(workspace, connection, CallbackUri(), ct);
         if (!result.Ok)
             return Redirect($"{FrontendBaseUrl}/login?sso_error={Uri.EscapeDataString(result.Error ?? "SSO unavailable")}");
         return Redirect(result.AuthorizeUrl!);
@@ -46,7 +55,7 @@ public class SsoController(SsoLoginService sso, IConfiguration configuration) : 
         if (string.IsNullOrWhiteSpace(state) || string.IsNullOrWhiteSpace(code))
             return Redirect($"{FrontendBaseUrl}/login?sso_error={Uri.EscapeDataString("Malformed SSO response.")}");
 
-        var result = await sso.CompleteOidcAsync(
+        var result = await sso.CompleteAsync(
             state, code, CallbackUri(),
             HttpContext.Connection.RemoteIpAddress?.ToString(), Request.Headers.UserAgent, ct);
 

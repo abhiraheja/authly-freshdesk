@@ -48,6 +48,9 @@ public static class DependencyInjection
         // OIDC (discovery/JWKS caching lives inside the singleton client).
         services.AddHttpClient("oidc");
         services.AddSingleton<IOidcClient, OidcClient>();
+        // The fallback for providers that never issue an id_token on the web —
+        // today Facebook alone. See OAuth2Client for why it is not OIDC.
+        services.AddSingleton<IOAuth2Client, OAuth2Client>();
         services.AddScoped<IAiCopilot, AnthropicAiCopilot>();
 
         return services;

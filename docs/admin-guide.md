@@ -147,31 +147,61 @@ self-hosted install and no recovery link, so a lockout here would be permanent.
 > the installation cannot be recovered through the app. The Members screen warns
 > you while you are the only one.
 
-### 3.3 SSO (OIDC / SAML)
+### 3.3 Single sign-on
 
-**What it is.** Let your team sign in with your identity provider — **Okta,
-Google, Entra ID, Authly, or any standard OIDC/SAML IdP**. Trackly still owns its
-users, roles, and sessions; the IdP only authenticates.
+**What it is.** Sign-in buttons backed by identity providers people already have
+— **Google, Microsoft, Facebook, Authly, or any OIDC / SAML 2.0 provider**.
+Trackly still owns its users, roles and sessions; the provider only says who
+someone is.
 **Where:** **Admin ▾ → Workspace → SSO**.
 
-**Set up (OIDC).**
-1. In your IdP, create an app and add Trackly’s **redirect URI**:
-   `{your-domain}/api/auth/sso/callback`.
-2. In Trackly SSO settings, enter the **discovery URL**, **client ID**, and
-   **client secret** (the secret is encrypted at rest and never shown again).
-3. Optionally add **group → role mappings** so an IdP group provisions the right
-   Trackly role. Mapping is applied **at login only**.
+**You can add several.** Each one is its own connection with its own credentials,
+its own on/off switch and its own audience — Google for customers and Microsoft
+for staff is an ordinary setup. Every enabled provider becomes one button on the
+sign-in page.
 
-**Set up (SAML).**
-1. Give your IdP Trackly’s **ACS URL** `{your-domain}/api/auth/saml/acs` and **SP
-   metadata** `{your-domain}/api/auth/saml/metadata?workspace=<slug>`.
-2. Paste the IdP metadata into Trackly. The IdP’s response signature is validated
-   against that metadata.
+**Set up.**
+1. Click a provider tile. Trackly already knows its endpoints — you supply only
+   what belongs to your own account.
+2. Copy the **redirect URI** shown in the panel into the app you create at the
+   provider. It must match exactly; a mismatch fails at the final step of a
+   sign-in, which is the hardest place to notice it. The same URI works for every
+   OIDC and OAuth provider you add.
+3. Paste the **client ID** and **client secret** (encrypted at rest, never shown
+   again). Microsoft also asks for a **directory (tenant) ID** — leave it blank
+   to admit any work account, or paste yours to admit only your organisation.
+   Custom OIDC asks for the **discovery URL**. **Authly** asks for its **base
+   URL** (e.g. `https://login.acme.com`) and your **workspace slug** — the slug
+   is what tells Authly which workspace is signing in when several share one
+   host, and you can leave it blank only if your Authly is on its own domain.
+4. Choose where the button appears: **staff sign-in**, **customer sign-in**, or
+   both. Customer is off by default.
+5. Optionally add **group → role mappings** so a provider group provisions the
+   right Trackly role. Mapping is applied **at login only**, and only providers
+   that can send groups offer it.
 
-**Use.** New SSO users are auto-created on first login (JIT provisioning) with the
-role from your group mapping (default: customer if unmapped). SSO and magic-link
-login coexist. _Deployment note: callback URLs must be public HTTPS — see
-go-live.md §5._
+**SAML.** Give your provider Trackly’s **ACS URL** and the **SP metadata URL**,
+both shown in the panel, then paste the IdP metadata (URL or XML). The provider’s
+response signature is validated against that metadata.
+
+**Narrow who can use a provider.** A Google or Facebook button accepts every
+account those companies have ever issued, and anyone who signs in is created as a
+customer. Put your own domains in **Allowed email domains** to stop that.
+
+**There is no Test button, on purpose.** Signing in *is* the test — a tick that
+only proved a config file parsed would tell you nothing. Use **Try it** to open
+the real flow in a new tab (use a private window if you are already signed in). A
+connection reads “Not used yet” until a real sign-in lands, and that is the fact
+Trackly checks before it will let you turn another sign-in method off.
+
+**Removing one.** Trackly refuses if it is the last thing that works — see §3.1.
+People’s accounts and tickets are kept; they just need another way in.
+
+**Use.** New users are created on first sign-in with the role their group mapping
+gives them (customer if unmapped). Someone who signs in with Google and later
+with Microsoft using the same address gets one account, not two. SSO, password
+and emailed-code sign-in all coexist. _Deployment note: callback URLs must be
+public HTTPS — see go-live.md §5._
 
 ### 3.4 Domains — removed
 
@@ -180,9 +210,10 @@ with a DNS TXT record, so that `@acme.com` sign-ins were routed to your SSO.
 
 **It is gone, and you do not need it.** Its only job was picking the right
 workspace out of many on a shared, hosted Trackly. You run your own installation:
-there is one workspace and one SSO connection, so the login page offers your SSO
-to everyone without needing to be told who they are first. Nothing to configure,
-and no DNS record to publish.
+there is one workspace, so the login page simply shows every provider you have
+enabled and lets people pick. Nothing to configure, and no DNS record to publish.
+To limit *who* a provider admits, use **Allowed email domains** on that
+connection (§3.3) — no DNS involved.
 
 ---
 

@@ -38,8 +38,9 @@ export const authRoutes: Routes = [
     data: { titleKey: 'comingSoon.titles.verifySignIn', from: 'frontend/src/pages/VerifyPage.tsx' },
   },
   {
+    // Where the SSO callback lands once Trackly has issued its own session.
+    // No guestGuard: arriving here signed in is the success case, not a mistake.
     path: 'auth/sso/complete',
-    loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
-    data: { titleKey: 'comingSoon.titles.signingIn', from: 'frontend/src/pages/auth/SsoCompletePage.tsx' },
+    loadComponent: () => import('./sso-complete').then((m) => m.SsoComplete),
   },
 ];

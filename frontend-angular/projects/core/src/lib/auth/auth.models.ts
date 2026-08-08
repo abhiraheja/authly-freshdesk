@@ -1,3 +1,5 @@
+import type { SsoProtocol, SsoProviderKind } from '../api/sso.api';
+
 export type UserRole = 'customer' | 'agent' | 'admin';
 
 export interface Workspace {
@@ -31,20 +33,44 @@ export interface User {
  */
 export type VerifyResponse = { status: 'ok'; user: User };
 
+/**
+ * One "Continue with …" button.
+ *
+ * `provider` is the kind, and picks the brand mark; `providerName` is the label,
+ * which an admin may have renamed to something like "Acme SSO".
+ */
+export interface SsoLoginProvider {
+  id: string;
+  provider: SsoProviderKind;
+  providerName: string;
+  protocol: SsoProtocol;
+  startUrl: string;
+}
+
 /** What the sign-in page should offer. Read before anyone has signed in. */
 export interface LoginMethods {
   /** No workspace exists yet — the visitor belongs on /setup. */
   needsSetup: boolean;
   passwordLoginEnabled: boolean;
   emailLoginEnabled: boolean;
-  sso: { providerName: string; protocol: 'oidc' | 'saml'; startUrl: string } | null;
+  /**
+   * The first provider, kept for callers written when a workspace had exactly
+   * one. Read `ssoProviders` instead — a workspace can offer several.
+   */
+  sso: SsoLoginProvider | null;
+  /**
+   * Every provider to show *on this surface*: the server filters by audience,
+   * so a branded customer login gets the customer-facing ones and Trackly's own
+   * sign-in gets the staff ones.
+   */
+  ssoProviders: SsoLoginProvider[];
 }
 
-/** This installation's SSO entry point, if one is configured. */
+/** This installation's first SSO entry point, if one is configured. */
 export interface SsoDiscovery {
   workspaceSlug: string;
   providerName: string;
-  protocol: 'oidc' | 'saml';
+  protocol: SsoProtocol;
   startUrl: string;
 }
 

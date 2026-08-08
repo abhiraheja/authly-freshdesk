@@ -78,10 +78,13 @@ This reverses the original "no passwords, ever" decision. What that decision was
 
 ### One workspace, three switches
 
-`password_login_enabled` and `email_login_enabled` live on the workspace; SSO is on/off by whether a connection exists. `PUT /api/admin/login-settings` **refuses to disable the last working method** — and "working" means proven, not configured:
+`password_login_enabled` and `email_login_enabled` live on the workspace; SSO is on/off per connection (`is_enabled`, `show_on_staff_login`). `PUT /api/admin/login-settings` **refuses to disable the last working method** — and "working" means proven, not configured:
 
 - email counts only once a test message has actually been delivered (`email_configs.last_verified_at`, set by `POST /api/admin/settings/email/test`)
-- SSO counts only once a real login has completed (`sso_connections.status = active`)
+- SSO counts only once a real login has completed (`sso_connections.status = active`) through a connection that is still enabled and still shown on the staff page — proof of a button nobody can see is not proof of a way in
+
+The same rule is enforced from the other side: `SsoSettingsController` refuses to
+delete, disable, or hide the connection holding the door open.
 
 On a self-hosted box there is no support desk and no recovery link, so this is the difference between a bad afternoon and a database restore.
 
@@ -93,52 +96,123 @@ A temporary password has travelled over a call or a chat, so `users.must_change_
 
 **There is no CLI recovery.** If the only admin loses their password while email is down, the installation cannot be recovered through the app. Keeping a second admin is the mitigation, and the Members screen says so.
 
-| Provider | Protocol | Notes |
-|----------|---------|-------|
-| **Authly** | Custom OIDC | Your own product — first-class support |
-| **Google Workspace** | SAML or OIDC | Most common for SMBs |
-| **Microsoft Entra ID** | SAML | Enterprise standard |
-| **Okta** | SAML | Enterprise standard |
-| **Auth0** | SAML or OIDC | Common in SaaS companies |
-| **Custom SAML** | SAML | Any SAML 2.0 compliant IdP |
-| **Custom OIDC** | OIDC | Any OIDC compliant IdP |
-| **Email + password** | Native | PBKDF2 hash in `users.password_hash`; the only method that works on a fresh install |
-| **Email magic link** | Native | Trackly emails a sign-in link + 6-digit code |
+A workspace configures **as many providers as it likes** — Google for customers
+and Entra for staff is an ordinary setup. Each is a row in `sso_connections`
+with its own secret, audience and status, and each becomes one button on the
+sign-in page.
+
+| Provider | Protocol | What the admin supplies | Notes |
+|----------|---------|---|---|
+| **Google** | OIDC | Client ID + secret | Discovery URL is fixed and built in |
+| **Microsoft** | OIDC | Directory (tenant) ID, client ID + secret | Discovery is built from the tenant; default `organizations` admits work accounts, not personal Outlook ones |
+| **Facebook** | **OAuth 2.0** | App ID + secret | Not OIDC — see below |
+| **Authly** | OIDC | Base URL, workspace slug, client ID (secret optional) | Self-hosted and multi-tenant — see below |
+| **Custom OIDC** | OIDC | Discovery URL, client ID, secret | Any OIDC IdP — Okta, Auth0, Keycloak. Configurable more than once |
+| **Custom SAML** | SAML 2.0 | IdP metadata (URL or XML) | Any SAML 2.0 IdP. Configurable more than once |
+| **Email + password** | Native | — | PBKDF2 hash in `users.password_hash`; the only method that works on a fresh install |
+| **Email magic link** | Native | — | Trackly emails a sign-in link + 6-digit code |
+
+**Facebook is the one that is not OIDC.** It publishes a discovery document, but
+the `id_token` that document describes is only issued to the mobile "Limited
+Login" SDKs — a web authorization-code exchange returns an access token and
+nothing else. So Facebook runs as plain OAuth 2.0 + PKCE (`IOAuth2Client` /
+`OAuth2Client`) and reads the profile from the Graph API. There is no signed
+assertion to validate; what makes the result trustworthy is that the token is
+exchanged over TLS with Facebook and spent immediately against Facebook's own
+userinfo endpoint.
+
+**The catalogue is the source of truth.** `SsoProviderCatalog` (in
+`Trackly.Core/Sso`) holds each provider's protocol, endpoints, default scopes and
+which fields an admin must supply. The API sends it to the settings screen, so
+adding a provider is one entry there rather than a server change plus a matching
+`if` in TypeScript. Protocol comes from the catalogue and is never accepted from
+the request — whether Facebook is OAuth 2.0 is not an admin's opinion.
+
+**Audience per connection.** `show_on_staff_login` and `show_on_customer_login`
+decide where a button appears. Customer-facing is off by default: an enterprise
+IdP knows staff, and a customer bounced off it has no way to tell why.
+`GET /api/public/login-methods` filters by audience, keyed on whether the caller
+passed a workspace slug — a slug is only ever in the URL on a branded,
+customer-facing surface.
+
+**Authly** (`Authly`, OpenIddict-based, self-hosted, multi-tenant) needs three
+things a single-tenant IdP does not, and each has a catalogue field behind it:
+
+- **A base URL, not a discovery URL** (`DiscoverySuffix`). Authly runs on the
+  customer's own domain, so nothing can be baked in — but asking for
+  `https://login.acme.com` is a question an admin can answer, while asking for
+  `…/.well-known/openid-configuration` is a path they must be told. Trackly
+  appends it, tolerates them pasting the full URL anyway, and shows the resolved
+  URL live under the field.
+- **A workspace slug on the authorize request** (`TenantAsAuthorizeParam` →
+  `?tenant=acme`). Authly resolves a tenant from a per-tenant custom domain, or
+  from a `tenant` hint. It cannot ride on the discovery URL: one shared host
+  publishes *one* discovery document for every tenant, so the tenant belongs to
+  the request. Without it, authorize fails with "different workspace" as soon as
+  it reaches a client owned by another tenant. Leave it blank only when Authly is
+  reached on its own domain.
+- **The `roles` scope.** Authly puts RBAC roles in a `roles` claim, gated on that
+  scope. Trackly's OIDC client already reads `roles` — but without the scope the
+  claim never arrives and every group→role mapping silently matches nothing,
+  which looks exactly like a mapping typo.
+
+PKCE is mandatory at Authly for confidential clients too; Trackly always sends
+it, so either a Web (confidential, with secret) or a SPA (public, PKCE-only)
+Authly client works. **Not yet done:** RP-initiated logout. Signing out of
+Trackly leaves Authly's own SSO cookie, so the next "Continue with Authly"
+re-authenticates silently. Closing that means keeping the `id_token` and
+redirecting to `/connect/logout?id_token_hint=…&post_logout_redirect_uri=…`.
+
+**`allowed_email_domains`** narrows a connection to named domains. It matters
+most for Google and Facebook: those buttons admit every account those companies
+have ever issued, and JIT provisioning would create a Trackly customer for each.
+Empty means any; sub-domains are not implied.
 
 ---
 
-### SSO Configuration Wizard (per workspace)
+### SSO settings screen (`/admin/settings/sso`)
 
-Admin sets up SSO at `/admin/settings/sso`. The wizard follows the same pattern as Claude's SSO setup (as seen in the reference screenshots):
+Not a wizard. A wizard suited one connection per workspace; a list of providers
+is a list, and the screen is shaped like one:
 
 ```
-Step 1 — Select your identity provider
-         (list of pre-built providers + Custom SAML + Custom OIDC)
-         ↓
-Step 2 — Create an application in your IdP
-         Trackly shows: redirect/callback URI to register in the IdP
-         ↓
-Step 3 — Add required claims
-         IdP must send: sub (required), email (required),
-                        given_name (required), family_name (required),
-                        groups (optional — used for auto role mapping)
-         ↓
-Step 4 — Provide your OIDC / SAML configuration
-         OIDC: Discovery endpoint URL, Client ID, Client Secret
-               (Client Secret is optional if the IdP supports PKCE for
-                public clients — e.g. Authly SPA clients)
-         SAML: IdP metadata URL (or paste XML), SP Entity ID
-         ↓
-Step 5 — Configure group → role mapping (optional)
-         e.g. Okta group "support-agents"  → agent
-              Okta group "support-admins"  → admin
-              (everyone else)              → customer
-         ↓
-Step 6 — Test Single Sign-On
-         Trackly initiates a test auth flow and confirms claims are received
+Providers        one row per configured connection
+                 brand mark · label · status · audience · enable switch ·
+                 "Try it" (opens the real flow) · Edit
+
+Add a provider   tile grid from the catalogue — Google, Microsoft, Facebook,
+                 Authly, Custom OIDC, Custom SAML. A tile is disabled once its
+                 provider is configured, unless the kind is repeatable.
+
+Editor (drawer)  fields the catalogue says this provider needs, the redirect
+                 URI to register, the two audience switches, allowed email
+                 domains, and group→role mapping where the provider can send
+                 groups.
 ```
 
-**Switching providers:** Admin can switch to a different provider at any time. Existing user records and tickets are preserved — only the SSO connection changes. User identity records (`user_identities`) for the old provider are kept but marked inactive (`is_active = false`); users are re-matched by email and get a new identity record on first login via the new provider.
+**The redirect URI comes from the server**, built from `App:ApiBaseUrl` — not
+from `window.location.origin`, which is simply wrong whenever the API is on
+another host and produces a registration that fails at the last step of a login,
+where it is hardest to diagnose. There is one URI for every OIDC and OAuth 2.0
+provider (`/api/auth/sso/callback`) and one ACS URL for every SAML one, so an
+admin registers the same string everywhere.
+
+**There is no Test button, deliberately.** An SSO flow signs you in — there is no
+way to exercise it without doing it, and a green tick that only proves a
+discovery document parsed is worse than none. A connection stays "not used yet"
+until a real login lands, and that is exactly the fact invariant 8 counts before
+it will let another sign-in method be switched off. The row's "Try it" link opens
+the real flow in a new tab.
+
+**Removing or disabling a provider** is guarded the same way as the login-method
+toggles: `SsoSettingsController` refuses when it is the last *proven* way in
+(`IsLastWayInAsync`). Existing user records and tickets are preserved — only the
+connection goes. `user_identities` rows for it are removed with it (cascade);
+users are re-matched by email and get a new identity on their next sign-in
+through whatever provider they use.
+
+**Provider is immutable after creation.** Changing it under a live connection
+would silently repoint every linked identity at a different IdP. Delete and add.
 
 ---
 
@@ -160,32 +234,37 @@ User visits /login
     ├── no workspace exists yet ──────▶ redirected to /setup (first-run)
     │
     ▼
-User enters email address
+GET /api/public/login-methods[?workspace=slug]
+    → which native methods are on, and which providers belong on THIS surface
     │
-    ▼
-Trackly checks: does this installation have an SSO connection?
-    │
-   YES ──────────────────────────────────────────────────────────────────────┐
+    ├─── "Continue with <provider>" ─────────────────────────────────────────┐
     │                                                                        ▼
-    │                                                    SSO flow (OIDC or SAML)
-    │                                                    Redirect to IdP → user authenticates
-    │                                                    IdP redirects back with code/assertion
-    │                                                    Trackly validates, extracts claims
-    │                                                    JIT provision or update user record
-    │                                                    Apply group→role mapping (if configured)
-    │                                                    Issue Trackly session → redirect to app
+    │                                    SSO flow (OIDC, OAuth 2.0 or SAML)
+    │                                    Redirect to IdP → user authenticates
+    │                                    IdP redirects back with code/assertion
+    │                                    Trackly validates, extracts claims
+    │                                    Check allowed_email_domains
+    │                                    JIT provision or update user record
+    │                                    Apply group→role mapping (if configured)
+    │                                    Issue Trackly session → redirect to app
     │
-   NO
-    ▼
-Passwordless email login (magic link + code)
+    ├─── email + password ──▶ POST /api/auth/password/login → session
     │
-    ▼
-Trackly emails a sign-in link + 6-digit code
-    → user clicks the link (or types the code)
-    → Trackly verifies the token → issues session → redirect to app
+    └─── email me a code ───▶ Trackly emails a sign-in link + 6-digit code
+                              → user clicks the link (or types the code)
+                              → verify token → issue session → redirect to app
 ```
 
-A **workspace-branded** login (`?workspace=slug`, reached from a submit form or portal link) skips the SSO check: it is a customer-facing surface, and customers are not who the IdP knows about.
+**The providers are buttons, not a fork inside submit.** With one connection per
+workspace, "has SSO" was a yes/no and typing an email simply bounced you to the
+IdP. Several providers make that impossible: the choice has to be visible — and
+the password field stops disappearing on installations that configured SSO for
+only some of their people.
+
+A **workspace-branded** login (`?workspace=slug`, reached from a submit form or
+portal link) gets the providers an admin marked customer-facing, which is usually
+none. The slug is what selects the audience, because a slug is only ever in the
+URL on a customer-facing surface.
 
 Verification has two outcomes, signed in or not. It used to have two more — `signup_required` (go create a workspace) and `choose_workspace` (this email is in several) — both unreachable with one workspace, and both removed. An email with no account still signs in and is created as a `customer`, which is how customers self-serve the portal.
 
@@ -1128,9 +1207,26 @@ services.AddOpenIdConnect("WorkspaceOidc", options => {
 > nonce. State/nonce/PKCE verifier are correlated **server-side** in
 > `sso_login_states` (single-use, 10-min TTL) instead of a cross-site cookie — a
 > `SameSite=Strict` cookie would not survive the IdP round-trip. Endpoints:
-> `GET /api/auth/sso?workspace=slug` → IdP; `GET /api/auth/sso/callback` → session.
-> Login-page routing: `GET /api/public/sso/discover?email=` returns the workspace's
-> SSO start URL when the email domain is a verified, discoverable claim.
+> `GET /api/auth/sso?workspace=slug&connection=<id>` → IdP;
+> `GET /api/auth/sso/callback` → session.
+>
+> **Multi-provider (this change):** the flow is keyed on a connection id, not on
+> "the workspace's SSO". The id travels in the link, and back through the `state`
+> row — so one callback serves OIDC and OAuth 2.0 alike, and an admin registers a
+> single redirect URI no matter how many providers they add. `connection` is
+> optional: a link written before this falls through to the workspace's first
+> enabled provider. The login page reads `GET /api/public/login-methods`, which
+> returns every provider for that surface; `/api/public/sso/discover` keeps its
+> single-provider shape for older clients and reports the first.
+>
+> **Two claim-reading traps, both fixed, both silent:**
+> `JwtSecurityTokenHandler` is constructed with `MapInboundClaims = false`. Left
+> at its default it rewrites OIDC claim names into legacy WS-* URIs — `sub`
+> becomes `…/claims/nameidentifier` — so the `sub` lookup returned null and every
+> OIDC sign-in died on "id_token has no sub claim". And group claims are read
+> from `groups`, `roles`, **`role`** and `group`: `role` singular is OpenIddict's
+> spelling and therefore Authly's, and without it an Authly group→role mapping
+> matches nothing while looking exactly like a mapping typo.
 
 **SAML handling:** `ITfoxtec.Identity.Saml2` (`.MvcCore`), handled in the API layer
 (`SamlController`): `GET /api/auth/saml?workspace=slug`, `POST /api/auth/saml/acs`,
@@ -1157,8 +1253,11 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | POST   | `/api/invitations/accept` | None | Accept invite via token, create account |
 | GET    | `/api/public/workspaces/{slug}/branding` | None | Public, cacheable — branding for form/widget |
 | PUT    | `/api/admin/branding` | Session | admin — update logo, colour, portal title |
-| GET    | `/api/auth/sso?workspace=` | None | Initiate SSO for workspace |
-| GET    | `/auth/callback` | None | OIDC/SAML callback |
+| GET    | `/api/public/login-methods?workspace=` | None | Which native methods are on + the providers for this surface |
+| GET    | `/api/auth/sso?workspace=&connection=` | None | Start OIDC or OAuth 2.0 for one connection |
+| GET    | `/api/auth/sso/callback` | None | One callback for both — `state` says which connection |
+| GET    | `/api/auth/saml?workspace=&connection=` | None | Start SAML for one connection |
+| POST   | `/api/auth/saml/acs` | None | SAML assertion consumer service |
 | POST   | `/api/auth/magic-link/send` | None | Email a sign-in link + 6-digit code (rate-limited) |
 | POST   | `/api/auth/magic-link/verify` | None | Consume link token or code → issue session |
 | POST   | `/api/auth/logout` | Session | Clear session |
@@ -1509,8 +1608,11 @@ offered Delete is not a convenience.
 | GET    | `/api/tickets/guest/{id}?token=` | None | Guest magic link |
 | POST   | `/api/tickets/{id}/attachments` | Session or guest token | Upload attachment |
 | GET    | `/api/attachments/{id}` | Session or guest token | Download via signed URL (visibility-checked) |
-| POST   | `/api/admin/sso` | Session | admin — save SSO connection |
-| POST   | `/api/admin/sso/test` | Session | admin — test SSO connection |
+| GET    | `/api/admin/sso` | Session | admin — provider catalogue + configured connections + the redirect URI to register |
+| POST   | `/api/admin/sso` | Session | admin — add a connection |
+| PUT    | `/api/admin/sso/{id}` | Session | admin — full save of one connection |
+| PATCH  | `/api/admin/sso/{id}` | Session | admin — just the switches (enabled, audiences, order); refuses to hide the last proven way in |
+| DELETE | `/api/admin/sso/{id}` | Session | admin — remove one; same refusal |
 | GET    | `/api/problems` | Session | agent, admin |
 | POST   | `/api/announcements` | Session | admin |
 
@@ -1545,26 +1647,43 @@ CREATE TABLE workspaces (
     updated_at             TIMESTAMPTZ DEFAULT now()
 );
 
--- SSO connections (one active per workspace)
+-- SSO connections (several per workspace — one button each)
 CREATE TABLE sso_connections (
     id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id       UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    provider_name      TEXT NOT NULL,       -- "Authly", "Okta", "Google", "Entra ID", "Custom OIDC", etc.
-    protocol           TEXT NOT NULL,       -- 'oidc' or 'saml'
-    -- OIDC fields
-    discovery_endpoint TEXT,
+    provider           TEXT NOT NULL DEFAULT 'oidc',  -- kind: google, microsoft, facebook, authly, oidc, saml
+    provider_name      TEXT NOT NULL,       -- the BUTTON LABEL, e.g. "Acme SSO". Editable.
+    protocol           TEXT NOT NULL,       -- 'oidc', 'saml' or 'oauth2' — set from the catalogue
+    -- OIDC / OAuth2 fields
+    discovery_endpoint TEXT,                -- only when the admin supplies it (Authly, custom)
     client_id          TEXT,
     client_secret      TEXT,               -- AES-256-GCM encrypted
+    tenant             TEXT,                -- Entra directory id; the discovery URL is built from it
+    scopes             TEXT,                -- override; null uses the catalogue default
     -- SAML fields
     idp_metadata_url   TEXT,
     idp_metadata_xml   TEXT,
     sp_entity_id       TEXT,
+    -- Reach
+    allowed_email_domains  TEXT,            -- comma separated; empty = any
+    is_enabled             BOOLEAN NOT NULL DEFAULT true,
+    show_on_staff_login    BOOLEAN NOT NULL DEFAULT true,
+    show_on_customer_login BOOLEAN NOT NULL DEFAULT false,
+    sort_order             INT NOT NULL DEFAULT 0,
     -- Status
     status             TEXT DEFAULT 'pending',  -- pending, active, error
     tested_at          TIMESTAMPTZ,
     created_at         TIMESTAMPTZ DEFAULT now(),
     updated_at         TIMESTAMPTZ DEFAULT now()
 );
+
+-- One of each well-known provider. The custom kinds are exempt, because two
+-- corporate IdPs is a real setup and two Googles never is.
+CREATE UNIQUE INDEX ix_sso_connections_workspace_id_provider
+    ON sso_connections (workspace_id, provider)
+    WHERE provider NOT IN ('oidc', 'saml');
+CREATE INDEX ix_sso_connections_workspace_id_sort_order
+    ON sso_connections (workspace_id, sort_order);
 
 -- IdP group → Trackly role mappings
 CREATE TABLE sso_group_role_mappings (

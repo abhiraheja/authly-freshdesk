@@ -347,6 +347,40 @@ Append here as phases land, so nothing is missed later.
   validated against the IdP metadata cert. **Both OIDC and SAML must be verified
   against a real IdP** — there is no automated substitute for a live identity
   provider.
+- **Multi-provider SSO (Google / Microsoft / Facebook / Authly / custom):** still
+  no new env keys — every provider is a row in `sso_connections`, encrypted with
+  `Security:MasterKey`. What changes at deploy time:
+  - **One** redirect URI covers every OIDC and OAuth 2.0 provider:
+    `{ApiBaseUrl}/api/auth/sso/callback`. Register that exact string at Google,
+    Entra and Facebook. It is shown on the SSO settings screen, built from
+    `ApiBaseUrl` — so a wrong `ApiBaseUrl` produces a registration that fails at
+    the last step of a login and nowhere earlier.
+  - **Facebook requires HTTPS** on the redirect URI outside its own dev mode, and
+    runs as plain OAuth 2.0 against `graph.facebook.com` — outbound egress to
+    `www.facebook.com` and `graph.facebook.com` must be open. The Graph API
+    version is pinned in `SsoProviderCatalog` (`v21.0`) and needs revisiting when
+    Meta retires it; a retired version fails every Facebook sign-in at once.
+  - **Outbound egress** for discovery + JWKS: `accounts.google.com`,
+    `login.microsoftonline.com`, plus whatever host serves an Authly or custom
+    IdP. A locked-down egress policy is the usual cause of "could not reach the
+    identity provider".
+  - **Microsoft tenant:** blank means `organizations` — any work or school
+    account, from any directory. Set the directory ID to admit only yours.
+  - **Authly:** register the redirect URI on an Authly **application** (Web
+    confidential, or SPA public — Trackly always sends PKCE, which Authly
+    requires either way). Set the **workspace slug** unless your Authly is on a
+    per-tenant custom domain; without it `/connect/authorize` fails with
+    "different workspace". The `roles` scope is requested by default — leave it
+    in, or group→role mapping silently matches nothing. Signing out of Trackly
+    does **not** clear Authly's SSO cookie, so the next Authly click
+    re-authenticates without a prompt; RP-initiated logout is not implemented.
+  - **`allowed_email_domains`** on Google and Facebook connections: without it,
+    those buttons admit every account those companies have ever issued and each
+    one is created as a Trackly customer. Decide this before the button goes live,
+    not after.
+  - Verify each provider with a **real sign-in** in a private window. There is no
+    test endpoint, deliberately — a connection is only `active` once a login has
+    actually completed, and that is what the last-way-in guard counts.
 - **Phase 6 (problems / announcements / widget / dashboard):**
   - `GET /widget.js` and `GET /api/public/workspaces/{slug}/widget` are public and
     must be reachable over HTTPS from wherever customers embed the widget. The

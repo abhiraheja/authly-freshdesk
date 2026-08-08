@@ -21,6 +21,11 @@ export const adminRoutes: Routes = [
     loadComponent: () => import('./login-settings').then((m) => m.AdminLoginSettings),
   },
   {
+    // Which identity providers this installation offers, and to whom.
+    path: 'settings/sso',
+    loadComponent: () => import('./sso-settings').then((m) => m.AdminSsoSettings),
+  },
+  {
     path: 'settings/configuration',
     loadComponent: () => import('./configuration').then((m) => m.AdminConfiguration),
   },
@@ -53,5 +58,4 @@ export const adminRoutes: Routes = [
   { path: 'settings/ai', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.aiCopilot', from: 'frontend/src/pages/admin/AiSettingsPage.tsx' } },
   { path: 'settings/email', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.email', from: 'frontend/src/pages/admin/EmailSettingsPage.tsx' } },
   { path: 'settings/branding', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.branding', from: 'frontend/src/pages/admin/BrandingSettingsPage.tsx' } },
-  { path: 'settings/sso', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.sso', from: 'frontend/src/pages/admin/SsoSettingsPage.tsx' } },
 ];

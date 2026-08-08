@@ -10,6 +10,7 @@
  */
 
 export * from './lib/icon/icon';
+export * from './lib/icon/provider-mark';
 export * from './lib/button/button';
 export * from './lib/card/card';
 export * from './lib/badge/badge';

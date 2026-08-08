@@ -28,12 +28,20 @@ public class OidcClient(IHttpClientFactory httpClientFactory) : IOidcClient
             ["response_type"] = "code",
             ["client_id"] = config.ClientId,
             ["redirect_uri"] = redirectUri,
-            ["scope"] = "openid profile email",
+            ["scope"] = string.IsNullOrWhiteSpace(config.Scopes) ? "openid profile email" : config.Scopes,
             ["state"] = state,
             ["nonce"] = nonce,
             ["code_challenge"] = codeChallenge,
             ["code_challenge_method"] = "S256",
         };
+
+        // Provider-specific extras (a tenant hint, today). Added last but never
+        // allowed to overwrite a protocol parameter — a bad catalogue entry must
+        // not be able to replace the state or the code challenge.
+        foreach (var (key, value) in config.ExtraAuthorizeParameters ?? new Dictionary<string, string>())
+            if (!query.ContainsKey(key))
+                query[key] = value;
+
         return QueryHelpers(oidc.AuthorizationEndpoint, query);
     }
 
@@ -79,7 +87,14 @@ public class OidcClient(IHttpClientFactory httpClientFactory) : IOidcClient
             ClockSkew = TimeSpan.FromMinutes(5),
         };
 
-        var handler = new JwtSecurityTokenHandler();
+        // MapInboundClaims = false is load-bearing, not a tidy-up. Left on (the
+        // default), JwtSecurityTokenHandler rewrites the OIDC claim names into
+        // the legacy WS-* URIs on the way in: `sub` becomes
+        // `…/claims/nameidentifier`, `email` and `name` likewise. Every lookup
+        // below reads the real name, so `sub` came back null and the check under
+        // it threw "id_token has no sub claim" — for every provider, on every
+        // login. Off, the claims arrive spelled the way the id_token spells them.
+        var handler = new JwtSecurityTokenHandler { MapInboundClaims = false };
         var principal = handler.ValidateToken(token.IdToken, parameters, out _);
 
         var nonce = principal.FindFirst("nonce")?.Value;
@@ -92,8 +107,14 @@ public class OidcClient(IHttpClientFactory httpClientFactory) : IOidcClient
         var name = principal.FindFirst("name")?.Value
                    ?? Join(principal.FindFirst("given_name")?.Value, principal.FindFirst("family_name")?.Value);
 
-        // Groups may arrive as repeated claims or a JSON array in "groups"/"roles".
-        var groups = principal.FindAll("groups").Concat(principal.FindAll("roles")).Concat(principal.FindAll("group"))
+        // Groups may arrive as repeated claims or a JSON array, and providers do
+        // not agree on the name. `role` singular is OpenIddict's spelling, which
+        // is what Authly emits — omitting it made every Authly group→role
+        // mapping match nothing, indistinguishable from a typo in the mapping.
+        var groups = principal.FindAll("groups")
+            .Concat(principal.FindAll("roles"))
+            .Concat(principal.FindAll("role"))
+            .Concat(principal.FindAll("group"))
             .SelectMany(c => ExpandClaim(c.Value))
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .Distinct(StringComparer.OrdinalIgnoreCase)

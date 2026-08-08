@@ -20,6 +20,7 @@ export * from './lib/api/http.interceptors';
 export * from './lib/api/admin.api';
 export * from './lib/api/notifications.api';
 export * from './lib/api/public.api';
+export * from './lib/api/sso.api';
 export * from './lib/api/tickets.api';
 export * from './lib/auth/auth.api';
 

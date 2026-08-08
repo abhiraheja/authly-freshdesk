@@ -1,56 +1,21 @@
 import { api } from './client'
 
-export interface GroupMapping {
-  groupName: string
-  tracklyRole: string
-}
-
-export interface SsoConnection {
-  providerName: string
-  protocol: 'oidc' | 'saml'
-  discoveryEndpoint: string | null
-  clientId: string | null
-  hasClientSecret: boolean
-  idpMetadataUrl: string | null
-  idpMetadataXml: string | null
-  spEntityId: string | null
-  status: string
-  testedAt: string | null
-  groupMappings: GroupMapping[]
-}
-
-export interface SaveSsoBody {
-  providerName: string
-  protocol: 'oidc' | 'saml'
-  discoveryEndpoint?: string | null
-  clientId?: string | null
-  clientSecret?: string | null // null keeps, "" clears, value sets
-  idpMetadataUrl?: string | null
-  idpMetadataXml?: string | null
-  spEntityId?: string | null
-  groupMappings: GroupMapping[]
-}
-
-export function getSso() {
-  return api<SsoConnection | null>('/api/admin/sso')
-}
-
-export function saveSso(body: SaveSsoBody) {
-  return api<SsoConnection>('/api/admin/sso', { method: 'PUT', body: JSON.stringify(body) })
-}
-
-export function deleteSso() {
-  return api<void>('/api/admin/sso', { method: 'DELETE' })
-}
+// Admin SSO configuration moved to the Angular app (`@trackly/core`'s SsoApi)
+// when a workspace gained more than one provider. The CRUD helpers that used to
+// live here spoke the old single-connection shape — PUT/DELETE /api/admin/sso
+// with no id — and those routes no longer exist.
+//
+// What remains is the one call the retiring React sign-in page still makes.
 
 export interface SsoDiscovery {
   workspaceSlug: string
   providerName: string
-  protocol: 'oidc' | 'saml'
+  protocol: 'oidc' | 'saml' | 'oauth2'
   startUrl: string
 }
 
 // Returns null when this installation has no SSO connection (API replies 204).
+// With several configured, this reports the first one shown on staff sign-in.
 export function discoverSso() {
   return api<SsoDiscovery | undefined>('/api/public/sso/discover').then((r) => r ?? null)
 }

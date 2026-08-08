@@ -29,7 +29,13 @@ export class AuthApi {
         workspaceSlug ? { workspace: workspaceSlug } : undefined,
       );
     } catch {
-      return { needsSetup: false, passwordLoginEnabled: true, emailLoginEnabled: true, sso: null };
+      return {
+        needsSetup: false,
+        passwordLoginEnabled: true,
+        emailLoginEnabled: true,
+        sso: null,
+        ssoProviders: [],
+      };
     }
   }
 
