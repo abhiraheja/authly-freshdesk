@@ -1750,7 +1750,10 @@ tr:has(.row-actions) td {
  *
  * z-index above the modal (which sits at 60) so it is not covered by the dialog
  * it escaped from. */
-.combobox-menu {
+/* A menu that has been moved to <body> and positioned against the viewport.
+   Shared by every control whose list must escape a clipping ancestor — see the
+   portal comment in combobox.ts for why leaving the DOM is the only fix. */
+.menu-floating {
   position: fixed;
   z-index: 80;
   overflow-y: auto;

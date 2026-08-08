@@ -44,6 +44,7 @@ All standalone, all `OnPush`, all signal-based. Add new controls under
 | `ConfirmService` / `ConfirmHost` | `tk-confirm-host` | `await confirm.ask({ heading, message, confirmLabel, tone })` → boolean |
 | `Drawer` | `tk-drawer` | `[(open)]`, `heading`, `persistent`; `[drawer-footer]` |
 | `Dropdown` | `tk-dropdown` | `align`; `[dropdown-trigger]` + `[dropdown-menu]` |
+| `FloatingMenu` | `[tkFloating]` | `tkFloating` (anchor element), `align`, `matchWidth` — the only way to position a popup |
 | `PageHeader` | `tk-page-header` | `title` (required), `subtitle`; `[page-actions]` |
 | `Editor` | `tk-editor` | `[(value)]` (HTML), `placeholder`, `ariaLabel`, `rows`, `disabled`, `labels`; `[editor-tools]` slot |
 | `RichTextView` | `tk-rich-text` | `value`, `format` ('html' \| 'text'), `dark` |
@@ -453,25 +454,38 @@ or a method name — `align-items`, `open()`. Write them bare. The build always
 catches it, but it reports six unrelated TypeScript errors and none of them
 mention the file's comment, so it costs a minute every time.
 
-### A popup inside a modal must leave the DOM
+### Any popup must leave the DOM — use `tkFloating`
 
-`position: fixed` does **not** escape an ancestor that has a `transform` — that
-ancestor becomes the containing block for fixed descendants. Trackly's modal
-animates in with `animate-float-in`, whose keyframes use `transform`, so
-anything `fixed` inside a dialog is positioned against the *modal* and then
-clipped away by the modal's own `overflow: hidden`.
+**Never position a menu `absolute` inside its control.** It will be clipped, and
+by ordinary layout, not exotic layout:
 
-`absolute` fares no better: `.modal > .card-body` scrolls, so it clips too.
+- a table wrapped in `overflow-x-auto` clips it — CSS computes the *other* axis
+  to `auto` too, so the card grows a scrollbar and swallows the list;
+- a modal or drawer body scrolls, so it clips it as well;
+- `position: fixed` does not rescue it either. A transformed ancestor becomes
+  the containing block for fixed descendants, and `.modal` carries
+  `animate-float-in`, whose keyframes use `transform`.
 
-The only thing that works is moving the element to `<body>` while it is open —
-see `Combobox`. Angular keeps owning the node: its bindings still update and it
-still removes it, because removal asks for the node's *current* parent. Two
-things the move breaks, both handled there:
+The only thing that works is moving the element to `<body>` while it is open.
+That is what `FloatingMenu` does, and it is the one implementation — `Select`,
+`Combobox`, `TagInput` and `Dropdown` all go through it:
 
-- `host.contains(relatedTarget)` in a focus-out check no longer sees it, so the
-  popup has to be checked separately or dragging its scrollbar closes it.
-- If the component is destroyed while open, remove the node in `onDestroy` —
-  Angular cannot reach it from the view.
+```html
+<ul #list class="menu" [tkFloating]="host.nativeElement" matchWidth>…</ul>
+<div class="menu" [tkFloating]="host.nativeElement" align="end">…</div>
+```
+
+`matchWidth` takes the anchor's width (a select); omit it to size to content (a
+menu). `align="end"` right-aligns. It measures on open and on every scroll and
+resize, flips above the anchor when there is no room below, and hides itself for
+one frame so `end` alignment does not visibly jump.
+
+Two things the move breaks, which the **caller** still owns:
+
+- `host.contains(relatedTarget)` in a focus-out check no longer sees the popup,
+  so test it separately or dragging its scrollbar closes it.
+- The element must exist only while the popup is open (`@if`), so the directive's
+  `onDestroy` can take the node off `<body>`.
 
 ### Never centre an animated panel with `transform`
 

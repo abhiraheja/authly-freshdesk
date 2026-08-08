@@ -1,5 +1,6 @@
 import { TranslocoPipe } from '@jsverse/transloco';
-import { ChangeDetectionStrategy, Component, computed, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, inject, input, signal } from '@angular/core';
+import { FloatingMenu } from './floating-menu';
 
 /**
  * Click-to-open menu anchored to a trigger.
@@ -23,7 +24,7 @@ import { ChangeDetectionStrategy, Component, computed, input, signal } from '@an
 @Component({
   selector: 'tk-dropdown',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [TranslocoPipe],
+  imports: [TranslocoPipe, FloatingMenu],
   host: { class: 'relative inline-flex' },
   template: `
     <div (click)="toggle()" (keydown.escape)="close()">
@@ -37,9 +38,14 @@ import { ChangeDetectionStrategy, Component, computed, input, signal } from '@an
         [attr.aria-label]="'common.closeMenu' | transloco"
         (click)="close()"
       ></button>
+      <!-- tkFloating moves this to <body> while it is open. Without it the menu
+           was clipped by any scrolling ancestor — a row-actions menu inside a
+           table's overflow wrapper being the case that bites. -->
       <div
-        [class]="menuClasses()"
+        class="menu animate-float-in"
         role="menu"
+        [tkFloating]="host.nativeElement"
+        [align]="align()"
         (click)="close()"
         (keydown.escape)="close()"
       >
@@ -49,17 +55,13 @@ import { ChangeDetectionStrategy, Component, computed, input, signal } from '@an
   `,
 })
 export class Dropdown {
+  /** Read from the template — the floating menu anchors to it. */
+  protected readonly host = inject(ElementRef<HTMLElement>);
+
   /** Which edge the menu aligns to. `end` right-aligns — use it in the top bar. */
   readonly align = input<'start' | 'end'>('start');
 
   protected readonly open = signal(false);
-
-  protected readonly menuClasses = computed(() =>
-    [
-      'menu absolute top-full z-50 mt-1.5 animate-float-in',
-      this.align() === 'end' ? 'right-0' : 'left-0',
-    ].join(' '),
-  );
 
   protected toggle(): void {
     this.open.update((v) => !v);

@@ -8,8 +8,10 @@ import {
   input,
   model,
   signal,
+  viewChild,
 } from '@angular/core';
 import { Icon } from '../icon/icon';
+import { FloatingMenu } from '../overlay/floating-menu';
 
 /**
  * Multi-value free-text field: selected values become chips, the rest of the
@@ -30,7 +32,7 @@ import { Icon } from '../icon/icon';
 @Component({
   selector: 'tk-tag-input',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon],
+  imports: [Icon, FloatingMenu],
   host: {
     class: 'relative block',
     '(focusout)': 'onFocusOut($event)',
@@ -68,7 +70,7 @@ import { Icon } from '../icon/icon';
     </div>
 
     @if (open() && (visible().length || canCreate())) {
-      <ul class="menu absolute left-0 right-0 top-full z-30 mt-1 max-h-60 overflow-y-auto" role="listbox" [id]="listId">
+      <ul #list class="menu" role="listbox" [id]="listId" [tkFloating]="host.nativeElement" matchWidth>
         @for (option of visible(); track option; let i = $index) {
           <li role="none">
             <button
@@ -110,7 +112,11 @@ import { Icon } from '../icon/icon';
   `,
 })
 export class TagInput {
-  private readonly host = inject(ElementRef<HTMLElement>);
+  /** Read from the template — the floating list anchors to it. */
+  protected readonly host = inject(ElementRef<HTMLElement>);
+
+  /** Checked on focus-out: once floating, the list is no longer inside the host. */
+  private readonly list = viewChild<ElementRef<HTMLElement>>('list');
 
   readonly value = model<string[]>([]);
   readonly suggestions = input<readonly string[]>([]);
@@ -224,6 +230,10 @@ export class TagInput {
   protected onFocusOut(event: FocusEvent): void {
     const next = event.relatedTarget as Node | null;
     if (next && this.host.nativeElement.contains(next)) return;
+    // The list lives on <body> now, so it is no longer "inside" the host and has
+    // to be checked separately — otherwise dragging its scrollbar closes the
+    // very list you are scrolling.
+    if (next && this.list()?.nativeElement.contains(next)) return;
     // Commit whatever was typed. Losing a half-typed tag because the user
     // clicked the Save button instead of pressing Enter is a real data loss and
     // an easy one to hit.

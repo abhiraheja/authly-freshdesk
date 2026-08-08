@@ -30,6 +30,7 @@ export * from './lib/upload/avatar-upload';
 export * from './lib/upload/attachment-list';
 export * from './lib/feedback/feedback';
 export * from './lib/toast/toast';
+export * from './lib/overlay/floating-menu';
 export * from './lib/overlay/modal';
 export * from './lib/overlay/confirm';
 export * from './lib/overlay/drawer';

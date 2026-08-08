@@ -13,6 +13,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { Icon } from '../icon/icon';
+import { FloatingMenu } from '../overlay/floating-menu';
 
 /**
  * One row of a {@link Select}. Renders nothing itself — the select reads its
@@ -58,7 +59,7 @@ export class SelectOption {
 @Component({
   selector: 'tk-select',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Icon],
+  imports: [Icon, FloatingMenu],
   host: {
     class: 'relative',
     '[class.block]': '!auto()',
@@ -88,12 +89,16 @@ export class SelectOption {
       <tk-icon name="chevron-down" [size]="16" class="select-caret" />
     </button>
 
+    <!-- tkFloating moves this to <body> while it is open — see FloatingMenu for
+         the ancestors that would otherwise clip it. -->
     @if (open()) {
       <ul
         #list
-        class="menu animate-float-in absolute left-0 top-full z-50 mt-1 max-h-60 w-full overflow-y-auto"
+        class="menu animate-float-in"
         role="listbox"
         [id]="listId"
+        [tkFloating]="host.nativeElement"
+        matchWidth
       >
         @for (option of options(); track option; let i = $index) {
           <li role="none">
@@ -126,7 +131,8 @@ export class SelectOption {
   `,
 })
 export class Select {
-  private readonly host = inject(ElementRef<HTMLElement>);
+  /** Read from the template too — it is what the floating list anchors to. */
+  protected readonly host = inject(ElementRef<HTMLElement>);
 
   readonly value = model('');
   readonly placeholder = input('');
@@ -143,6 +149,7 @@ export class Select {
   protected readonly open = signal(false);
   protected readonly highlighted = signal(-1);
   protected readonly listId = `tk-select-${nextId++}`;
+
 
   private readonly trigger = viewChild.required<ElementRef<HTMLButtonElement>>('trigger');
   private readonly list = viewChild<ElementRef<HTMLUListElement>>('list');
@@ -251,6 +258,10 @@ export class Select {
   protected onFocusOut(event: FocusEvent): void {
     const next = event.relatedTarget as Node | null;
     if (next && this.host.nativeElement.contains(next)) return;
+    // The list lives on <body> now, so it is no longer "inside" the host and has
+    // to be checked separately — otherwise dragging its scrollbar closes the
+    // very list you are scrolling.
+    if (next && this.list()?.nativeElement.contains(next)) return;
     this.close();
   }
 
