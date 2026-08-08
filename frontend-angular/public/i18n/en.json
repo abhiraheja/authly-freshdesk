@@ -316,7 +316,7 @@
       "slaMissed": "Resolved after target",
       "tabRelated": "Related",
       "tabTasks": "Tasks",
-      "tabAssets": "Assets"
+      "tabAssets": "Assets & services"
     },
     "noCustomer": "No customer",
     "links": {
@@ -420,7 +420,9 @@
         "down": "Down",
         "degraded": "Degraded",
         "minor": "Minor"
-      }
+      },
+      "noCatalogue": "No services have been set up yet, so there is nothing to mark as impacted.",
+      "openRegisters": "Add services"
     },
     "fields": {
       "title": "More properties",
@@ -786,7 +788,13 @@
     "apply": "Apply",
     "cancel": "Cancel",
     "mention": "Mention someone",
-    "noMatches": "Nobody by that name"
+    "noMatches": "Nobody by that name",
+    "emoji": "Emoji",
+    "emojiGroups": {
+      "faces": "Faces",
+      "gestures": "Gestures",
+      "work": "Work"
+    }
   },
   "notifications": {
     "markAllRead": "Mark all read",

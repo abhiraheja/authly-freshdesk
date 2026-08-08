@@ -4,6 +4,7 @@ import { RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
   IMPACT_LEVELS,
+  SessionStore,
   TicketsApi,
   errorMessage,
   type Tone,
@@ -187,6 +188,19 @@ const IMPACT_TONE: Record<string, Tone> = {
           <p class="mb-3 text-body text-muted-foreground">{{ 'tickets.services.empty' | transloco }}</p>
         }
 
+        <!-- An empty catalogue is not an empty ticket, and the fix is somewhere
+             else entirely. Without this the agent gets a dropdown with nothing
+             in it and no idea why. -->
+        @if (catalogueEmpty()) {
+          <tk-alert tone="info">
+            {{ 'tickets.services.noCatalogue' | transloco }}
+            @if (isAdmin()) {
+              <a class="ml-1 font-semibold underline" routerLink="/admin/settings/catalogue">
+                {{ 'tickets.services.openRegisters' | transloco }}
+              </a>
+            }
+          </tk-alert>
+        } @else {
         <div class="flex flex-wrap items-center gap-2">
           <tk-select
             inset
@@ -233,6 +247,7 @@ const IMPACT_TONE: Record<string, Tone> = {
             {{ 'tickets.services.add' | transloco }}
           </button>
         </div>
+        }
       } @else if (impacted.error()) {
         <tk-alert tone="danger">{{ impactError() }}</tk-alert>
       } @else {
@@ -245,6 +260,7 @@ export class TicketAssets {
   private readonly api = inject(TicketsApi);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
+  private readonly session = inject(SessionStore);
 
   readonly ticketId = input.required<string>();
 
@@ -275,6 +291,24 @@ export class TicketAssets {
 
   protected readonly searching = computed(() => this.assetSearch.isLoading());
   protected readonly impactError = computed(() => errorMessage(this.impacted.error()));
+
+  /**
+   * Nothing in the register to pick from.
+   *
+   * Checked against the LOADED value, not against the filtered list: a catalogue
+   * with three services all already on this ticket is a different situation and
+   * gets the ordinary empty picker, not a message telling an admin to go and
+   * build one.
+   */
+  protected readonly catalogueEmpty = computed(() => this.catalogue.value()?.length === 0);
+
+  /**
+   * Only an admin can act on the message, so only an admin gets the link.
+   *
+   * Straight from the store — it already derives this, and a second copy of the
+   * rule is a second place for it to be wrong.
+   */
+  protected readonly isAdmin = this.session.isAdmin;
 
   /** Already attached is not a result — offering it again is a click that does nothing. */
   protected readonly assetMatches = computed(() => {

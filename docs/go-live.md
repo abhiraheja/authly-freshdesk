@@ -73,6 +73,25 @@ Generate a master key:
 
 ---
 
+## 2.5 Time zone data (business hours)
+
+Business hours resolve an **IANA time zone name** (`Asia/Kolkata`,
+`Europe/London`) at runtime, and every SLA deadline in a workspace that has them
+switched on is computed from it.
+
+- **Linux containers need `tzdata` installed.** The `mcr.microsoft.com/dotnet/aspnet`
+  images include it; a trimmed or distroless base may not. Without it
+  `TimeZoneInfo.FindSystemTimeZoneById` throws for every name, the calendar falls
+  back to UTC, and deadlines are wrong by hours with nothing on screen to explain
+  it.
+- **Verify after deploying** by saving a schedule with a non-UTC zone: the admin
+  screen refuses a name the server cannot resolve, so a successful save is the
+  check.
+- Windows hosts accept IANA names on .NET 6+; no extra step.
+
+Nothing else here is configuration — the schedule lives in the database, per
+workspace, and is off by default.
+
 ## 3. File storage (attachments, profile photos, workspace logos)
 
 Storage is **per workspace**, chosen by an admin under **Admin → Storage**, not

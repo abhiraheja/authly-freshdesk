@@ -1158,6 +1158,76 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 **flags, not ids**: they resolve to the caller server-side, so there is no shape
 of request that could ask for somebody else's mentions.
 
+### Business hours, breach alerts and the scorecard
+
+```sql
+-- One row per workspace, so the workspace id IS the key.
+CREATE TABLE business_hours (
+    workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+    is_enabled   BOOLEAN NOT NULL DEFAULT false,   -- off = round-the-clock
+    time_zone    TEXT NOT NULL DEFAULT 'UTC'       -- IANA; decides what "9am" means
+);
+-- A row per OPEN window. A closed day is the ABSENCE of a row — one fewer state
+-- that can contradict itself than a flag plus hours would be.
+CREATE TABLE business_hour_days (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES business_hours(workspace_id) ON DELETE CASCADE,
+    day_of_week  INTEGER NOT NULL,   -- 0 = Sunday
+    start_minute INTEGER NOT NULL,   -- minutes from local midnight; 540 = 09:00
+    end_minute   INTEGER NOT NULL
+);
+CREATE TABLE business_holidays (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID NOT NULL REFERENCES business_hours(workspace_id) ON DELETE CASCADE,
+    date         DATE NOT NULL,
+    name         TEXT
+);
+CREATE UNIQUE INDEX ON business_holidays (workspace_id, date);
+
+-- The breach sweep's memory. See below for why these are markers.
+ALTER TABLE tickets ADD COLUMN sla_warning_sent_at TIMESTAMPTZ;
+ALTER TABLE tickets ADD COLUMN sla_breach_sent_at  TIMESTAMPTZ;
+CREATE INDEX ON tickets (resolve_due_at, first_response_due_at)
+    WHERE status_category NOT IN ('resolved', 'closed');
+```
+
+**`BusinessCalendar` is pure and immutable** — built once from the schedule, then
+asked questions, touching nothing. That is what makes arithmetic every SLA number
+in the product depends on testable without a database.
+
+Three ways it degrades to continuous, all deliberate: **off**, **an unresolvable
+time zone** (falls back to UTC rather than silently using the server's), and
+**enabled with no open days**. That last one matters most — treating it as "never
+open" would push every deadline out forever, which looks exactly like the clock
+being broken.
+
+`SlaService` caches the calendar per workspace for the life of the scoped
+service: one request can recompute deadlines twice and the schedule cannot change
+mid-request.
+
+**Deadlines are stored as UTC instants, never as remaining minutes.** Everything
+downstream — the list's SLA column, the sort, the breach sweep — is then one
+indexed comparison rather than a calculation per row. Existing deadlines are not
+recomputed when the schedule changes: they were promised under the old one.
+
+**The breach sweep marks rather than re-derives.** "Is it late" stays true from
+the moment it goes late until somebody acts, so a sweep that re-derived it would
+resend every minute until the recipient filtered the lot into a folder. Two
+columns, because a warning and a breach are different messages and sending the
+second must not depend on the first having gone. A ticket that goes straight past
+the window gets its warning column stamped too, so it never warns about a
+deadline already gone. Reopening clears both.
+
+Warnings use a **fixed thirty-minute window**, not a proportion: 10% of a
+four-hour target is 24 minutes and 10% of a five-day one is most of a day, while
+a fixed window is the same promise on every ticket.
+
+**The scorecard counts; it does not score.** Trackly deliberately has no agent
+points number — an invented formula gets gamed within a month (cherry-picking
+easy tickets, closing and reopening to reset a clock) and then measures nothing.
+A leg with no policy is excluded from both halves, and attainment is null rather
+than zero when nothing was measurable.
+
 ### Two-level taxonomies, and the resolution split
 
 **Departments and categories each gained a `parent_id`, and the ticket gained a

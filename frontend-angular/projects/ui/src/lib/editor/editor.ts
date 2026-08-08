@@ -15,6 +15,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { Icon } from '../icon/icon';
 import { CODE_LANGUAGES, MENTION_CLASS, isEmptyHtml, sanitizeHtml, textToHtml } from './rich-text';
+import { EMOJI_GROUPS, matchEmojiShortcut } from './emoji';
 
 /** Someone the composer can name. Supplied by the host — the editor knows no API. */
 export interface MentionCandidate {
@@ -72,6 +73,29 @@ const MARKS: readonly Mark[] = [
   template: `
     <div class="editor" [class.is-disabled]="disabled()" [class.is-focused]="focused()">
       <div class="editor-toolbar" role="toolbar" [attr.aria-label]="toolbarLabel()">
+        <!-- Projected tools lead the toolbar. Attaching a file is a thing you
+             decide to do before you write, not a formatting choice you make
+             after, so it sits where the eye starts rather than after eleven
+             mark buttons. -->
+        <ng-content select="[editor-tools]" />
+
+        <button
+          #emojiButton
+          type="button"
+          class="editor-tool"
+          [class.is-active]="emojiOpen()"
+          [attr.aria-expanded]="emojiOpen()"
+          [attr.aria-label]="label('editor.emoji')"
+          [title]="label('editor.emoji')"
+          [disabled]="disabled()"
+          (mousedown)="hold($event)"
+          (click)="toggleEmoji()"
+        >
+          <tk-icon name="smile" [size]="15" />
+        </button>
+
+        <span class="editor-tool-divider" aria-hidden="true"></span>
+
         @for (mark of marks; track mark.command) {
           <button
             type="button"
@@ -207,9 +231,41 @@ const MARKS: readonly Mark[] = [
         >
           <tk-icon name="remove-formatting" [size]="15" />
         </button>
-
-        <ng-content select="[editor-tools]" />
       </div>
+
+      <!-- A popover, anchored to the button and moved to <body>.
+           An inline panel pushed the whole composer down and swallowed the box
+           the agent was writing in. Leaving the DOM is what lets it sit over the
+           page: fixed positioning alone is not enough, because a transformed
+           ancestor — Trackly's modal animates with one — becomes the containing
+           block and then clips it away. Same fix as the combobox. -->
+      @if (emojiOpen()) {
+        <div
+          #emojiPanel
+          class="editor-emoji"
+          role="dialog"
+          [attr.aria-label]="label('editor.emoji')"
+          [style.left.px]="emojiAnchor().left"
+          [style.top.px]="emojiAnchor().top"
+        >
+          @for (group of emojiGroups; track group.key) {
+            <p class="editor-emoji-group">{{ label('editor.emojiGroups.' + group.key) }}</p>
+            <div class="editor-emoji-grid">
+              @for (glyph of group.emoji; track glyph) {
+                <button
+                  type="button"
+                  class="editor-emoji-option"
+                  [attr.aria-label]="glyph"
+                  (mousedown)="hold($event)"
+                  (click)="insertEmoji(glyph)"
+                >
+                  {{ glyph }}
+                </button>
+              }
+            </div>
+          }
+        </div>
+      }
 
       @if (linkOpen()) {
         <div class="editor-linkbar">
@@ -274,7 +330,7 @@ const MARKS: readonly Mark[] = [
         [attr.data-placeholder]="placeholder()"
         [class.is-empty]="empty()"
         [style.min-height.rem]="minHeightRem()"
-        (input)="pull()"
+        (input)="onInput()"
         (paste)="onPaste($event)"
         (keydown)="onKeydown($event)"
         (focus)="focused.set(true)"
@@ -321,6 +377,9 @@ export class Editor {
   protected readonly linkUrl = signal('');
 
   /** What has been typed after the `@`, or null when no mention is in progress. */
+  protected readonly emojiGroups = EMOJI_GROUPS;
+  protected readonly emojiOpen = signal(false);
+
   private readonly mentionQuery = signal<string | null>(null);
   protected readonly mentionIndex = signal(0);
 
@@ -402,9 +461,51 @@ export class Editor {
       this.trackMention();
     };
     document.addEventListener('selectionchange', onSelectionChange);
-    inject(DestroyRef).onDestroy(() =>
-      document.removeEventListener('selectionchange', onSelectionChange),
-    );
+
+    // Move the popover to <body> the moment it exists.
+    //
+    // Fixed positioning is not enough on its own: a transformed ancestor becomes
+    // the containing block for fixed descendants, and Trackly's modal animates
+    // in with a transform — so inside a dialog this would be positioned against
+    // the modal and then clipped away by its overflow. The element has to leave.
+    // Angular still owns it: it created it, its bindings keep updating, and it
+    // removes it by asking for the node's CURRENT parent.
+    effect(() => {
+      const panel = this.emojiPanel()?.nativeElement;
+      if (panel && panel.parentElement !== document.body) document.body.appendChild(panel);
+    });
+
+    // A popover that stays put while the page scrolls under it is worse than one
+    // that closes. Capture phase, because the scroll that matters is usually an
+    // ancestor's and scroll events do not bubble.
+    const reposition = () => {
+      if (this.emojiOpen()) this.measureEmoji();
+    };
+    window.addEventListener('scroll', reposition, true);
+    window.addEventListener('resize', reposition);
+
+    // Anywhere outside the panel and its button closes it. Pointerdown, not
+    // click: the emoji buttons act on click, and a click-based close would fire
+    // first and remove the button being pressed.
+    const onPointerDown = (event: Event) => {
+      if (!this.emojiOpen()) return;
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (this.emojiPanel()?.nativeElement.contains(target)) return;
+      if (this.emojiButton()?.nativeElement.contains(target)) return;
+      this.emojiOpen.set(false);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+
+    inject(DestroyRef).onDestroy(() => {
+      document.removeEventListener('selectionchange', onSelectionChange);
+      window.removeEventListener('scroll', reposition, true);
+      window.removeEventListener('resize', reposition);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      // Angular cannot reach a node it no longer owns the parent of if the
+      // component is torn down while the panel is open.
+      this.emojiPanel()?.nativeElement.remove();
+    });
   }
 
   /** Puts the caret in the writing area — for a parent that wants focus on open. */
@@ -448,6 +549,19 @@ export class Editor {
     this.refreshState();
   }
 
+  /**
+   * Every keystroke: convert a finished emoticon, then publish.
+   *
+   * The order matters. `replaceShortcut` edits the DOM, so publishing first
+   * would emit the `:-)` the user typed and leave the 🙂 unpublished until the
+   * next keystroke — send at that moment and the message goes out with the
+   * shortcut still in it.
+   */
+  protected onInput(): void {
+    this.replaceShortcut();
+    this.pull();
+  }
+
   /** Reads the DOM back into `value`. Called after every mutation, ours or theirs. */
   protected pull(): void {
     const element = this.surface()?.nativeElement;
@@ -456,6 +570,95 @@ export class Editor {
     this.lastEmitted = html;
     this.value.set(html);
     this.trackMention();
+  }
+
+  // ---- Emoji ---------------------------------------------------------------
+
+  /** Viewport coordinates for the popover. Recomputed on open, scroll and resize. */
+  protected readonly emojiAnchor = signal({ left: 0, top: 0 });
+
+  private readonly emojiButton = viewChild<ElementRef<HTMLElement>>('emojiButton');
+  private readonly emojiPanel = viewChild<ElementRef<HTMLElement>>('emojiPanel');
+
+  protected toggleEmoji(): void {
+    if (this.emojiOpen()) {
+      this.emojiOpen.set(false);
+      return;
+    }
+    this.measureEmoji();
+    this.emojiOpen.set(true);
+  }
+
+  /**
+   * Places the popover under the button, flipping above when there is no room.
+   *
+   * The composer usually sits at the BOTTOM of a ticket, so below is often the
+   * side without space — a panel that only ever hung downwards would open
+   * off-screen on the most common screen in the product.
+   */
+  private measureEmoji(): void {
+    const button = this.emojiButton()?.nativeElement;
+    if (!button) return;
+
+    const rect = button.getBoundingClientRect();
+    const gap = 6;
+    const width = 320;
+    const height = 300;
+
+    const below = window.innerHeight - rect.bottom - gap;
+    const preferBelow = below >= height || below >= rect.top - gap;
+
+    this.emojiAnchor.set({
+      // Clamped to the viewport so a button near the right edge does not push
+      // the panel off it.
+      left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
+      top: preferBelow ? rect.bottom + gap : Math.max(8, rect.top - gap - height),
+    });
+  }
+
+  /**
+   * Drops a glyph in at the caret.
+   *
+   * `insertText`, not `insertHTML`: an emoji is a character, so the browser
+   * handles it as one — it lands inside whatever formatting is already active,
+   * backspaces as a unit, and needs no markup that the sanitiser would then have
+   * to be taught about.
+   */
+  protected insertEmoji(glyph: string): void {
+    this.emojiOpen.set(false);
+    this.exec('insertText', glyph);
+  }
+
+  /**
+   * Turns `:-)` into 🙂 as it is typed, the way Teams and WhatsApp do.
+   *
+   * Runs off the text before the caret — the same mechanism as mentions, and for
+   * the same reason: watching keystrokes gets it wrong the moment somebody
+   * backspaces into a half-typed shortcut.
+   *
+   * Returns true when it replaced something, so the caller knows the DOM moved
+   * under it and the value it was about to publish is already stale.
+   */
+  private replaceShortcut(): boolean {
+    const selection = window.getSelection();
+    const node = selection?.anchorNode;
+    if (!node || node.nodeType !== Node.TEXT_NODE || !this.ownsSelection()) return false;
+
+    const offset = selection!.anchorOffset;
+    const before = (node.textContent ?? '').slice(0, offset);
+    const found = matchEmojiShortcut(before);
+    if (!found) return false;
+
+    // Select back over the shortcut so the insert replaces it rather than
+    // appending after it.
+    const range = document.createRange();
+    range.setStart(node, offset - found.code.length);
+    range.setEnd(node, offset);
+    selection!.removeAllRanges();
+    selection!.addRange(range);
+
+    document.execCommand('insertText', false, found.emoji);
+    return true;
   }
 
   // ---- Mentions ------------------------------------------------------------
@@ -816,6 +1019,10 @@ export class Editor {
  */
 const FALLBACK_LABELS: Record<string, string> = {
   'editor.toolbar': 'Formatting',
+  'editor.emoji': 'Emoji',
+  'editor.emojiGroups.faces': 'Faces',
+  'editor.emojiGroups.gestures': 'Gestures',
+  'editor.emojiGroups.work': 'Work',
   'editor.bold': 'Bold',
   'editor.italic': 'Italic',
   'editor.underline': 'Underline',

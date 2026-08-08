@@ -402,6 +402,68 @@ policy covers it, and shows whether the ticket beat its resolve target.
 **Use.** Agents see the SLA badge on each ticket; **Analytics** (§17) reports
 first-response and resolution **attainment** (the % met on time).
 
+### 6.1 Business hours
+
+**Where:** on the same screen, under the targets.
+
+**Off by default, and off means round-the-clock.** A four-hour target is four
+real hours, whatever the day or time. That is right for a 24/7 desk and wrong for
+everyone else: a ticket raised at 17:55 on Friday with a four-hour target is
+breached before anyone is back at their desk. That is not a missed SLA, it is a
+badly measured one — and a team that stops trusting the number stops looking at
+it.
+
+**Switch it on** and the clocks only run while you are open. Set a **time zone**
+(IANA name — `Asia/Kolkata`, `Europe/London`; it decides what "9am" means), tick
+the days you work, and give each one an opening and closing time. An unticked day
+is closed. **Holidays** shut the desk for a whole date regardless of the weekly
+pattern.
+
+With Mon–Fri 09:00–17:00, a ticket raised Saturday night with a two-hour target
+is due **Monday at 11:00**.
+
+**Deadlines already stamped on tickets are left alone.** They were promised under
+the old schedule, and quietly moving a queue of due dates is how an agent finds a
+ticket late that was not late a minute ago. This changes what new tickets get.
+
+### 6.2 Breach alerts
+
+Trackly sweeps every minute and sends **two** notifications, each **once**:
+
+- a **warning** thirty minutes before a deadline, while there is still time to act;
+- a **breach** when the deadline passes.
+
+They go to the assignee, the responders and the watchers — **never the customer**.
+A missed internal target is a fact about the desk, not about them.
+
+Once each, deliberately. A ticket stays late from the moment it goes late until
+somebody acts, so a sweep that kept re-checking would resend the same warning
+every minute until the recipient filtered the lot into a folder — at which point
+the feature is worse than nothing, because it looks like it is working.
+
+Resolved, closed and **pending** tickets are skipped: the first two are over, and
+a pending ticket's clock is deliberately paused. Reopening a ticket resets the
+markers, so it can warn again on its second life.
+
+### 6.3 The scorecard
+
+**Where:** under business hours, readable by every agent.
+
+Per agent, over the last 30 days, counted from tickets **they finished**: how many
+they resolved, how many first responses and resolutions met their target out of
+how many were measurable, and the **attainment** — the share of measurable legs
+met.
+
+**A ticket with no policy is neither met nor missed**, so it is left out of both
+halves. Attainment shows as **—** rather than 0% when nothing they finished had a
+target: "0%" reads as failure and the truth is that no target applied.
+
+> **Trackly does not give agents a points score, and that is a decision, not a
+> gap.** An invented formula in a support tool gets gamed within a month — agents
+> cherry-pick easy tickets, or close and reopen to reset a clock — and the number
+> stops measuring anything. What is here is the raw record plus one figure that is
+> defensible on its own terms.
+
 ---
 
 ## 7. Automation rules

@@ -761,6 +761,9 @@ export class TicketDetail {
       'toolbar', 'bold', 'italic', 'underline', 'strikethrough', 'bulletList',
       'numberedList', 'quote', 'inlineCode', 'codeBlock', 'language', 'link',
       'linkUrl', 'unlink', 'clearFormatting', 'apply', 'cancel',
+      'emoji', 'mention', 'noMatches',
+      // Nested, so they cannot be built by prefixing `editor.` like the rest.
+      'emojiGroups.faces', 'emojiGroups.gestures', 'emojiGroups.work',
     ];
     return Object.fromEntries(
       keys.map((key) => [`editor.${key}`, this.transloco.translate(`editor.${key}`)]),

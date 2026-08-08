@@ -316,7 +316,7 @@
       "slaMissed": "तय समय के बाद हल हुआ",
       "tabRelated": "संबंधित",
       "tabTasks": "कार्य",
-      "tabAssets": "संपत्तियाँ"
+      "tabAssets": "संपत्तियाँ और सेवाएँ"
     },
     "noCustomer": "कोई ग्राहक नहीं",
     "links": {
@@ -420,7 +420,9 @@
         "down": "बंद",
         "degraded": "बाधित",
         "minor": "मामूली"
-      }
+      },
+      "noCatalogue": "अभी कोई सेवा बनाई नहीं गई है, इसलिए प्रभावित दिखाने को कुछ नहीं है।",
+      "openRegisters": "सेवाएँ जोड़ें"
     },
     "fields": {
       "title": "और गुण",
@@ -786,7 +788,13 @@
     "apply": "लागू करें",
     "cancel": "रद्द करें",
     "mention": "किसी को मेंशन करें",
-    "noMatches": "इस नाम का कोई नहीं"
+    "noMatches": "इस नाम का कोई नहीं",
+    "emoji": "इमोजी",
+    "emojiGroups": {
+      "faces": "चेहरे",
+      "gestures": "इशारे",
+      "work": "काम"
+    }
   },
   "notifications": {
     "markAllRead": "सब पढ़ा हुआ करें",
