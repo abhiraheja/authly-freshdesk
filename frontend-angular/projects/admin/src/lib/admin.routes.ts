@@ -11,6 +11,16 @@ const placeholder = () => import('@trackly/ui').then((m) => m.ComingSoon);
 
 export const adminRoutes: Routes = [
   {
+    path: 'users',
+    loadComponent: () => import('./members').then((m) => m.AdminMembers),
+  },
+  {
+    // The screen that decides who can get in at all — and refuses to let
+    // an admin switch off the last working method.
+    path: 'settings/login',
+    loadComponent: () => import('./login-settings').then((m) => m.AdminLoginSettings),
+  },
+  {
     path: 'settings/configuration',
     loadComponent: () => import('./configuration').then((m) => m.AdminConfiguration),
   },
@@ -36,7 +46,6 @@ export const adminRoutes: Routes = [
   },
   { path: 'analytics', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.analytics', from: 'frontend/src/pages/admin/AnalyticsPage.tsx' } },
   { path: 'announcements', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.announcements', from: 'frontend/src/pages/admin/AnnouncementsPage.tsx' } },
-  { path: 'users', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.members', from: 'frontend/src/pages/admin/UsersPage.tsx' } },
   { path: 'teams', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.teams', from: 'frontend/src/pages/admin/TeamsPage.tsx' } },
   { path: 'automation', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.automation', from: 'frontend/src/pages/admin/AutomationPage.tsx' } },
   { path: 'channels', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.messagingChannels', from: 'frontend/src/pages/admin/ChannelsPage.tsx' } },

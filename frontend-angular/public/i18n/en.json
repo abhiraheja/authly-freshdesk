@@ -18,7 +18,11 @@
     "switchToLight": "Switch to light mode",
     "switchToDark": "Switch to dark mode",
     "poweredBy": "Powered by Trackly",
-    "save": "Save"
+    "save": "Save",
+    "copy": "Copy",
+    "copied": "Copied",
+    "copyFailed": "Could not copy — select the text instead.",
+    "done": "Done"
   },
   "nav": {
     "main": "Main",
@@ -70,7 +74,8 @@
       "active": "Active",
       "catalogue": "Registers",
       "pinned": "Pinned",
-      "flagged": "Flagged"
+      "flagged": "Flagged",
+      "login": "Login methods"
     }
   },
   "palette": {
@@ -779,6 +784,64 @@
       "attainment": "Attainment",
       "empty": "Nothing resolved in the last 30 days.",
       "hint": "The last 30 days, counted from tickets each agent finished. Met / measurable — a ticket with no policy is neither met nor missed."
+    },
+    "members": {
+      "title": "Members",
+      "subtitle": "Everyone with an account here. Roles live in Trackly, never in your identity provider.",
+      "count": "{{count}} people",
+      "member": "Member",
+      "signIn": "Signs in with",
+      "role": "Role",
+      "lastActive": "Last active",
+      "never": "Never",
+      "add": "Add member",
+      "create": "Create and show password",
+      "email": "Email",
+      "name": "Name (optional)",
+      "addHint": "Trackly generates a password and shows it once. Pass it on yourself — no email is sent, so this works before email is configured.",
+      "password": "Password",
+      "emailCode": "Emailed code",
+      "tempPassword": "Temporary password",
+      "deactivated": "Deactivated",
+      "reset": "Reset password",
+      "resetHeading": "Reset the password for {{name}}?",
+      "resetBody": "A new password is generated and shown once. Their other sessions are signed out immediately.",
+      "deactivate": "Deactivate",
+      "reactivate": "Reactivate",
+      "deactivateHeading": "Deactivate {{name}}?",
+      "deactivateBody": "They are signed out everywhere and cannot sign in again until reactivated. Their tickets stay.",
+      "passwordIssued": "Password created",
+      "passwordIssuedBody": "Give this to {{email}}. They will be asked to replace it when they first sign in.",
+      "passwordOnce": "This is the only time it is shown. Trackly stores only a hash — if it is lost, reset it again.",
+      "soleAdmin": "You are the only administrator",
+      "soleAdminBody": "If you lose your password and email is not working, nobody can reset it for you. Make a second person an admin.",
+      "saved": "Member updated",
+      "loadFailed": "Could not load members"
+    },
+    "login": {
+      "title": "Login methods",
+      "subtitle": "How people sign in to this installation.",
+      "methods": "Methods",
+      "password": "Password sign-in",
+      "passwordHint": "Email and password. The only method that works before email is configured.",
+      "passwordLocked": "Cannot be turned off until another method is proven to work.",
+      "emailCode": "Emailed sign-in code",
+      "emailCodeHint": "A magic link and a 6-digit code, sent by email.",
+      "emailUnproven": "Not proven yet — send a test message below.",
+      "sso": "Single sign-on",
+      "ssoActive": "Active — someone has signed in through it.",
+      "ssoInactive": "Not configured, or never used successfully.",
+      "emailProof": "Prove email works",
+      "emailProofBody": "Sends a real message to your own address. Password sign-in can only be turned off once one arrives — otherwise turning it off would lock everyone out.",
+      "sendTest": "Send a test email",
+      "emailProven": "A test message was delivered",
+      "testPassed": "Test email sent",
+      "testPassedBody": "Check {{email}}. If it arrived, outbound email works.",
+      "testFailed": "Test email failed",
+      "saved": "Login methods updated",
+      "loadFailed": "Could not load login methods",
+      "lockoutHeading": "Why some switches are locked",
+      "lockoutBody": "Trackly runs on your own server — there is no support desk to call and no recovery link if the last working sign-in method is turned off. At least one proven method always stays enabled."
     }
   },
   "customers": {
@@ -885,5 +948,10 @@
       "title": "Your account, your key.",
       "body": "Trackly stores only a hash — nobody, including an administrator, can read your password back."
     }
+  },
+  "roles": {
+    "customer": "Customer",
+    "agent": "Agent",
+    "admin": "Admin"
   }
 }

@@ -95,6 +95,7 @@ export const NAV: readonly NavGroup[] = [
       { labelKey: 'nav.items.email', icon: 'mail', route: '/admin/settings/email' },
       { labelKey: 'nav.items.storage', icon: 'upload-cloud', route: '/admin/settings/storage' },
       { labelKey: 'nav.items.branding', icon: 'palette', route: '/admin/settings/branding' },
+      { labelKey: 'nav.items.login', icon: 'lock', route: '/admin/settings/login' },
       { labelKey: 'nav.items.sso', icon: 'shield-check', route: '/admin/settings/sso' },
     ],
   },

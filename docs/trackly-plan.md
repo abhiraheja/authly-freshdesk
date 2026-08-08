@@ -4,7 +4,7 @@
 
 Trackly is a standalone, multi-tenant ticket management SaaS that can be sold to **any organisation** regardless of their existing identity infrastructure. Authly is supported as one of many identity providers — not a hard dependency.
 
-This design mirrors how products like Claude for Teams, Notion, and GitHub handle enterprise SSO: each workspace configures the identity provider they already use (Okta, Google Workspace, Microsoft Entra ID, Authly — or no IdP at all, using passwordless email magic links), and Trackly works with all of them identically.
+This design mirrors how products like Claude for Teams, Notion, and GitHub handle enterprise SSO: each workspace configures the identity provider they already use (Okta, Google Workspace, Microsoft Entra ID, Authly — or no IdP at all, using email + password or an emailed code), and Trackly works with all of them identically.
 
 **Trackly owns its own identity layer.** Users, roles, and sessions are all managed in Trackly's own database. External IdPs are used only for authentication — they never dictate what a user can do inside Trackly.
 
@@ -47,7 +47,7 @@ An empty database is claimed once:
 | Endpoint | Auth | Behaviour |
 |---|---|---|
 | `GET /api/setup/status` | none | `{ "needsSetup": true }` while no workspace row exists |
-| `POST /api/setup` | none, rate-limited | `{ organisationName, email, name? }` → creates the workspace and its first `admin`, issues a session cookie, then answers `409` forever |
+| `POST /api/setup` | none, rate-limited | `{ organisationName, email, password, name? }` → creates the workspace and its first `admin`, issues a session cookie, then answers `409` forever |
 
 **Setup signs the operator in inline — it does not email a magic link.** On a fresh install SMTP has not been configured, and SMTP is configured from inside the admin UI, so mailing the first admin their own way in would brick every new install. The person at the setup screen on an empty database *is* the operator; there is nobody else to authenticate them against, and no data to protect yet.
 
@@ -55,9 +55,43 @@ Concurrency is settled by the database, not by the `needsSetup` check: the works
 
 The SPA guards this at `/setup` (`setupGuard`); `guestGuard` redirects there when an unclaimed installation is reached at `/login`.
 
-### Supported Identity Providers
+### Sign-in methods
 
-Each workspace configures exactly one SSO connection (like Claude's model — one active provider at a time, switchable). Additionally, **passwordless email login (magic link + code)** is always available as a fallback unless the admin disables it (stored as `email_login_enabled` on the workspace — see schema). Trackly stores **no passwords at all**.
+Three, and the order matters:
+
+| Method | Stored as | Works on a fresh install? |
+|---|---|---|
+| **Email + password** | `users.password_hash` (PBKDF2), `workspaces.password_login_enabled` | **Yes** — the only one that does |
+| **Emailed link + 6-digit code** | `email_tokens`, `workspaces.email_login_enabled` | No — needs SMTP |
+| **SSO (OIDC / SAML)** | `sso_connections` | No — needs an IdP configured |
+
+**Why passwords exist.** Trackly is self-hosted. On an empty database there is no SMTP and no IdP, and *both are configured from inside Trackly*. A 6-digit code that cannot be delivered is not a way in; reading it out of the server log is a developer's workaround that does not survive contact with production. Passwords are what make a fresh install usable, and what makes it recoverable when SMTP later breaks.
+
+This reverses the original "no passwords, ever" decision. What that decision was really protecting against — password reuse, weak secrets, credential stuffing — is addressed by the policy below rather than by having no passwords at all.
+
+**Password handling**
+- PBKDF2-HMAC-SHA256, 210,000 iterations, 16-byte per-password salt, 32-byte output (`IPasswordHasher` → `Pbkdf2PasswordHasher`). No package: `Rfc2898DeriveBytes.Pbkdf2` is in the framework, so there is nothing extra to keep patched inside a container someone else operates.
+- Stored as one self-describing base64 value: `version ‖ iterations ‖ salt ‖ hash`. Raising the cost re-hashes each password on its owner's next sign-in — no migration, no lockout.
+- Verification is `CryptographicOperations.FixedTimeEquals`.
+- **Length only, minimum 12** (`PasswordPolicy`). Composition rules push people to `Password1!`; NIST SP 800-63B and OWASP both dropped them.
+- Unknown email, no password set, and wrong password all return the **same** result, so the endpoint cannot be used to ask whether an address has an account.
+
+### One workspace, three switches
+
+`password_login_enabled` and `email_login_enabled` live on the workspace; SSO is on/off by whether a connection exists. `PUT /api/admin/login-settings` **refuses to disable the last working method** — and "working" means proven, not configured:
+
+- email counts only once a test message has actually been delivered (`email_configs.last_verified_at`, set by `POST /api/admin/settings/email/test`)
+- SSO counts only once a real login has completed (`sso_connections.status = active`)
+
+On a self-hosted box there is no support desk and no recovery link, so this is the difference between a bad afternoon and a database restore.
+
+### Getting people in without email
+
+Invitations are emails, so before SMTP works they have nowhere to go. `POST /api/users/members` creates an agent or admin and returns a **temporary password once** for the admin to pass on by hand; `POST /api/users/{id}/password` resets one the same way and revokes that user's other sessions.
+
+A temporary password has travelled over a call or a chat, so `users.must_change_password` is set. While it is, `MustChangePasswordFilter` refuses every endpoint except reading your own profile and changing the password — a UI redirect alone would leave the API open to anyone holding the temporary credential and an HTTP client.
+
+**There is no CLI recovery.** If the only admin loses their password while email is down, the installation cannot be recovered through the app. Keeping a second admin is the mitigation, and the Members screen says so.
 
 | Provider | Protocol | Notes |
 |----------|---------|-------|
@@ -68,7 +102,8 @@ Each workspace configures exactly one SSO connection (like Claude's model — on
 | **Auth0** | SAML or OIDC | Common in SaaS companies |
 | **Custom SAML** | SAML | Any SAML 2.0 compliant IdP |
 | **Custom OIDC** | OIDC | Any OIDC compliant IdP |
-| **Email magic link** | Native (passwordless) | Trackly emails a sign-in link + 6-digit code; no credentials stored |
+| **Email + password** | Native | PBKDF2 hash in `users.password_hash`; the only method that works on a fresh install |
+| **Email magic link** | Native | Trackly emails a sign-in link + 6-digit code |
 
 ---
 
@@ -158,7 +193,7 @@ Verification has two outcomes, signed in or not. It used to have two more — `s
 
 ### Passwordless Email Login (magic link + code)
 
-The native fallback is passwordless — Trackly never stores passwords. It reuses the same email-token machinery as guest OTP verification.
+The second native method, alongside email + password. It reuses the same email-token machinery as guest OTP verification, and is the way customers self-serve the portal without ever being given a password.
 
 ```
 1. User enters their email on /login
@@ -250,12 +285,12 @@ Trackly owns its own user table. This is the **primary source of truth** for use
 | Field | Source |
 |-------|-------|
 | `id` | Trackly-generated UUID |
-| `email` | From IdP JWT/SAML assertion (or verified via magic link for passwordless users) |
+| `email` | From IdP JWT/SAML assertion, or verified via magic link, or set at first-run setup |
 | `name` | From IdP JWT/SAML assertion (or asked on first magic-link login) |
 | `role` | Set in Trackly's DB (via group mapping or manual assignment by admin) |
 | `workspace_id` | The deployment's single workspace (`ResolveWorkspaceAsync`), or the slug on a branded link |
 
-No `password_hash` — Trackly is fully passwordless. Non-SSO users authenticate via emailed magic link + code.
+`password_hash` is nullable: SSO users and customers who only ever use emailed codes never get one, and null means "cannot sign in with a password" — never "any password works".
 
 **Users panel in Trackly admin** (`/admin/users`):
 - View all workspace members
@@ -1110,6 +1145,14 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 |--------|------|------|------|
 | GET    | `/api/setup/status` | None | Whether this installation still needs first-run setup |
 | POST   | `/api/setup` | None | First run only — create the workspace + first admin, sign in inline (409 thereafter) |
+| POST   | `/api/auth/password/login` | None | Email + password → session (rate-limited) |
+| POST   | `/api/auth/password/change` | Session | Change your own password |
+| GET    | `/api/public/login-methods` | None | Which sign-in methods this installation offers |
+| GET    | `/api/users/members` | Session | admin — everyone, including deactivated |
+| POST   | `/api/users/members` | Session | admin — create staff, returns a temporary password once |
+| POST   | `/api/users/{id}/password` | Session | admin — reset a password, revoke their sessions |
+| GET/PUT| `/api/admin/login-settings` | Session | admin — sign-in method toggles (refuses the last one) |
+| POST   | `/api/admin/settings/email/test` | Session | admin — send a test email; records the proof |
 | POST   | `/api/invitations` | Session | admin — invite agents by email |
 | POST   | `/api/invitations/accept` | None | Accept invite via token, create account |
 | GET    | `/api/public/workspaces/{slug}/branding` | None | Public, cacheable — branding for form/widget |
@@ -1546,7 +1589,8 @@ CREATE TABLE users (
     avatar_storage_key  TEXT,
     avatar_content_type TEXT,
     role          TEXT NOT NULL DEFAULT 'customer',  -- customer, agent, admin
-    -- no password_hash: Trackly is passwordless (SSO or magic link only)
+    password_hash          TEXT,                   -- PBKDF2; null for SSO/code-only users
+    must_change_password   BOOLEAN DEFAULT false,  -- temporary password issued by an admin
     is_active     BOOLEAN DEFAULT true,
     created_at    TIMESTAMPTZ DEFAULT now(),
     updated_at    TIMESTAMPTZ DEFAULT now(),

@@ -12,22 +12,30 @@ sensible default.
 
 ---
 
-## 0. The two things most likely to bite
+## 0. The three things most likely to bite
 
-1. **Migrations do not auto-apply outside Development.** `Program.cs` runs
-   `Database.Migrate()` only when `app.Environment.IsDevelopment()`. In every other
-   environment you must apply migrations yourself as a deploy step:
-   ```
-   dotnet ef database update --project src/Trackly.Infrastructure --startup-project src/Trackly.Api
-   ```
-   (or generate an idempotent SQL script with `dotnet ef migrations script -i` and
-   run it in your release pipeline). Forgetting this = a running API against an
-   empty/stale schema.
+1. **Whoever reaches `/setup` first becomes your administrator.** A freshly
+   deployed Trackly with an empty database is unclaimed, and setup is anonymous
+   by necessity — there is no account to authenticate against yet. Claim it
+   yourself immediately after the first deploy, before the URL is reachable by
+   anyone else. Once claimed it answers `409` forever.
 2. **`Security:MasterKey` is forever.** It encrypts every stored secret (SMTP/IMAP
    passwords, webhook secrets, future OAuth tokens). If it changes or is lost,
    every previously-encrypted value becomes undecryptable. Generate it once per
    environment, store it in the secret manager, and back it up. In Development a
    fixed fallback key is used so local runs work — **never let that reach prod.**
+3. **There is no password recovery outside the app.** No CLI, no reset script. An
+   admin resets another admin from **Admin ▾ → People → Members**, and a "forgot
+   password" email only works once SMTP does. **Keep two administrators.** With
+   one admin, one lost password and a broken mail relay means restoring from a
+   database backup.
+
+Migrations apply automatically on boot (`Trackly:AutoMigrate`, default true), which
+is what a container pointed at an empty database needs. If you set it false, apply
+them yourself as a deploy step:
+```
+dotnet ef database update --project src/Trackly.Infrastructure --startup-project src/Trackly.Api
+```
 
 ---
 
@@ -295,7 +303,9 @@ worker on all but one) if any workspace uses mailbox polling.
 
 - [ ] `ConnectionStrings:Trackly` set; DB reachable
 - [ ] Migrations applied — automatic on boot unless `Trackly:AutoMigrate` is false, in which case run `dotnet ef database update` yourself
-- [ ] **First-run setup done** — open the app, land on `/setup`, create the workspace + first admin. This signs you in inline (no email), so it works before SMTP exists. It answers `409` afterwards; if it does not, the installation was never claimed and **anyone who reaches it becomes your administrator**
+- [ ] **First-run setup done** — open the app, land on `/setup`, create the workspace + first admin **with a password**. This signs you in inline (no email), so it works before SMTP exists. It answers `409` afterwards; if it does not, the installation was never claimed and **anyone who reaches it becomes your administrator**
+- [ ] **A second administrator exists.** There is no CLI password recovery. If the only admin loses their password while email is not working, the installation cannot be recovered through the app — only from a database backup
+- [ ] **Email proven, if you intend to turn password sign-in off** — **Admin ▾ → Workspace → Login methods → Send a test email** must succeed first. Trackly refuses to disable the last *proven* method, and an unproven email setting does not count
 - [ ] `Security:MasterKey` set to a real base64 32-byte key, stored + backed up
 - [ ] `App:FrontendBaseUrl` = the public SPA URL (test a magic-link email points there)
 - [ ] `Storage:LocalPath` on a persistent, backed-up volume (single instance) — still the default and the fallback even when workspaces use a cloud provider

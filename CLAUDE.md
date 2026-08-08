@@ -1,6 +1,6 @@
 # Trackly
 
-Trackly is a standalone, **self-hosted** ticket management app (FreshDesk/Zendesk-like) that any organisation can run on its own infrastructure, regardless of their identity infrastructure. Organisations bring their own SSO (Okta, Google, Entra ID, Authly, custom SAML/OIDC) or use passwordless email magic links. Trackly owns its own users, roles, and sessions — external IdPs authenticate only.
+Trackly is a standalone, **self-hosted** ticket management app (FreshDesk/Zendesk-like) that any organisation can run on its own infrastructure, regardless of their identity infrastructure. People sign in with email + password, an emailed link + 6-digit code, or the organisation’s own SSO (Okta, Google, Entra ID, Authly, custom SAML/OIDC). Trackly owns its own users, roles, and sessions — external IdPs authenticate only.
 
 **One deployment, one workspace.** There is no public sign-up, no workspace picker and no domain verification: whoever runs the container owns it. An empty database is claimed once via `POST /api/setup`, which creates the workspace and its first admin and signs them in inline — it cannot email a link, because SMTP is configured from inside the admin UI.
 
@@ -18,7 +18,10 @@ Trackly is a standalone, **self-hosted** ticket management app (FreshDesk/Zendes
 - **Frontend:** Angular 22 + TypeScript + Vite (`@angular/build`), Tailwind v4 on a CSS-variable token layer, standalone components, signals + `resource()`, zoneless change detection. Lives in **`frontend-angular/`**.
   - **Migration in progress.** `frontend/` is the retiring React 19 + MUI app. Routes not yet ported render `ComingSoon`, which names the React file to port. Read `frontend/` for *behaviour*; never port its MUI markup. Delete each React screen in the same change that lands its Angular replacement. When `app.routes.ts` stops importing `ComingSoon`, delete `frontend/` and its `.vscode` entries.
   - No Angular Material, PrimeNG, or a second styling system — the design system is `src/styles.scss` (tokens + component CSS) plus thin wrappers in `src/app/ui/`.
-- **Auth:** Trackly's own HttpOnly session cookie (hash stored in `sessions` table). SSO via one generic OIDC scheme (per-workspace config resolved at request time — see plan caveat) + `ITfoxtec.Identity.Saml2` for SAML. Passwordless magic link + 6-digit code as native fallback. **No passwords, ever.**
+- **Auth:** Trackly's own HttpOnly session cookie (hash stored in `sessions` table). Three ways in: **email + password**, an emailed magic link + 6-digit code, and SSO (one generic OIDC scheme + `ITfoxtec.Identity.Saml2` for SAML).
+  - **Passwords are primary, not a compromise.** Trackly is self-hosted: on a fresh database SMTP and SSO are both unconfigured, and both are configured *from inside Trackly*. A code that cannot be delivered and an IdP that does not exist yet leave no way in — reading the OTP out of the server log is a developer's workaround, not a way to run production. Passwords are the only credential that works on an empty install.
+  - Hashed with PBKDF2-HMAC-SHA256 (`IPasswordHasher` / `Pbkdf2PasswordHasher`), per-password salt, cost stored inside the value so it can be raised later and re-hashed on next sign-in. Never logged, never returned.
+  - An admin may turn password sign-in off — but only once another method is **proven** to work (a test email actually delivered, or a completed SSO login). See invariant 8.
 - **Email:** MailKit (SMTP out, IMAP polling in) + inbound parse webhooks; both connectors feed one shared pipeline
 - **Solution layout:** `src/Trackly.Core` (entities/interfaces), `src/Trackly.Modules` (business logic), `src/Trackly.Infrastructure` (EF, email, SSO handlers), `src/Trackly.Api` (controllers/middleware)
 
@@ -31,6 +34,8 @@ Trackly is a standalone, **self-hosted** ticket management app (FreshDesk/Zendes
 5. **Private notes (`is_internal`)** must never reach customers, guest views, messaging connectors, or the AI model — enforce in the API, not the UI.
 6. **Customer-facing surfaces** (submit form, portal, guest view, knowledge base, widget, live chat, CSAT survey, notification emails) render the **workspace's branding**, not Trackly's, and are always light.
 7. **Magic-link verify pages never consume the token on GET** — only the confirm POST does (email scanners prefetch GETs).
+8. **Never leave an installation with no working way in.** A sign-in method may only be disabled while another one is *proven* — email counts only after a test message was delivered (`email_configs.last_verified_at`), SSO only after a real login completed (`status = active`). Enforced in `LoginSettingsController`, not just greyed out in the UI. Self-hosted means no support desk and no recovery link: a lockout here is permanent.
+9. **A temporary password is a credential someone else has seen.** `users.must_change_password` blocks every endpoint except reading your own profile and changing the password — enforced by `MustChangePasswordFilter` in the API, never by the SPA alone.
 
 ## Build order
 

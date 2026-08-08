@@ -1,5 +1,51 @@
 import { Injectable, inject } from '@angular/core';
 import { ApiService } from './api.service';
+import type { UserRole } from '../auth/auth.models';
+
+/** A row on the Members screen. Deactivated accounts are included. */
+export interface Member {
+  readonly id: string;
+  readonly name: string | null;
+  readonly email: string | null;
+  readonly role: UserRole;
+  readonly isActive: boolean;
+  readonly lastLoginAt: string | null;
+  /** They can sign in with a password at all. Never the hash itself. */
+  readonly hasPassword: boolean;
+  /** On a temporary password an admin issued; the API blocks them until it is replaced. */
+  readonly mustChangePassword: boolean;
+  readonly avatarUrl: string | null;
+}
+
+export interface AddMemberBody {
+  readonly email: string;
+  readonly name?: string;
+  readonly role?: UserRole;
+  /** Omit to have the server generate a readable one. */
+  readonly password?: string;
+}
+
+/** The only time a password is ever readable — it is stored hashed. */
+export interface AddMemberResult {
+  readonly id: string;
+  readonly email: string | null;
+  readonly temporaryPassword: string;
+}
+
+export interface LoginSettings {
+  readonly passwordLoginEnabled: boolean;
+  readonly emailLoginEnabled: boolean;
+  /** A test message has actually been delivered — not merely configured. */
+  readonly emailWorks: boolean;
+  /** An SSO login has actually completed. */
+  readonly ssoActive: boolean;
+}
+
+export interface EmailTestResult {
+  readonly ok: boolean;
+  readonly sentTo?: string;
+  readonly error?: string;
+}
 
 /** Where a workspace's attachments live. */
 export type StorageProvider = 'local' | 'azure' | 'gcs';
@@ -168,5 +214,46 @@ export class AdminApi {
    */
   testStorage(): Promise<StorageTestResult> {
     return this.api.post<StorageTestResult>('/api/admin/settings/storage/test', {});
+  }
+
+  // ---- Members -------------------------------------------------------------
+
+  /** Everyone in the workspace, including deactivated accounts. */
+  members(): Promise<Member[]> {
+    return this.api.get<Member[]>('/api/users/members');
+  }
+
+  /**
+   * Creates staff and returns a password to pass on by hand.
+   *
+   * The password comes back exactly once — it is stored hashed, so a second look
+   * means a reset.
+   */
+  addMember(body: AddMemberBody): Promise<AddMemberResult> {
+    return this.api.post<AddMemberResult>('/api/users/members', body);
+  }
+
+  /** Also returns the new password once, and revokes that user's other sessions. */
+  resetPassword(id: string, password?: string): Promise<AddMemberResult> {
+    return this.api.post<AddMemberResult>(`/api/users/${id}/password`, { password });
+  }
+
+  updateMember(id: string, body: { role?: UserRole; isActive?: boolean }): Promise<Member> {
+    return this.api.patch<Member>(`/api/users/${id}`, body);
+  }
+
+  // ---- Login settings ------------------------------------------------------
+
+  loginSettings(): Promise<LoginSettings> {
+    return this.api.get<LoginSettings>('/api/admin/login-settings');
+  }
+
+  saveLoginSettings(body: { passwordLoginEnabled?: boolean; emailLoginEnabled?: boolean }): Promise<LoginSettings> {
+    return this.api.put<LoginSettings>('/api/admin/login-settings', body);
+  }
+
+  /** Sends a real message to the caller and records that it arrived. */
+  testEmail(): Promise<EmailTestResult> {
+    return this.api.post<EmailTestResult>('/api/admin/settings/email/test', {});
   }
 }

@@ -4,7 +4,7 @@ A standalone, **self-hosted** ticket management app — submit, track, and resol
 
 ## Key capabilities
 
-- **Multi-IdP authentication** — each workspace connects its own identity provider (Okta, Google Workspace, Microsoft Entra ID, Authly, custom SAML/OIDC) or uses passwordless email magic links. No passwords stored, ever.
+- **Three ways in** — email + password, an emailed magic link + 6-digit code, or your own identity provider (Okta, Google Workspace, Microsoft Entra ID, Authly, custom SAML/OIDC). Passwords are hashed with PBKDF2; Trackly refuses to switch off the last working sign-in method.
 - **Ticketing** — statuses/priorities/categories, round-robin assignment, teams, watchers, private internal notes, tags, attachments, and problem grouping.
 - **Service desk** — SLA policies with a live countdown, automation rules, a public knowledge base (with submit-form deflection), and canned responses.
 - **Omnichannel** — email (below), an embeddable widget, real-time **live chat** (transcript becomes a ticket), and inbound **Slack / WhatsApp / Teams** connectors feeding one shared pipeline.

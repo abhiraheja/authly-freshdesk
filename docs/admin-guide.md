@@ -15,7 +15,7 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 1. [Core concepts](#1-core-concepts)
 2. [Getting started](#2-getting-started)
 3. [Access & identity](#3-access--identity)
-   - 3.1 Passwordless login · 3.2 Members & roles · 3.3 SSO (OIDC/SAML)
+   - 3.1 How people sign in · 3.2 Members & roles · 3.3 SSO (OIDC/SAML)
 4. [Ticketing](#4-ticketing)
    - 4.1 Tickets & the agent workspace · 4.2 Pinning & flagging · 4.3 Statuses & workflow · 4.4 Registers · 4.5 Categories · 4.6 Customer portal · 4.7 Guest submission
 5. [Agent productivity](#5-agent-productivity)
@@ -56,8 +56,7 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
   - **Customer-facing surfaces** (submit form, portal, guest view, widget, KB,
     live chat, CSAT, notification emails) carry **your workspace branding** and
     are always light. Setting up branding (§10) changes all of them at once.
-- **Sessions** — login issues an HttpOnly session cookie. There are **no
-  passwords** anywhere in Trackly.
+- **Sessions** — login issues an HttpOnly session cookie, valid 30 days.
 
 ---
 
@@ -65,13 +64,13 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 
 1. **Claim the installation.** Trackly is self-hosted: one deployment, one
    workspace, and it is yours. The first time anyone opens a fresh install they
-   land on **/setup** — enter your organisation name and your email, and you are
-   created as the administrator and signed in on the spot.
+   land on **/setup** — enter your organisation name, your email and a password,
+   and you are created as the administrator and signed in on the spot.
 
    No code, no magic link, no confirmation email. Outbound email is configured
    from inside Trackly (§9), so on a brand-new install there is no way to deliver
    one yet; asking you to click a link you could never receive would lock you out
-   of your own installation. Once this has run, `/setup` is closed permanently —
+   of your own installation. That is also why Trackly has passwords at all (§3.1). Once this has run, `/setup` is closed permanently —
    everyone else joins by invitation (§3.2) or SSO (§3.3).
 2. **Invite your team** — **Admin ▾ → People → Members** (§3.2).
 3. **Set your branding** — **Admin ▾ → Workspace → Branding** (§10) so customer
@@ -86,20 +85,39 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 
 ## 3. Access & identity
 
-### 3.1 Passwordless login
+### 3.1 How people sign in
 
-**What it is.** Everyone signs in without a password. Trackly emails a **magic
-link** and a **6-digit code**; either one signs you in. Logging in with a new
-address creates the account (sign-up = login).
+Three ways, and only one of them works on a brand-new installation.
+**Where:** **Admin ▾ → Workspace → Login methods**.
 
-**Set up.** Nothing to configure — it works as soon as outbound email is
-available (§9; without an SMTP relay, codes are written to the server log for
-local testing). You can disable email login per workspace if you require SSO
-only (the toggle lives with the workspace’s login settings).
+| Method | Works before you configure anything? |
+|---|---|
+| **Email + password** | **Yes** |
+| **Emailed link + 6-digit code** | No — needs outbound email (§9) |
+| **Single sign-on** | No — needs an identity provider (§3.3) |
 
-**Use.** Users enter their email on the login page, then paste the code or click
-the link. Verify links are single-use and safe against email-scanner prefetch
-(the link is only consumed when the user confirms, not when it’s opened).
+**Why there are passwords.** Trackly runs on your own server, and both email and
+SSO are configured *from inside Trackly*. On a fresh install a 6-digit code has
+nowhere to go — so a password is what gets you in, and what gets you back in if
+your mail relay breaks later.
+
+**Passwords.** Minimum 12 characters; no “one capital, one symbol” rules, because
+those produce worse passwords, not better ones. Trackly stores only a salted
+PBKDF2 hash — nobody, including you, can read a password back. Change your own
+under **your avatar → Change password**.
+
+**Emailed codes.** Users enter their email, then paste the code or click the
+link. Links are single-use and safe against email-scanner prefetch: the link is
+consumed when the user confirms, not when it is opened. An unknown address that
+signs in this way is created as a **customer** — that is how customers self-serve
+the portal.
+
+**Turning a method off.** You can require SSO or codes only — but Trackly
+**refuses to switch off the last working method**, and “working” means proven:
+email counts only after a test message has actually been delivered, SSO only
+after somebody has successfully signed in through it. Send the test from
+**Admin ▾ → Workspace → Login methods**. There is no support desk behind a
+self-hosted install and no recovery link, so a lockout here would be permanent.
 
 ### 3.2 Members & roles
 
@@ -107,12 +125,27 @@ the link. Verify links are single-use and safe against email-scanner prefetch
 **Where:** **Admin ▾ → People → Members**.
 
 **Set up / use.**
-- **Invite** — enter an email, choose **Agent** or **Admin**, send. The invitee
-  gets an email with a join link **valid for 7 days**.
+- **Add member** — enter an email, choose **Agent** or **Admin**. Trackly creates
+  the account and shows a **temporary password once**. Pass it on yourself: no
+  email is sent, so this works before email is configured. They are forced to
+  replace it the first time they sign in, and until they do, their account can do
+  nothing else.
+- **Invite** — where outbound email works, an invitee can instead get a join link
+  **valid for 7 days**.
+- **Reset password** — on any member row. A new password is shown once and their
+  other sessions are signed out immediately. This is your recovery path when
+  somebody is locked out and email is not available.
 - **Change a role** — pick a new role on any member row; it takes effect on their
   next request (no re-login needed).
+- **Deactivate** — signs them out everywhere and blocks sign-in. Their tickets
+  stay.
 - Roles always come from Trackly’s own records — never from an SSO token at
   request time (see §3.3 for how SSO groups map to roles **at login**).
+
+> **Keep a second administrator.** There is no command-line recovery. If the only
+> admin loses their password while email is not working, nobody can reset it and
+> the installation cannot be recovered through the app. The Members screen warns
+> you while you are the only one.
 
 ### 3.3 SSO (OIDC / SAML)
 
@@ -712,7 +745,7 @@ Canned.
 | **Workflow** | Statuses & workflow · SLA policies · Automation · AI copilot |
 | **Ticket view** | Registers (§4.3) · Ticket layout (§23) |
 | **Channels** | Messaging (connectors) · Widget · Email |
-| **Workspace** | Branding · SSO |
+| **Workspace** | Branding · Login methods · SSO |
 
 **Customer-facing URLs:** `/submit` · `/portal` · `/kb` · `/chat` · guest tracking
 & CSAT links (emailed), all with `?workspace=<slug>` where shown.
@@ -723,7 +756,7 @@ Canned.
 
 - **Workspace isolation** — every query is scoped to your workspace; no
   cross-workspace access, ever.
-- **No passwords** — login is magic link / code / SSO only.
+- **Passwords are hashed, never readable** — salted PBKDF2; an admin can reset one but can never see it. Emailed codes and SSO work alongside.
 - **Secrets encrypted at rest** — SSO client secrets, SMTP/IMAP credentials, and
   connector signing secrets are AES-256-GCM encrypted and never shown again after
   saving (you’ll see “set”, and can rotate).

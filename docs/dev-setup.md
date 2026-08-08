@@ -138,21 +138,28 @@ before the first launch.
 
 An empty database has no workspace, so the app sends you to **`/setup`**:
 
-1. Enter an organisation name and your email. That's it — you are created as the
-   **admin** and signed in immediately, with no code to paste. Setup deliberately
-   does not email anything: SMTP is configured from inside the app, so on a fresh
-   database there is no way to deliver a link yet.
+1. Enter an organisation name, your email, and a password (12+ characters). You
+   are created as the **admin** and signed in immediately, with no code to paste.
+   Setup deliberately does not email anything: SMTP is configured from inside the
+   app, so on a fresh database there is no way to deliver a link yet — which is
+   also why there is a password at all.
 2. `/setup` closes permanently once it has run; going back there redirects to
    `/login`.
 
-**Signing in afterwards** (or as anyone else):
+**Signing in afterwards.** Email and password, on the login page — that is the
+everyday path and it needs nothing configured.
 
-1. On the login page, enter any email (e.g. `you@example.com`).
+**Adding an agent to test with.** **Admin ▾ → People → Members → Add member**.
+Trackly shows a temporary password once; sign in with it in a private window and
+you will be forced to replace it before anything else works.
+
+**The emailed-code path** (customers, and anyone without a password):
+
+1. On the login page, choose **Email me a sign-in code instead**.
 2. Because no SMTP relay is configured, the **magic link + 6-digit code are printed
    to the API console** (Terminal 1). Copy the code.
 3. Paste it to verify. An email with no account signs in as a **customer** — that
-   is how customers self-serve the portal. Agents and admins arrive by invitation
-   or SSO.
+   is how customers self-serve the portal.
 
 **Starting over.** Setup only runs on an installation with no workspace, so to see
 it again drop and recreate the database:
