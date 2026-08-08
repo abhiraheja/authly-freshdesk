@@ -20,6 +20,7 @@ using Trackly.Modules.Guest;
 using Trackly.Modules.Invitations;
 using Trackly.Modules.Kb;
 using Trackly.Modules.Problems;
+using Trackly.Modules.Setup;
 using Trackly.Modules.Sso;
 using Trackly.Modules.Tickets;
 using Trackly.Api.Workers;
@@ -30,6 +31,7 @@ builder.Services.AddControllers(options => options.Filters.Add<ApiExceptionFilte
 builder.Services.AddOpenApi();
 builder.Services.AddTracklyInfrastructure(builder.Configuration);
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<SetupService>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<Trackly.Modules.Notifications.NotificationFeed>();
 builder.Services.AddScoped<InboundEmailService>();
@@ -94,8 +96,14 @@ builder.Services.AddRateLimiter(options =>
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
-{
     app.MapOpenApi();
+
+// Not Development-only: a self-hosted install is a container pointed at an empty
+// database with no separate migration step to run, so the app brings its own
+// schema up on boot. Operators who apply migrations out of band — or who run
+// several replicas and want exactly one of them touching DDL — set this false.
+if (app.Configuration.GetValue("Trackly:AutoMigrate", true))
+{
     using var scope = app.Services.CreateScope();
     scope.ServiceProvider.GetRequiredService<TracklyDbContext>().Database.Migrate();
 }

@@ -1,6 +1,8 @@
 # Trackly
 
-Trackly is a standalone, multi-tenant ticket management SaaS (FreshDesk/Zendesk-like) that any organisation can adopt regardless of their identity infrastructure. Enterprises bring their own SSO (Okta, Google, Entra ID, Authly, custom SAML/OIDC) or use passwordless email magic links. Trackly owns its own users, roles, and sessions — external IdPs authenticate only.
+Trackly is a standalone, **self-hosted** ticket management app (FreshDesk/Zendesk-like) that any organisation can run on its own infrastructure, regardless of their identity infrastructure. Organisations bring their own SSO (Okta, Google, Entra ID, Authly, custom SAML/OIDC) or use passwordless email magic links. Trackly owns its own users, roles, and sessions — external IdPs authenticate only.
+
+**One deployment, one workspace.** There is no public sign-up, no workspace picker and no domain verification: whoever runs the container owns it. An empty database is claimed once via `POST /api/setup`, which creates the workspace and its first admin and signs them in inline — it cannot email a link, because SMTP is configured from inside the admin UI.
 
 ## Source of truth
 
@@ -22,7 +24,7 @@ Trackly is a standalone, multi-tenant ticket management SaaS (FreshDesk/Zendesk-
 
 ## Non-negotiable invariants
 
-1. **Workspace isolation:** every query filters by `workspace_id`. No cross-workspace data access, ever.
+1. **Workspace isolation:** every query filters by `workspace_id`. No cross-workspace data access, ever. This stands even though a deployment only ever has one workspace — the column is what makes the guarantee checkable, and removing it would rewrite every query for no user-visible gain. Surfaces with no session (guest views, chat, branding, widget, CSAT, SSO start) resolve it with `db.ResolveWorkspaceAsync(slug, ct)`, which falls back to the single workspace when no slug is supplied.
 2. **Roles live in Trackly's DB** (`users.role`), never derived from IdP tokens at request time. Group→role mapping is applied at login only.
 3. **Secrets at rest** (SSO client secrets, SMTP/IMAP credentials, OAuth tokens, messaging-connector signing secrets) are AES-256-GCM encrypted.
 4. **Tokens are stored hashed** (sessions, magic links, OTPs, invite tokens, guest magic links, CSAT rating tokens, chat visitor tokens) — SHA-256, single-use where applicable.

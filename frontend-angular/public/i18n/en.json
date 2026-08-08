@@ -60,7 +60,6 @@
       "storage": "Storage",
       "branding": "Branding",
       "sso": "SSO",
-      "domains": "Domains",
       "myTickets": "My tickets",
       "newTicket": "New ticket",
       "configuration": "Configuration",
@@ -83,18 +82,12 @@
   "login": {
     "signIn": "Sign in to Trackly",
     "signInTo": "Sign in to {{name}}",
-    "createAccount": "Create your account",
     "welcomeBack": "Track your support requests in one place.",
-    "signupSubhead": "You'll be the administrator of your new workspace.",
     "workEmail": "Work email",
     "emailPlaceholder": "you@company.com",
     "continue": "Continue",
     "checkingSso": "Checking your organisation…",
     "magicLinkHint": "We'll email a sign-in link and a 6-digit code. Click the link or type the code — there's no password to remember.",
-    "newToTrackly": "New to Trackly?",
-    "startFree": "Start free",
-    "haveWorkspace": "Already have a workspace?",
-    "signInLink": "Sign in",
     "sendFailed": "Could not send the sign-in email.",
     "checkEmail": "Check your email",
     "sentTo": "We sent a sign-in link and a 6-digit code to",
@@ -105,11 +98,8 @@
     "resend": "Resend the email",
     "useDifferentEmail": "Use a different email",
     "codeFailed": "That code did not work. Try again, or resend the email.",
-    "chooseWorkspace": "Choose a workspace",
-    "belongsToMany": "{{email}} belongs to more than one workspace.",
     "panel": {
       "signInTitle": "Every conversation, in one place.",
-      "signUpTitle": "Your support desk, running today.",
       "body": "Email, chat and web requests land in a single queue — with SLAs, automation and an AI copilot behind them.",
       "aiDrafted": "AI drafted a reply",
       "statResponse": "median first response",
@@ -541,7 +531,6 @@
     "titles": {
       "verifySignIn": "Verify sign-in",
       "signingIn": "Signing you in",
-      "createWorkspace": "Create your workspace",
       "submitTicket": "Submit a ticket",
       "knowledgeBase": "Knowledge base",
       "liveChat": "Live chat",
@@ -563,8 +552,7 @@
       "aiCopilot": "AI copilot",
       "email": "Email",
       "branding": "Branding",
-      "sso": "SSO",
-      "domains": "Domains"
+      "sso": "SSO"
     }
   },
   "admin": {
@@ -855,6 +843,23 @@
       "reply": "{{actor}} replied",
       "sla_warning": "An SLA is about to run out",
       "sla_breached": "An SLA has been missed"
+    }
+  },
+  "setup": {
+    "title": "Set up Trackly",
+    "subtitle": "This installation is new. Create your workspace and you'll be signed in as its administrator.",
+    "organisation": "Organisation name",
+    "organisationPlaceholder": "Acme Corporation",
+    "organisationHint": "Shown to your customers on the support portal, forms and emails.",
+    "email": "Your email",
+    "emailHint": "You'll be the first administrator. Sign in later with a link sent to this address.",
+    "name": "Your name (optional)",
+    "submit": "Create workspace and sign in",
+    "footnote": "You're signed in straight away — email isn't configured yet, so there's no link to send.",
+    "failed": "Could not complete setup.",
+    "panel": {
+      "title": "One workspace. Yours.",
+      "body": "Trackly runs on your own infrastructure. No tenant to pick, no domain to verify — set a name and start taking tickets."
     }
   }
 }

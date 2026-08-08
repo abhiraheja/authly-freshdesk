@@ -3,7 +3,6 @@ import { RequireAuth } from './components/RequireAuth'
 import { RequireRole } from './components/RequireRole'
 import { DashboardPage } from './pages/DashboardPage'
 import { EmailAuthPage } from './pages/EmailAuthPage'
-import { OnboardingWorkspacePage } from './pages/OnboardingWorkspacePage'
 import { VerifyPage } from './pages/VerifyPage'
 import { AgentWorkspacePage } from './pages/agent/AgentWorkspacePage'
 import { CannedResponsesPage } from './pages/agent/CannedResponsesPage'
@@ -15,7 +14,6 @@ import { AnnouncementsPage } from './pages/admin/AnnouncementsPage'
 import { AutomationPage } from './pages/admin/AutomationPage'
 import { BrandingSettingsPage } from './pages/admin/BrandingSettingsPage'
 import { ChannelsPage } from './pages/admin/ChannelsPage'
-import { DomainsPage } from './pages/admin/DomainsPage'
 import { EmailSettingsPage } from './pages/admin/EmailSettingsPage'
 import { SsoSettingsPage } from './pages/admin/SsoSettingsPage'
 import { TeamsPage } from './pages/admin/TeamsPage'
@@ -36,11 +34,9 @@ import { KbPage } from './pages/admin/KbPage'
 function App() {
   return (
     <Routes>
-      <Route path="/login" element={<EmailAuthPage mode="login" />} />
-      <Route path="/signup" element={<EmailAuthPage mode="signup" />} />
+      <Route path="/login" element={<EmailAuthPage />} />
       <Route path="/auth/verify" element={<VerifyPage />} />
       <Route path="/auth/sso/complete" element={<SsoCompletePage />} />
-      <Route path="/onboarding/workspace" element={<OnboardingWorkspacePage />} />
       {/* Public, workspace-branded surfaces */}
       <Route path="/submit" element={<SubmitPage />} />
       <Route path="/kb" element={<PublicKbPage />} />
@@ -72,7 +68,6 @@ function App() {
           <Route path="/admin/settings/email" element={<EmailSettingsPage />} />
           <Route path="/admin/settings/ai" element={<AiSettingsPage />} />
           <Route path="/admin/settings/sso" element={<SsoSettingsPage />} />
-          <Route path="/admin/settings/domains" element={<DomainsPage />} />
           <Route path="/admin/channels" element={<ChannelsPage />} />
           <Route path="/admin/widget" element={<WidgetPage />} />
         </Route>

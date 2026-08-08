@@ -50,15 +50,8 @@ public class AuthController(AuthService authService) : ControllerBase
                     status = "ok",
                     user = UserResponse.From(result.User!),
                 });
-            case VerifyStatus.SignupRequired:
-                return Ok(new { status = "signup_required", email = result.Email });
-            case VerifyStatus.ChooseWorkspace:
-                return Ok(new
-                {
-                    status = "choose_workspace",
-                    email = result.Email,
-                    workspaces = result.Workspaces,
-                });
+            case VerifyStatus.NotSetUp:
+                return Conflict(new { error = "This Trackly installation has not been set up yet." });
             case VerifyStatus.Locked:
                 return StatusCode(StatusCodes.Status423Locked,
                     new { error = "Too many incorrect codes. Request a new sign-in email." });

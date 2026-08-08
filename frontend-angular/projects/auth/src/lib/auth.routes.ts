@@ -1,5 +1,5 @@
 import type { Routes } from '@angular/router';
-import { guestGuard } from '@trackly/core';
+import { guestGuard, setupGuard } from '@trackly/core';
 
 /**
  * Mounted by the host at the app root, outside the shell — these are
@@ -15,10 +15,11 @@ export const authRoutes: Routes = [
     loadComponent: () => import('./login').then((m) => m.Login),
   },
   {
-    path: 'signup',
-    canActivate: [guestGuard],
-    loadComponent: () => import('./login').then((m) => m.Login),
-    data: { mode: 'signup' },
+    // First run only. Trackly is self-hosted, so there is no public sign-up —
+    // the workspace is created once, by whoever stands up the installation.
+    path: 'setup',
+    canActivate: [setupGuard],
+    loadComponent: () => import('./setup').then((m) => m.Setup),
   },
   {
     // Magic-link landing. The token is NEVER consumed on load — only the confirm
@@ -32,10 +33,5 @@ export const authRoutes: Routes = [
     path: 'auth/sso/complete',
     loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
     data: { titleKey: 'comingSoon.titles.signingIn', from: 'frontend/src/pages/auth/SsoCompletePage.tsx' },
-  },
-  {
-    path: 'onboarding/workspace',
-    loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
-    data: { titleKey: 'comingSoon.titles.createWorkspace', from: 'frontend/src/pages/OnboardingWorkspacePage.tsx' },
   },
 ];

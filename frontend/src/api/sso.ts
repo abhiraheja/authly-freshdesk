@@ -43,45 +43,6 @@ export function deleteSso() {
   return api<void>('/api/admin/sso', { method: 'DELETE' })
 }
 
-export interface WorkspaceDomain {
-  id: string
-  domain: string
-  verified: boolean
-  discoverable: boolean
-  verifiedAt: string | null
-  txtRecordName: string
-  txtRecordValue: string
-}
-
-export function listDomains() {
-  return api<WorkspaceDomain[]>('/api/admin/domains')
-}
-
-export function addDomain(domain: string) {
-  return api<WorkspaceDomain>('/api/admin/domains', { method: 'POST', body: JSON.stringify({ domain }) })
-}
-
-export interface VerifyResult extends Partial<WorkspaceDomain> {
-  verified: boolean
-  expectedTxt?: string
-  found?: string[]
-}
-
-export function verifyDomain(id: string) {
-  return api<VerifyResult>(`/api/admin/domains/${id}/verify`, { method: 'POST' })
-}
-
-export function setDiscoverable(id: string, discoverable: boolean) {
-  return api<WorkspaceDomain>(`/api/admin/domains/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ discoverable }),
-  })
-}
-
-export function deleteDomain(id: string) {
-  return api<void>(`/api/admin/domains/${id}`, { method: 'DELETE' })
-}
-
 export interface SsoDiscovery {
   workspaceSlug: string
   providerName: string
@@ -89,9 +50,7 @@ export interface SsoDiscovery {
   startUrl: string
 }
 
-// Returns null when the email domain isn't routed to SSO (API replies 204).
-export function discoverSso(email: string) {
-  return api<SsoDiscovery | undefined>(`/api/public/sso/discover?email=${encodeURIComponent(email)}`).then(
-    (r) => r ?? null,
-  )
+// Returns null when this installation has no SSO connection (API replies 204).
+export function discoverSso() {
+  return api<SsoDiscovery | undefined>('/api/public/sso/discover').then((r) => r ?? null)
 }

@@ -14,15 +14,10 @@ export interface User {
   workspace: Workspace
 }
 
-export interface WorkspaceSummary {
-  slug: string
-  name: string
-}
-
-export type VerifyResponse =
-  | { status: 'ok'; user: User }
-  | { status: 'signup_required'; email: string }
-  | { status: 'choose_workspace'; email: string; workspaces: WorkspaceSummary[] }
+// Trackly is self-hosted: one workspace. Verification used to also return
+// `signup_required` (go create a workspace) and `choose_workspace` (this email
+// is in several) — neither can happen now.
+export type VerifyResponse = { status: 'ok'; user: User }
 
 export function sendMagicLink(email: string, workspaceSlug?: string) {
   return api<void>('/api/auth/magic-link/send', {
@@ -38,20 +33,6 @@ export function verifyMagicLink(params: {
   workspaceSlug?: string
 }) {
   return api<VerifyResponse>('/api/auth/magic-link/verify', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  })
-}
-
-export function signup(params: {
-  email: string
-  token?: string
-  code?: string
-  workspaceName: string
-  workspaceSlug: string
-  name?: string
-}) {
-  return api<{ status: 'ok'; user: User }>('/api/signup', {
     method: 'POST',
     body: JSON.stringify(params),
   })

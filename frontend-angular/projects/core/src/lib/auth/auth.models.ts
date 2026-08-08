@@ -16,23 +16,16 @@ export interface User {
   workspace: Workspace;
 }
 
-export interface WorkspaceSummary {
-  slug: string;
-  name: string;
-}
-
 /**
- * Magic-link verification has three outcomes, not two:
- * - `ok` — signed in
- * - `signup_required` — the email is unknown; continue to workspace creation
- * - `choose_workspace` — the email belongs to more than one workspace
+ * Magic-link verification either signs you in or fails.
+ *
+ * It used to have two more outcomes — `signup_required` (build a workspace) and
+ * `choose_workspace` (this email is in several). A self-hosted install has one
+ * workspace, so there is nothing to create and nothing to choose between.
  */
-export type VerifyResponse =
-  | { status: 'ok'; user: User }
-  | { status: 'signup_required'; email: string }
-  | { status: 'choose_workspace'; email: string; workspaces: WorkspaceSummary[] };
+export type VerifyResponse = { status: 'ok'; user: User };
 
-/** A workspace's SSO entry point, resolved from the email's domain. */
+/** This installation's SSO entry point, if one is configured. */
 export interface SsoDiscovery {
   workspaceSlug: string;
   providerName: string;

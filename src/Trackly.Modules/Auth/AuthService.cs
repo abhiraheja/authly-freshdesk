@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Trackly.Core.Entities;
@@ -7,17 +6,12 @@ using Trackly.Infrastructure.Data;
 
 namespace Trackly.Modules.Auth;
 
-public partial class AuthService(TracklyDbContext db, IEmailSender emailSender, IConfiguration configuration)
+public class AuthService(TracklyDbContext db, IEmailSender emailSender, IConfiguration configuration)
 {
     private const int MaxSendsPer15Minutes = 3;
     private const int MaxCodeAttempts = 5;
     private static readonly TimeSpan TokenLifetime = TimeSpan.FromMinutes(10);
     private static readonly TimeSpan SessionLifetime = TimeSpan.FromDays(30);
-    private static readonly string[] ReservedSlugs =
-        ["www", "app", "api", "admin", "auth", "login", "signup", "support", "trackly"];
-
-    [GeneratedRegex("^[a-z0-9](?:[a-z0-9-]{1,28}[a-z0-9])?$")]
-    private static partial Regex SlugRegex();
 
     // ---- Send -------------------------------------------------------------
 
@@ -25,16 +19,14 @@ public partial class AuthService(TracklyDbContext db, IEmailSender emailSender, 
     {
         var email = NormalizeEmail(request.Email);
 
-        Workspace? workspace = null;
-        if (!string.IsNullOrWhiteSpace(request.WorkspaceSlug))
-        {
-            workspace = await db.Workspaces
-                .SingleOrDefaultAsync(w => w.Slug == request.WorkspaceSlug, ct);
-            if (workspace is null)
-                return SendMagicLinkStatus.WorkspaceNotFound;
-            if (!workspace.EmailLoginEnabled)
-                return SendMagicLinkStatus.EmailLoginDisabled;
-        }
+        // Resolved even when no slug was supplied, so an installation that has
+        // not been set up yet refuses here rather than emailing a link that
+        // could never resolve to anything at verify time.
+        var workspace = await db.ResolveWorkspaceAsync(request.WorkspaceSlug, ct);
+        if (workspace is null)
+            return SendMagicLinkStatus.WorkspaceNotFound;
+        if (!workspace.EmailLoginEnabled)
+            return SendMagicLinkStatus.EmailLoginDisabled;
 
         var windowStart = DateTime.UtcNow.AddMinutes(-15);
         var recentSends = await db.EmailTokens
@@ -47,7 +39,7 @@ public partial class AuthService(TracklyDbContext db, IEmailSender emailSender, 
 
         db.EmailTokens.Add(new EmailToken
         {
-            WorkspaceId = workspace?.Id,
+            WorkspaceId = workspace.Id,
             Email = email,
             Purpose = EmailTokenPurpose.Login,
             LinkTokenHash = TokenUtils.Sha256Hex(linkToken),
@@ -57,11 +49,11 @@ public partial class AuthService(TracklyDbContext db, IEmailSender emailSender, 
         await db.SaveChangesAsync(ct);
 
         var frontendBaseUrl = configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173";
-        var verifyUrl = $"{frontendBaseUrl}/auth/verify?token={linkToken}";
-        if (workspace is not null)
-            verifyUrl += $"&workspace={workspace.Slug}";
+        // The slug is redundant now that the token carries the workspace, but the
+        // verify page reads it to render the workspace's branding (invariant 6).
+        var verifyUrl = $"{frontendBaseUrl}/auth/verify?token={linkToken}&workspace={workspace.Slug}";
 
-        var productName = workspace?.Name ?? "Trackly";
+        var productName = workspace.Name;
         var codeDisplay = $"{code[..3]} {code[3..]}";
         await emailSender.SendAsync(new EmailMessage(
             email,
@@ -90,44 +82,14 @@ public partial class AuthService(TracklyDbContext db, IEmailSender emailSender, 
         if (token is null)
             return new VerifyResult(error);
 
-        // Work out which workspace this login is for.
-        Workspace? workspace = null;
-        if (token.WorkspaceId is not null)
-        {
-            workspace = await db.Workspaces.SingleAsync(w => w.Id == token.WorkspaceId, ct);
-        }
-        else if (!string.IsNullOrWhiteSpace(request.WorkspaceSlug))
-        {
-            workspace = await db.Workspaces
-                .SingleOrDefaultAsync(w => w.Slug == request.WorkspaceSlug, ct);
-            if (workspace is null)
-                return new VerifyResult(VerifyStatus.InvalidToken);
-        }
-        else
-        {
-            // Global login: infer the workspace from existing memberships.
-            var memberships = await db.Users
-                .Where(u => u.Email == token.Email && u.IsActive)
-                .Include(u => u.Workspace)
-                .ToListAsync(ct);
-
-            switch (memberships.Count)
-            {
-                case 0:
-                    // Token is NOT consumed — POST /api/signup consumes it once
-                    // the workspace details are collected (onboarding step 2).
-                    return new VerifyResult(VerifyStatus.SignupRequired, Email: token.Email);
-                case 1:
-                    workspace = memberships[0].Workspace;
-                    break;
-                default:
-                    // Token is NOT consumed — caller re-verifies with a slug.
-                    return new VerifyResult(VerifyStatus.ChooseWorkspace, Email: token.Email,
-                        Workspaces: memberships
-                            .Select(m => new WorkspaceSummary(m.Workspace.Slug, m.Workspace.Name))
-                            .ToList());
-            }
-        }
+        // Which workspace this login is for. Tokens minted since first-run setup
+        // always carry one; the slug and the fall-through cover links issued
+        // before that and any sent without a workspace context.
+        var workspace = token.WorkspaceId is not null
+            ? await db.Workspaces.SingleAsync(w => w.Id == token.WorkspaceId, ct)
+            : await db.ResolveWorkspaceAsync(request.WorkspaceSlug, ct);
+        if (workspace is null)
+            return new VerifyResult(VerifyStatus.NotSetUp);
 
         var user = await db.Users.SingleOrDefaultAsync(
             u => u.WorkspaceId == workspace.Id && u.Email == token.Email, ct);
@@ -176,41 +138,6 @@ public partial class AuthService(TracklyDbContext db, IEmailSender emailSender, 
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.RequesterId, user.Id), ct);
     }
 
-    // ---- Signup (onboarding steps 1–2) -------------------------------------
-
-    public async Task<SignupResult> SignupAsync(
-        SignupRequest request, string? ipAddress, string? userAgent, CancellationToken ct)
-    {
-        var slug = request.WorkspaceSlug.Trim().ToLowerInvariant();
-        if (!SlugRegex().IsMatch(slug) || ReservedSlugs.Contains(slug))
-            return new SignupResult(SignupStatus.InvalidSlug);
-
-        var (token, error) = await ResolveEmailTokenAsync(request.Token, request.Email, request.Code, ct);
-        if (token is null)
-            return new SignupResult(error == VerifyStatus.Locked ? SignupStatus.Locked : SignupStatus.InvalidToken);
-
-        if (await db.Workspaces.AnyAsync(w => w.Slug == slug, ct))
-            return new SignupResult(SignupStatus.SlugTaken);
-
-        var workspace = new Workspace { Name = request.WorkspaceName.Trim(), Slug = slug };
-        var user = new User
-        {
-            Workspace = workspace,
-            Email = token.Email,
-            Name = string.IsNullOrWhiteSpace(request.Name) ? null : request.Name.Trim(),
-            Role = TracklyRoles.Admin,
-            LastLoginAt = DateTime.UtcNow,
-        };
-        db.Workspaces.Add(workspace);
-        db.Users.Add(user);
-        token.ConsumedAt = DateTime.UtcNow;
-
-        var sessionToken = CreateSession(user, workspace, ipAddress, userAgent);
-        await db.SaveChangesAsync(ct);
-
-        return new SignupResult(SignupStatus.Success, user, sessionToken);
-    }
-
     // ---- Sessions ----------------------------------------------------------
 
     public async Task LogoutAsync(string sessionToken, CancellationToken ct)
@@ -234,7 +161,10 @@ public partial class AuthService(TracklyDbContext db, IEmailSender emailSender, 
         return sessionToken;
     }
 
-    private string CreateSession(User user, Workspace workspace, string? ipAddress, string? userAgent)
+    // Internal rather than private: SetupService stages the first workspace, its
+    // admin and their session into one SaveChanges, so it needs the session row
+    // built against a Workspace that has not been written yet.
+    internal string CreateSession(User user, Workspace workspace, string? ipAddress, string? userAgent)
     {
         var sessionToken = TokenUtils.GenerateToken();
         db.Sessions.Add(new Session
@@ -249,7 +179,7 @@ public partial class AuthService(TracklyDbContext db, IEmailSender emailSender, 
         return sessionToken;
     }
 
-    // ---- Token resolution (shared by verify and signup) ---------------------
+    // ---- Token resolution ---------------------------------------------------
 
     private async Task<(EmailToken? Token, VerifyStatus Error)> ResolveEmailTokenAsync(
         string? linkToken, string? email, string? code, CancellationToken ct)

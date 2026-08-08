@@ -88,9 +88,7 @@
   <div class="subnav">
     <h3>Settings</h3>
     <a href="#users" class="active">Users &amp; roles</a>
-    <a href="#sso">Single sign-on</a>
-    <a href="#domains">Domains</a>
-    <a href="#branding">Branding</a>
+    <a href="#sso">Single sign-on</a>    <a href="#branding">Branding</a>
     <a href="#">Email</a>
     <a href="#">Notifications</a>
     <a href="#">Widget</a>
@@ -98,7 +96,7 @@
   </div>
 
   <main>
-    <div class="note">📋 Design review: four settings pages shown stacked (Users, SSO, Domains, Branding). In the real app each is its own page.</div>
+    <div class="note">📋 Design review: three settings pages shown stacked (Users, SSO, Branding). In the real app each is its own page.</div>
 
     <!-- USERS -->
     <h1 id="users">Users &amp; roles</h1>
@@ -145,7 +143,7 @@
 
     <!-- SSO -->
     <h1 id="sso">Single sign-on</h1>
-    <p class="sub">One active connection per workspace. Email+password stays available unless disabled below.</p>
+    <p class="sub">One active connection for this installation. Email sign-in stays available unless disabled below.</p>
     <div class="card">
       <div class="conn">
         <div class="l">
@@ -178,22 +176,6 @@
         <div><b>Switch provider</b><div class="d">Users and tickets are preserved; identities re-link by email on first login.</div></div>
         <button class="btn btn-outline">Change provider…</button>
       </div>
-    </div>
-
-    <!-- DOMAINS -->
-    <h1 id="domains">Domains</h1>
-    <p class="sub">Verified domains route your users to SSO automatically from the login page.</p>
-    <div class="card">
-      <div class="domain-row">
-        <div><b>acme.com</b> <span class="chip verified">✓ Verified</span></div>
-        <div style="display:flex; gap:16px; align-items:center; font-size:13px; color:#475569;">Discoverable <div class="switch"></div></div>
-      </div>
-      <div class="domain-row">
-        <div><b>acme.co.uk</b> <span class="chip pending">⏳ Pending verification</span></div>
-        <button class="btn btn-outline">Check DNS</button>
-      </div>
-      <div class="mono">TXT record for acme.co.uk:&nbsp;&nbsp;trackly-verification=tk_9f3a1c77e2b64d0c</div>
-      <div class="actions"><button class="btn btn-primary">+ Add domain</button></div>
     </div>
 
     <!-- BRANDING -->

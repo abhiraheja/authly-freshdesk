@@ -55,15 +55,29 @@
 </head>
 <body>
 
-<div class="note">📋 Design review: all 5 onboarding steps shown stacked on one page. In the real app each step is its own screen.</div>
+<div class="note">📋 Design review. Trackly is self-hosted, so there is no sign-up funnel: an empty installation is claimed once at <b>/setup</b>, and what used to be wizard steps 3–5 are ordinary admin pages. Shown stacked; each is its own screen.</div>
 
-<!-- STEP 1 -->
-<div class="step-label">Step 1 of 5</div>
+<div class="step-label">First run — /setup (only while the installation has no workspace)</div>
 <div class="card">
   <div class="logo"><div class="logo-mark">◆</div> Trackly</div>
-  <div class="steps"><div class="dot done"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-  <h2>Create your account</h2>
-  <p class="sub">You'll be the administrator of your new workspace.<br>No password needed — ever.</p>
+  <h2>Set up Trackly</h2>
+  <p class="sub">This installation is new. Create your workspace and you'll be signed in as its administrator.</p>
+  <label>Organisation name</label>
+  <input type="text" placeholder="Acme Corporation">
+  <label>Your email</label>
+  <input type="email" placeholder="you@company.com">
+  <label>Your name (optional)</label>
+  <input type="text">
+  <button class="btn btn-primary">Create workspace and sign in →</button>
+  <div class="skip" style="margin-top:12px;"><span style="color:#94A3B8; font-size:13px;">You're signed in straight away — email isn't configured yet, so there's no link to send.</span></div>
+</div>
+
+<!-- STEP 1 -->
+<div class="step-label">Sign in — /login (everyone, every time after first run)</div>
+<div class="card">
+  <div class="logo"><div class="logo-mark">◆</div> Trackly</div>
+  <h2>Sign in to Trackly</h2>
+  <p class="sub">No password needed — ever.</p>
   <button class="btn btn-google">🔵 Continue with Google</button>
   <div class="divider">or sign up with email</div>
   <label>Work email</label>
@@ -73,7 +87,7 @@
 </div>
 
 <!-- STEP 1b -->
-<div class="step-label">Step 1b — check your email (shown after "Email me a sign-in link")</div>
+<div class="step-label">Sign in, step 2 — check your email</div>
 <div class="card">
   <div class="logo"><div class="logo-mark">◆</div> Trackly</div>
   <h2>Check your email 📬</h2>
@@ -91,28 +105,10 @@
   <div class="skip"><a href="#">Resend email</a></div>
 </div>
 
-<!-- STEP 2 -->
-<div class="step-label">Step 2 of 5</div>
-<div class="card">
-  <div class="logo"><div class="logo-mark">◆</div> Trackly</div>
-  <div class="steps"><div class="dot done"></div><div class="dot done"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
-  <h2>Create your workspace</h2>
-  <p class="sub">This is where your team manages tickets.</p>
-  <label>Company name</label>
-  <input type="text" value="Acme Corporation">
-  <label>Workspace URL</label>
-  <div class="subdomain">
-    <input type="text" value="acme">
-    <span>.trackly.com</span>
-  </div>
-  <button class="btn btn-primary">Continue →</button>
-</div>
-
 <!-- STEP 3 -->
-<div class="step-label">Step 3 of 5</div>
+<div class="step-label">Admin ▾ → Workspace → Branding</div>
 <div class="card">
   <div class="logo"><div class="logo-mark">◆</div> Trackly</div>
-  <div class="steps"><div class="dot done"></div><div class="dot done"></div><div class="dot done"></div><div class="dot"></div><div class="dot"></div></div>
   <h2>Brand your support portal</h2>
   <p class="sub">Your customers see <b>your</b> brand — not Trackly's.</p>
   <label>Logo</label>
@@ -138,10 +134,9 @@
 </div>
 
 <!-- STEP 4 -->
-<div class="step-label">Step 4 of 5</div>
+<div class="step-label">Admin ▾ → People → Members</div>
 <div class="card">
   <div class="logo"><div class="logo-mark">◆</div> Trackly</div>
-  <div class="steps"><div class="dot done"></div><div class="dot done"></div><div class="dot done"></div><div class="dot done"></div><div class="dot"></div></div>
   <h2>Invite your team</h2>
   <p class="sub">Invitees receive an email with a join link (valid 7 days).</p>
   <div class="invite-row"><input type="email" value="monica@acme.com"><select><option>Agent</option><option>Admin</option></select><button class="add">+</button></div>
@@ -152,10 +147,9 @@
 </div>
 
 <!-- STEP 5 -->
-<div class="step-label">Step 5 of 5</div>
+<div class="step-label">Admin ▾ → Workspace → SSO</div>
 <div class="card">
   <div class="logo"><div class="logo-mark">◆</div> Trackly</div>
-  <div class="steps"><div class="dot done"></div><div class="dot done"></div><div class="dot done"></div><div class="dot done"></div><div class="dot done"></div></div>
   <h2>Connect single sign-on</h2>
   <p class="sub">Let your team sign in with the identity provider you already use. You can set this up any time in Settings → SSO.</p>
   <div class="idp-grid">
@@ -171,16 +165,16 @@
 </div>
 
 <!-- LANDING CHECKLIST -->
-<div class="step-label">After the wizard — dashboard checklist card</div>
+<div class="step-label">Dashboard — getting-started checklist</div>
 <div class="card">
   <h2 style="text-align:left; font-size:19px;">🚀 Getting started</h2>
   <p class="sub" style="text-align:left; margin-bottom:6px;">3 of 5 complete</p>
   <ul class="checklist">
-    <li class="done">✅ Create your workspace</li>
+    <li class="done">✅ Set up your workspace</li>
     <li class="done">✅ Add your branding</li>
     <li class="done">✅ Invite agents</li>
-    <li>⬜ Verify your email domain</li>
     <li>⬜ Configure SSO</li>
+    <li>⬜ Embed the widget</li>
   </ul>
 </div>
 

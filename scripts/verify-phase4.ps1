@@ -18,12 +18,10 @@
 param(
     [string]$BaseUrl = "http://localhost:5210",
     [Parameter(Mandatory = $true)][string]$AdminEmail,
-    [string]$WorkspaceName = "Phase4 QA",
-    [string]$WorkspaceSlug = ""
+    [string]$WorkspaceName = "Phase4 QA"
 )
 
 $ErrorActionPreference = "Stop"
-if (-not $WorkspaceSlug) { $WorkspaceSlug = "phase4-" + (Get-Random -Maximum 99999) }
 $script:pass = 0
 $script:fail = 0
 
@@ -62,20 +60,23 @@ function Send-Api([string]$method, [string]$url, [string]$body, $headers, $sessi
     }
 }
 
-# ---- Sign in (magic link + pasted code, signing up if new) ------------------
+# ---- Sign in ----------------------------------------------------------------
+# Trackly is self-hosted: an empty installation is claimed once by POST /api/setup,
+# which creates the workspace and signs its first admin straight in - there is no
+# code to paste and no SMTP yet. Afterwards this is the ordinary magic-link flow.
 Write-Host "`nSigning in as $AdminEmail ..." -ForegroundColor Cyan
-Invoke-RestMethod -Uri "$BaseUrl/api/auth/magic-link/send" -Method Post -ContentType "application/json" `
-    -Body (@{ email = $AdminEmail } | ConvertTo-Json) | Out-Null
-$code = Read-Host "Paste the 6-digit code from the API console"
-
-$verify = Invoke-WebRequest -Uri "$BaseUrl/api/auth/magic-link/verify" -Method Post -ContentType "application/json" `
-    -Body (@{ email = $AdminEmail; code = $code } | ConvertTo-Json) -SessionVariable session -UseBasicParsing
-$vbody = $verify.Content | ConvertFrom-Json
-if ($vbody.status -eq "signup_required") {
-    Write-Host "New account - creating workspace '$WorkspaceName' ($WorkspaceSlug)" -ForegroundColor Cyan
-    $signupBody = @{ email = $AdminEmail; code = $code; workspaceName = $WorkspaceName; workspaceSlug = $WorkspaceSlug; name = "QA Admin" } | ConvertTo-Json
-    Invoke-WebRequest -Uri "$BaseUrl/api/signup" -Method Post -ContentType "application/json" `
-        -Body $signupBody -WebSession $session -UseBasicParsing | Out-Null
+if ((Invoke-RestMethod -Uri "$BaseUrl/api/setup/status").needsSetup) {
+    Write-Host "Empty installation - running first-run setup as '$WorkspaceName'" -ForegroundColor Cyan
+    Invoke-WebRequest -Uri "$BaseUrl/api/setup" -Method Post -ContentType "application/json" `
+        -Body (@{ organisationName = $WorkspaceName; email = $AdminEmail; name = "QA Admin" } | ConvertTo-Json) `
+        -SessionVariable session -UseBasicParsing | Out-Null
+}
+else {
+    Invoke-RestMethod -Uri "$BaseUrl/api/auth/magic-link/send" -Method Post -ContentType "application/json" `
+        -Body (@{ email = $AdminEmail } | ConvertTo-Json) | Out-Null
+    $code = Read-Host "Paste the 6-digit code from the API console"
+    Invoke-WebRequest -Uri "$BaseUrl/api/auth/magic-link/verify" -Method Post -ContentType "application/json" `
+        -Body (@{ email = $AdminEmail; code = $code } | ConvertTo-Json) -SessionVariable session -UseBasicParsing | Out-Null
 }
 $me = Invoke-RestMethod -Uri "$BaseUrl/api/users/me" -WebSession $session
 $slug = $me.workspace.slug

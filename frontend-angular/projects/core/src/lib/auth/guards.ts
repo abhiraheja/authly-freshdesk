@@ -1,5 +1,6 @@
 import { inject } from '@angular/core';
 import { type CanActivateFn, Router } from '@angular/router';
+import { AuthApi } from './auth.api';
 import { homePathFor, type UserRole } from './auth.models';
 import { SessionStore } from './session.store';
 
@@ -47,5 +48,22 @@ export const guestGuard: CanActivateFn = async () => {
   const router = inject(Router);
 
   const user = await session.ensureLoaded();
-  return user ? router.createUrlTree([homePathFor(user)]) : true;
+  if (user) return router.createUrlTree([homePathFor(user)]);
+
+  // A brand-new install has nothing to sign in to yet. Sending them to /setup
+  // beats a sign-in form that can only ever fail.
+  return (await inject(AuthApi).needsSetup()) ? router.createUrlTree(['/setup']) : true;
+};
+
+/**
+ * Guards /setup itself: it exists only until the installation is claimed.
+ *
+ * The check is the API's, not a local flag — the whole point is that a second
+ * person cannot reach this screen, and only the database knows whether the
+ * first one has already been through it.
+ */
+export const setupGuard: CanActivateFn = async () => {
+  const router = inject(Router);
+  if (await inject(AuthApi).needsSetup()) return true;
+  return router.createUrlTree(['/login']);
 };

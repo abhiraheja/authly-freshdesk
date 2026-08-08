@@ -47,7 +47,6 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<SsoConnection> SsoConnections => Set<SsoConnection>();
     public DbSet<SsoGroupRoleMapping> SsoGroupRoleMappings => Set<SsoGroupRoleMapping>();
     public DbSet<UserIdentity> UserIdentities => Set<UserIdentity>();
-    public DbSet<WorkspaceDomain> WorkspaceDomains => Set<WorkspaceDomain>();
     public DbSet<SsoLoginState> SsoLoginStates => Set<SsoLoginState>();
     public DbSet<Problem> Problems => Set<Problem>();
     public DbSet<Tag> Tags => Set<Tag>();
@@ -646,16 +645,6 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.HasOne(i => i.User).WithMany().HasForeignKey(i => i.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasOne(i => i.Connection).WithMany().HasForeignKey(i => i.ConnectionId)
-                .OnDelete(DeleteBehavior.Cascade);
-        });
-
-        modelBuilder.Entity<WorkspaceDomain>(e =>
-        {
-            e.ToTable("workspace_domains");
-            e.HasIndex(d => d.Domain).IsUnique();  // globally unique
-            e.Property(d => d.Discoverable).HasDefaultValue(true);
-            e.Property(d => d.Verified).HasDefaultValue(false);
-            e.HasOne(d => d.Workspace).WithMany().HasForeignKey(d => d.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

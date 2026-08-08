@@ -32,9 +32,28 @@ PostgreSQL "trackly" database          ← workspaces, users, roles, tickets, et
 
 ## Authentication Architecture
 
-### Workspaces (Trackly's own multi-tenancy)
+### Workspaces (one per deployment)
 
-Trackly has its own `workspaces` table — this replaces any dependency on an external IdP's tenant concept. Each customer gets one workspace. All data (tickets, users, roles, settings) is scoped to a `workspace_id` in Trackly's own DB.
+Trackly has its own `workspaces` table — this replaces any dependency on an external IdP's tenant concept. All data (tickets, users, roles, settings) is scoped to a `workspace_id` in Trackly's own DB.
+
+**Trackly is self-hosted, so a deployment holds exactly one workspace.** There is no public sign-up, no workspace picker and no subdomain: whoever runs the container owns it. The `workspace_id` column stays regardless — it is what makes invariant 1 checkable, and dropping it would rewrite every query in the app to no visible benefit.
+
+The slug is fixed to `default` (`SetupService.WorkspaceSlug`). It survives because the unauthenticated surfaces — guest ticket views, live chat, public branding, the widget, CSAT, SSO start — already carry `?workspace=` in links that are out in the wild. New links may omit it; `db.ResolveWorkspaceAsync(slug, ct)` falls back to the one workspace.
+
+### First-run setup
+
+An empty database is claimed once:
+
+| Endpoint | Auth | Behaviour |
+|---|---|---|
+| `GET /api/setup/status` | none | `{ "needsSetup": true }` while no workspace row exists |
+| `POST /api/setup` | none, rate-limited | `{ organisationName, email, name? }` → creates the workspace and its first `admin`, issues a session cookie, then answers `409` forever |
+
+**Setup signs the operator in inline — it does not email a magic link.** On a fresh install SMTP has not been configured, and SMTP is configured from inside the admin UI, so mailing the first admin their own way in would brick every new install. The person at the setup screen on an empty database *is* the operator; there is nobody else to authenticate them against, and no data to protect yet.
+
+Concurrency is settled by the database, not by the `needsSetup` check: the workspace always takes the slug `default`, `ix_workspaces_slug` is unique, and a losing insert surfaces as `DbUpdateException` and is answered `409`.
+
+The SPA guards this at `/setup` (`setupGuard`); `guestGuard` redirects there when an unclaimed installation is reached at `/login`.
 
 ### Supported Identity Providers
 
@@ -88,39 +107,28 @@ Step 6 — Test Single Sign-On
 
 ---
 
-### Domain Verification
+### Domain verification — removed
 
-Admin verifies their organisation's email domain(s) at `/admin/settings/domains`:
+There used to be a `workspace_domains` table, a `/admin/settings/domains` screen and a DNS TXT verification flow. Their **only** purpose was routing an `@acme.com` login to the right workspace's IdP *among many workspaces*. A self-hosted deployment has one workspace and one connection, so there is nothing to route — and it made an admin prove, by DNS record, that they owned a domain on a server they already ran.
 
-- Add a domain (e.g. `acme.com`)
-- Verify ownership via DNS TXT record
-- Toggle **Discoverable** — if on, users entering an `@acme.com` email on the Trackly login page are automatically routed to this workspace's SSO provider
+Removed in full: the entity, `DomainsController`, `IDnsTxtLookup` / `DnsClientTxtLookup`, the `DnsClient` package, and the table (migration `RemoveWorkspaceDomains`).
 
-```sql
-CREATE TABLE workspace_domains (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    domain       TEXT NOT NULL UNIQUE,  -- globally unique: only one workspace may claim a domain
-    verified     BOOLEAN DEFAULT false,
-    discoverable BOOLEAN DEFAULT true,
-    dns_txt_token TEXT NOT NULL,         -- token to place in DNS for verification
-    verified_at  TIMESTAMPTZ,
-    created_at   TIMESTAMPTZ DEFAULT now()
-);
-```
+`GET /api/public/sso/discover` survives with the same response shape but a different question: instead of matching the caller's email domain, it reports whether *this installation* has an SSO connection and where to start it. The `email` parameter is still accepted and ignored, so existing clients keep working.
 
 ---
 
 ### Login Flow
 
 ```
-User visits trackly.yourdomain.com/login
+User visits /login
+    │
+    ├── no workspace exists yet ──────▶ redirected to /setup (first-run)
     │
     ▼
 User enters email address
     │
     ▼
-Trackly checks: is this email domain linked to a workspace with active SSO?
+Trackly checks: does this installation have an SSO connection?
     │
    YES ──────────────────────────────────────────────────────────────────────┐
     │                                                                        ▼
@@ -142,6 +150,10 @@ Trackly emails a sign-in link + 6-digit code
     → Trackly verifies the token → issues session → redirect to app
 ```
 
+A **workspace-branded** login (`?workspace=slug`, reached from a submit form or portal link) skips the SSO check: it is a customer-facing surface, and customers are not who the IdP knows about.
+
+Verification has two outcomes, signed in or not. It used to have two more — `signup_required` (go create a workspace) and `choose_workspace` (this email is in several) — both unreachable with one workspace, and both removed. An email with no account still signs in and is created as a `customer`, which is how customers self-serve the portal.
+
 ---
 
 ### Passwordless Email Login (magic link + code)
@@ -155,7 +167,7 @@ The native fallback is passwordless — Trackly never stores passwords. It reuse
      - a 6-digit code              → typed fallback
    (single row, both hashes stored, 10-minute expiry, single-use)
 3. Email sent: "Sign in to Acme Support"
-     [ Sign in → https://acme.trackly.com/auth/verify?token=… ]
+     [ Sign in → {App:FrontendBaseUrl}/auth/verify?token=…&workspace=default ]
      "or enter this code: 482 913"
 4a. User clicks the link → lands on a "Confirm sign-in" page →
     clicks the button (POST consumes the token)
@@ -175,18 +187,12 @@ Design decisions:
   verification — no "account already exists" errors, no separate signup form.
 - **Rate limiting:** same as guest OTP — max 3 sends per email per 15 minutes,
   per-IP limits, 5 failed code attempts locks the token.
-- **Global vs workspace-scoped sends:** a send from a workspace context
-  (e.g. acme.trackly.com/login) stores `workspace_id` on the token; a send from
-  trackly.com stores NULL and the workspace is resolved at verify time from the
-  user's memberships. Verify then returns one of: `ok` (session issued),
-  `signup_required` (email verified but no account anywhere → onboarding step 2),
-  or `choose_workspace` (email belongs to several workspaces → client re-verifies
-  with a slug).
-- **Deferred consumption for multi-step outcomes:** `signup_required` and
-  `choose_workspace` responses do **not** consume the token — the follow-up
-  request (`POST /api/signup`, or re-verify with a workspace slug) validates it
-  again and consumes it there. Expiry and the failed-attempt lock still apply
-  throughout; a session is only ever issued from a request that consumes the token.
+- **The workspace is resolved at send time, not at verify time.** `SendMagicLinkAsync`
+  calls `ResolveWorkspaceAsync` even when no slug was supplied and stores the id on
+  the token, so an installation that has not been set up yet refuses at send rather
+  than emailing a link that could never resolve to anything. Verify therefore has
+  one success outcome, `ok`; the multi-workspace `signup_required` and
+  `choose_workspace` branches are gone along with their deferred-consumption rule.
 
 ---
 
@@ -247,7 +253,7 @@ Trackly owns its own user table. This is the **primary source of truth** for use
 | `email` | From IdP JWT/SAML assertion (or verified via magic link for passwordless users) |
 | `name` | From IdP JWT/SAML assertion (or asked on first magic-link login) |
 | `role` | Set in Trackly's DB (via group mapping or manual assignment by admin) |
-| `workspace_id` | Determined at login by domain lookup or workspace slug |
+| `workspace_id` | The deployment's single workspace (`ResolveWorkspaceAsync`), or the slug on a branded link |
 
 No `password_hash` — Trackly is fully passwordless. Non-SSO users authenticate via emailed magic link + code.
 
@@ -757,27 +763,26 @@ Trackly has **three surfaces**, each with its own audience:
 | Surface | URL | Audience | Branding |
 |---------|-----|----------|----------|
 | Marketing site | `trackly.com` | Enterprises evaluating Trackly | Trackly's own brand |
-| Internal portal | `app.trackly.com` (or `acme.trackly.com`) | Workspace admins + agents | Trackly brand + workspace name |
-| Customer-facing support | `acme.trackly.com/support` (+ widget) | The enterprise's end customers | **The enterprise's brand** (logo, colors) |
+| Internal portal | `{your-host}/dashboard` | Admins + agents | Trackly brand + workspace name |
+| Customer-facing support | `{your-host}/submit`, `/portal` (+ widget) | The organisation's end customers | **The organisation's brand** (logo, colors) |
 
 Layout inspiration: three-pane agent workspace (ticket list left, conversation centre, details right) — styled with Material UI and Trackly's own branding, not a pixel copy of any reference design.
 
 ---
 
-### 1. Enterprise Journey — Discover → Sign Up → Live
+### 1. Operator journey — Install → Set up → Live
 
 ```
-Marketing site                    Onboarding wizard                      Live
-──────────────                    ─────────────────                      ────
-Landing page                      Step 1  Create admin account
-  → Features                      Step 2  Create workspace
-  → Pricing                       Step 3  Add your branding
-  → [Start free trial] ────────►  Step 4  Invite agents        ────►  /dashboard
-                                  Step 5  Set up SSO (optional,       (setup checklist
-                                          skippable — do later)        card shown)
+docker compose up            /setup                         Live
+─────────────────            ──────                         ────
+Empty database          →    Organisation name          →   /dashboard
+                             Your email                     (getting-started
+                             [ Create and sign in ]          checklist card)
 ```
 
-The signup itself always uses **Google sign-in or an emailed magic link** — SSO can't be used yet because the workspace doesn't exist, and Trackly stores no passwords. The first user becomes the workspace `admin`.
+There is no marketing funnel and no trial: you already have the software. The
+first user becomes the workspace `admin` and is signed in immediately, because
+no email can be sent before SMTP is configured.
 
 ---
 
@@ -813,54 +818,33 @@ The signup itself always uses **Google sign-in or an emailed magic link** — SS
 
 ---
 
-### 3. Onboarding Wizard (after "Start free trial")
+### 3. First run
 
 ```
-Step 1 — Create your account            Step 2 — Create your workspace
-┌────────────────────────────┐          ┌────────────────────────────┐
-│  Create your account       │          │  Name your workspace       │
-│                            │          │                            │
-│  [ Continue with Google ]  │          │  Company name  __________  │
-│                            │          │  Subdomain     [acme   ]   │
-│  ───────── or ─────────    │          │                .trackly.com│
-│  Work email  ____________  │          │                            │
-│  [ Email me a sign-in link]│          │        [ Continue → ]      │
-│  (link + 6-digit code —    │          └────────────────────────────┘
-│   no password to create)   │
-└────────────────────────────┘
+Empty database  ──►  /setup  ──────────────────────────────►  /dashboard
+                     ┌────────────────────────────┐           (getting-started
+                     │  Set up Trackly            │            checklist card)
+                     │                            │
+                     │  Organisation name _______ │
+                     │  Your email        _______ │
+                     │  Your name (opt.)  _______ │
+                     │                            │
+                     │ [ Create workspace and     │
+                     │   sign in ]                │
+                     └────────────────────────────┘
+```
 
-Step 3 — Add your branding              Step 4 — Invite your team
-┌────────────────────────────┐          ┌────────────────────────────┐
-│  Brand your support portal │          │  Invite agents             │
-│                            │          │                            │
-│  Logo         [ Upload ]   │          │  email@…  [agent ▾]  [+]   │
-│  Brand color  [■ #2563EB]  │          │  email@…  [admin ▾]  [+]   │
-│  Portal title __________   │          │                            │
-│                            │          │  Invitees get an email     │
-│  ┌ Live preview ────────┐  │          │  with a join link          │
-│  │ [logo] Acme Support  │  │          │                            │
-│  │  Submit a ticket …   │  │          │  [ Skip ]  [ Send & → ]    │
-│  └──────────────────────┘  │          └────────────────────────────┘
-│  [ Skip ]  [ Continue → ]  │
-└────────────────────────────┘
+One screen, then you are in — no email round trip, because SMTP is configured
+from inside the admin UI and does not exist yet.
 
-Step 5 — Single Sign-On (optional)
-┌───────────────────────────────────────┐
-│  Connect your identity provider       │
-│                                       │
-│  ○ Okta   ○ Google   ○ Entra ID       │
-│  ○ Authly ○ Custom SAML ○ Custom OIDC │
-│                                       │
-│  You can set this up any time in      │
-│  Settings → SSO.                      │
-│                                       │
-│  [ Skip for now ]  [ Configure → ]    │
-└───────────────────────────────────────┘
-        │
-        ▼
-Lands on /dashboard with a "Getting started" checklist card:
-  ☐ Verify your domain   ☐ Configure SSO   ☐ Embed the widget
-  ☑ Invite agents        ☑ Add branding
+**There is no multi-step wizard.** The old design had five steps; steps 3-5
+(branding, invite team, SSO) were never built as wizard steps and already exist
+as admin pages, and step 2 (create workspace) is gone with the SaaS funnel.
+Building a wizard to reach three pages that already exist adds a screen and no
+product. The dashboard checklist points at them instead:
+
+```
+  ☐ Add your branding   ☐ Invite agents   ☐ Configure SSO   ☐ Embed the widget
 ```
 
 ---
@@ -1015,15 +999,16 @@ be paired with `borderColor: 'divider'` or it falls back to `currentColor`.
 | Area | Routes | Auth required | Who sees it |
 |------|--------|--------------|-------------|
 | Marketing site | `/`, `/features`, `/pricing` | No | Prospective enterprises |
-| Signup + onboarding | `/signup`, `/onboarding/*` (5-step wizard) | Signup only | New workspace admins |
+| First-run setup | `/setup` (one screen, first run only) | No | The operator standing up the install |
 | Accept invite | `/invite/:token` | No | Invited agents/admins |
 | Public ticket form | `/submit` (workspace-branded) | No | Anyone |
 | Anonymous ticket view | `/tickets/:id?token=` | No | Guest (magic link) |
 | Login | `/login` | No | All |
+| First-run setup | `/setup` | No | Only while no workspace exists |
 | SSO callback | `/auth/callback` | No | All |
 | Customer portal | `/portal/tickets`, `/portal/tickets/new`, `/portal/tickets/:id` | Yes | `customer` |
 | Agent dashboard | `/dashboard/tickets`, `/dashboard/tickets/:id`, `/dashboard/problems` | Yes | `agent`, `admin` |
-| Admin settings | `/admin/users`, `/admin/settings/sso`, `/admin/settings/email`, `/admin/settings/domains`, `/admin/settings/branding`, `/admin/widget`, `/admin/announcements` | Yes | `admin` |
+| Admin settings | `/admin/users`, `/admin/settings/sso`, `/admin/settings/email`, `/admin/settings/branding`, `/admin/widget`, `/admin/announcements` | Yes | `admin` |
 
 ---
 
@@ -1123,7 +1108,8 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 
 | Method | Path | Auth | Role |
 |--------|------|------|------|
-| POST   | `/api/signup` | None | Create admin account + workspace (onboarding steps 1–2) |
+| GET    | `/api/setup/status` | None | Whether this installation still needs first-run setup |
+| POST   | `/api/setup` | None | First run only — create the workspace + first admin, sign in inline (409 thereafter) |
 | POST   | `/api/invitations` | Session | admin — invite agents by email |
 | POST   | `/api/invitations/accept` | None | Accept invite via token, create account |
 | GET    | `/api/public/workspaces/{slug}/branding` | None | Public, cacheable — branding for form/widget |
@@ -1510,22 +1496,10 @@ offered Delete is not a convenience.
 CREATE TABLE workspaces (
     id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name                   TEXT NOT NULL,
-    slug                   TEXT NOT NULL UNIQUE,   -- e.g. "acme" → acme.trackly.com
+    slug                   TEXT NOT NULL UNIQUE,   -- fixed to "default"; kept for ?workspace= links
     email_login_enabled    BOOLEAN DEFAULT true,   -- magic-link fallback; off = SSO-only login
     created_at             TIMESTAMPTZ DEFAULT now(),
     updated_at             TIMESTAMPTZ DEFAULT now()
-);
-
--- Verified email domains
-CREATE TABLE workspace_domains (
-    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-    domain        TEXT NOT NULL UNIQUE,  -- globally unique: only one workspace may claim a domain
-    verified      BOOLEAN DEFAULT false,
-    discoverable  BOOLEAN DEFAULT true,
-    dns_txt_token TEXT NOT NULL,
-    verified_at   TIMESTAMPTZ,
-    created_at    TIMESTAMPTZ DEFAULT now()
 );
 
 -- SSO connections (one active per workspace)
@@ -2190,7 +2164,7 @@ Build in this order — each phase is independently shippable and testable:
 - Solution scaffold: `Trackly.Core` / `Modules` / `Infrastructure` / `Api` + React app (Vite)
 - PostgreSQL `trackly` DB, EF Core migrations for: workspaces, users, sessions, email_tokens
 - Magic-link auth end-to-end (send → verify → session cookie) + `GET /api/users/me`
-- Workspace signup (`POST /api/signup`) + onboarding steps 1–2
+- First-run setup (`POST /api/setup`) — one workspace per deployment
 
 **Phase 2 — Core ticketing**
 - Tables: tickets, comments, categories, attachments
@@ -2212,7 +2186,6 @@ Build in this order — each phase is independently shippable and testable:
 **Phase 5 — SSO**
 - sso_connections + generic OIDC scheme (single scheme, per-workspace resolution)
 - JIT provisioning + group→role mapping + SSO wizard UI (mockup 05)
-- Domain verification + login-page domain routing
 - SAML via ITfoxtec (after OIDC works)
 
 **Phase 6 — Remaining features**

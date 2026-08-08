@@ -134,14 +134,32 @@ before the first launch.
 
 ---
 
-## 5. First login + create a workspace
+## 5. First run + signing in
+
+An empty database has no workspace, so the app sends you to **`/setup`**:
+
+1. Enter an organisation name and your email. That's it — you are created as the
+   **admin** and signed in immediately, with no code to paste. Setup deliberately
+   does not email anything: SMTP is configured from inside the app, so on a fresh
+   database there is no way to deliver a link yet.
+2. `/setup` closes permanently once it has run; going back there redirects to
+   `/login`.
+
+**Signing in afterwards** (or as anyone else):
 
 1. On the login page, enter any email (e.g. `you@example.com`).
 2. Because no SMTP relay is configured, the **magic link + 6-digit code are printed
    to the API console** (Terminal 1). Copy the code.
-3. Paste it to verify. A new email = a new account (sign-up = login).
-4. Complete onboarding: name your workspace and pick a **slug** (used in customer
-   URLs like `/submit?workspace=<slug>`). You're now an **admin**.
+3. Paste it to verify. An email with no account signs in as a **customer** — that
+   is how customers self-serve the portal. Agents and admins arrive by invitation
+   or SSO.
+
+**Starting over.** Setup only runs on an installation with no workspace, so to see
+it again drop and recreate the database:
+
+```bash
+docker compose down -v && docker compose up -d
+```
 
 ### Seed demo data (recommended)
 

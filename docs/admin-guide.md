@@ -15,7 +15,7 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 1. [Core concepts](#1-core-concepts)
 2. [Getting started](#2-getting-started)
 3. [Access & identity](#3-access--identity)
-   - 3.1 Passwordless login · 3.2 Members & roles · 3.3 SSO (OIDC/SAML) · 3.4 Domains & login routing
+   - 3.1 Passwordless login · 3.2 Members & roles · 3.3 SSO (OIDC/SAML)
 4. [Ticketing](#4-ticketing)
    - 4.1 Tickets & the agent workspace · 4.2 Pinning & flagging · 4.3 Statuses & workflow · 4.4 Registers · 4.5 Categories · 4.6 Customer portal · 4.7 Guest submission
 5. [Agent productivity](#5-agent-productivity)
@@ -42,9 +42,10 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 
 ## 1. Core concepts
 
-- **Workspace** — your organisation’s isolated tenant. Every ticket, user, and
-  setting belongs to exactly one workspace; data is never shared across
-  workspaces.
+- **Workspace** — your organisation. Every ticket, user, and setting belongs to
+  it. Trackly is self-hosted, so an installation has exactly one workspace and it
+  is created once, at first run (§2) — there is no sign-up page and no way to add
+  a second.
 - **Roles** (stored in Trackly, not derived from your IdP):
   - **Admin** — full access, including all settings in the **Admin ▾** menu.
   - **Agent** — works tickets, chat, KB, canned responses; no settings access.
@@ -62,9 +63,16 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 
 ## 2. Getting started
 
-1. **Create your workspace.** Sign up with your work email; you’ll get a 6-digit
-   code / magic link (see §3.1), then name your workspace and pick a slug (the
-   slug appears in customer URLs like `/submit?workspace=<slug>`).
+1. **Claim the installation.** Trackly is self-hosted: one deployment, one
+   workspace, and it is yours. The first time anyone opens a fresh install they
+   land on **/setup** — enter your organisation name and your email, and you are
+   created as the administrator and signed in on the spot.
+
+   No code, no magic link, no confirmation email. Outbound email is configured
+   from inside Trackly (§9), so on a brand-new install there is no way to deliver
+   one yet; asking you to click a link you could never receive would lock you out
+   of your own installation. Once this has run, `/setup` is closed permanently —
+   everyone else joins by invitation (§3.2) or SSO (§3.3).
 2. **Invite your team** — **Admin ▾ → People → Members** (§3.2).
 3. **Set your branding** — **Admin ▾ → Workspace → Branding** (§10) so customer
    surfaces show your logo and colour.
@@ -132,15 +140,16 @@ role from your group mapping (default: customer if unmapped). SSO and magic-link
 login coexist. _Deployment note: callback URLs must be public HTTPS — see
 go-live.md §5._
 
-### 3.4 Domains & login routing
+### 3.4 Domains — removed
 
-**What it is.** Verify email domains you own so users at those domains are routed
-to the right login experience (e.g. straight to your SSO).
-**Where:** **Admin ▾ → Workspace → Domains**.
+There used to be a **Domains** screen where you proved ownership of `acme.com`
+with a DNS TXT record, so that `@acme.com` sign-ins were routed to your SSO.
 
-**Set up.** Add a domain; Trackly gives you a **DNS TXT record** to publish. Once
-it resolves, the domain is verified. (Requires the server to make outbound DNS
-lookups — deployment concern.)
+**It is gone, and you do not need it.** Its only job was picking the right
+workspace out of many on a shared, hosted Trackly. You run your own installation:
+there is one workspace and one SSO connection, so the login page offers your SSO
+to everyone without needing to be told who they are first. Nothing to configure,
+and no DNS record to publish.
 
 ---
 
@@ -703,7 +712,7 @@ Canned.
 | **Workflow** | Statuses & workflow · SLA policies · Automation · AI copilot |
 | **Ticket view** | Registers (§4.3) · Ticket layout (§23) |
 | **Channels** | Messaging (connectors) · Widget · Email |
-| **Workspace** | Branding · SSO · Domains |
+| **Workspace** | Branding · SSO |
 
 **Customer-facing URLs:** `/submit` · `/portal` · `/kb` · `/chat` · guest tracking
 & CSAT links (emailed), all with `?workspace=<slug>` where shown.

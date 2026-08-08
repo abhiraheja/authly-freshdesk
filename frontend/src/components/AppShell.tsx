@@ -103,7 +103,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       items: [
         { label: 'Branding', path: '/admin/settings/branding' },
         { label: 'SSO', path: '/admin/settings/sso' },
-        { label: 'Domains', path: '/admin/settings/domains' },
       ],
     },
   ]

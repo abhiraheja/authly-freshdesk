@@ -8,19 +8,17 @@
     powershell -File .\scripts\verify-phase5.ps1 -AdminEmail you@example.com
 
   Covers the HTTP-testable SSO surface: admin connection CRUD (secret never
-  returned), domain add/verify/discovery, and the SSO start redirect. The actual
-  OIDC/SAML login round-trip requires a real IdP and is not automated here.
+  returned), discovery, and the SSO start redirect. The actual OIDC/SAML login
+  round-trip requires a real IdP and is not automated here.
   Written for Windows PowerShell 5.1.
 #>
 param(
     [string]$BaseUrl = "http://localhost:5210",
     [Parameter(Mandatory = $true)][string]$AdminEmail,
-    [string]$WorkspaceName = "Phase5 QA",
-    [string]$WorkspaceSlug = ""
+    [string]$WorkspaceName = "Phase5 QA"
 )
 
 $ErrorActionPreference = "Stop"
-if (-not $WorkspaceSlug) { $WorkspaceSlug = "phase5-" + (Get-Random -Maximum 99999) }
 $script:pass = 0
 $script:fail = 0
 
@@ -57,18 +55,23 @@ function Get-Redirect([string]$url, $session) {
     }
 }
 
-# ---- Sign in (magic link + pasted code, signing up if new) ------------------
+# ---- Sign in ----------------------------------------------------------------
+# Trackly is self-hosted: an empty installation is claimed once by POST /api/setup,
+# which creates the workspace and signs its first admin straight in - there is no
+# code to paste and no SMTP yet. Afterwards this is the ordinary magic-link flow.
 Write-Host "`nSigning in as $AdminEmail ..." -ForegroundColor Cyan
-Invoke-RestMethod -Uri "$BaseUrl/api/auth/magic-link/send" -Method Post -ContentType "application/json" `
-    -Body (@{ email = $AdminEmail } | ConvertTo-Json) | Out-Null
-$code = Read-Host "Paste the 6-digit code from the API console"
-
-$verify = Invoke-WebRequest -Uri "$BaseUrl/api/auth/magic-link/verify" -Method Post -ContentType "application/json" `
-    -Body (@{ email = $AdminEmail; code = $code } | ConvertTo-Json) -SessionVariable session -UseBasicParsing
-if (($verify.Content | ConvertFrom-Json).status -eq "signup_required") {
-    $signupBody = @{ email = $AdminEmail; code = $code; workspaceName = $WorkspaceName; workspaceSlug = $WorkspaceSlug; name = "QA Admin" } | ConvertTo-Json
-    Invoke-WebRequest -Uri "$BaseUrl/api/signup" -Method Post -ContentType "application/json" `
-        -Body $signupBody -WebSession $session -UseBasicParsing | Out-Null
+if ((Invoke-RestMethod -Uri "$BaseUrl/api/setup/status").needsSetup) {
+    Write-Host "Empty installation - running first-run setup as '$WorkspaceName'" -ForegroundColor Cyan
+    Invoke-WebRequest -Uri "$BaseUrl/api/setup" -Method Post -ContentType "application/json" `
+        -Body (@{ organisationName = $WorkspaceName; email = $AdminEmail; name = "QA Admin" } | ConvertTo-Json) `
+        -SessionVariable session -UseBasicParsing | Out-Null
+}
+else {
+    Invoke-RestMethod -Uri "$BaseUrl/api/auth/magic-link/send" -Method Post -ContentType "application/json" `
+        -Body (@{ email = $AdminEmail } | ConvertTo-Json) | Out-Null
+    $code = Read-Host "Paste the 6-digit code from the API console"
+    Invoke-WebRequest -Uri "$BaseUrl/api/auth/magic-link/verify" -Method Post -ContentType "application/json" `
+        -Body (@{ email = $AdminEmail; code = $code } | ConvertTo-Json) -SessionVariable session -UseBasicParsing | Out-Null
 }
 $me = Invoke-RestMethod -Uri "$BaseUrl/api/users/me" -WebSession $session
 $slug = $me.workspace.slug
@@ -102,27 +105,21 @@ $start = Get-Redirect "$BaseUrl/api/auth/sso?workspace=$slug" $session
 Check "SSO start returns a redirect" ($start.Status -ge 300 -and $start.Status -lt 400) "status=$($start.Status)"
 Check "Unreachable IdP bounces to login with sso_error" ($start.Location -like "*sso_error*")
 
-# ---- Domains ----------------------------------------------------------------
-$domain = "qa-$((Get-Random -Maximum 99999)).example"
-$added = Invoke-RestMethod -Uri "$BaseUrl/api/admin/domains" -Method Post -ContentType "application/json" `
-    -Body (@{ domain = $domain } | ConvertTo-Json) -WebSession $session
-Check "Domain added, unverified, TXT token issued" `
-    ($added.verified -eq $false -and $added.txtRecordValue -like "trackly-verification=*")
-
-$dupe = Send-Api "Post" "$BaseUrl/api/admin/domains" (@{ domain = $domain } | ConvertTo-Json) $session
-Check "Duplicate domain rejected (409)" ($dupe.Status -eq 409)
-
-$verifyDom = Invoke-RestMethod -Uri "$BaseUrl/api/admin/domains/$($added.id)/verify" -Method Post -WebSession $session
-Check "Verify fails without the DNS TXT record" ($verifyDom.verified -eq $false)
-
-# Discovery must NOT route an unverified domain to SSO (API replies 204).
-$disc = Send-Api "Get" "$BaseUrl/api/public/sso/discover?email=someone@$domain" $null $session
-Check "Discovery returns 204 for unverified domain" ($disc.Status -eq 204)
+# ---- SSO discovery ----------------------------------------------------------
+# Trackly is self-hosted, so there is one workspace and one connection: discovery
+# reports that connection rather than matching the caller's email domain. The
+# email parameter is still accepted, and still ignored.
+$disc = Invoke-RestMethod -Uri "$BaseUrl/api/public/sso/discover" -WebSession $session
+Check "Discovery reports the configured connection" ($disc.providerName -eq "Authly" -and $disc.protocol -eq "oidc")
+Check "Discovery hands back an SSO start URL" ($disc.startUrl -like "/api/auth/sso?workspace=*")
 
 # ---- Disable SSO ------------------------------------------------------------
 Invoke-WebRequest -Uri "$BaseUrl/api/admin/sso" -Method Delete -WebSession $session -UseBasicParsing | Out-Null
 $afterDelete = Send-Api "Get" "$BaseUrl/api/admin/sso" $null $session
 Check "After delete, GET sso is empty" ($afterDelete.Status -eq 200 -and [string]::IsNullOrWhiteSpace($afterDelete.Body))
+
+$discGone = Send-Api "Get" "$BaseUrl/api/public/sso/discover" $null $session
+Check "Discovery returns 204 once SSO is removed" ($discGone.Status -eq 204)
 
 # ---- Summary ----------------------------------------------------------------
 Write-Host "`n----------------------------------------" -ForegroundColor Cyan

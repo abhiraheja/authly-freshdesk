@@ -1,6 +1,6 @@
 # Trackly
 
-A standalone, multi-tenant ticket management SaaS — submit, track, and resolve customer support tickets with a fully branded customer portal, agent workspace, and bring-your-own-SSO authentication.
+A standalone, **self-hosted** ticket management app — submit, track, and resolve customer support tickets with a fully branded customer portal, agent workspace, and bring-your-own-SSO authentication. One deployment, one workspace, no sign-up page: an empty database is claimed once at `/setup`.
 
 ## Key capabilities
 
@@ -12,7 +12,7 @@ A standalone, multi-tenant ticket management SaaS — submit, track, and resolve
 - **Insight** — CSAT surveys on resolution (per-agent scores) and an analytics dashboard (volume, response/resolution times, SLA attainment, leaderboard).
 - **Email** — outbound notifications plus two-way threading via either an inbound parse webhook (MX record) or polling a support mailbox over **IMAP** (`ms_graph` / `gmail_api` are reserved transports, not yet implemented).
 - **Customer surfaces in *your* brand** — branded submit form, customer portal, KB, widget, live chat, CSAT, and guest submissions verified by one-time codes with magic-link tracking.
-- **Workspace admin** — SSO with group→role mapping, domain verification, branding editor, member/role management, messaging connectors, and outage announcements.
+- **Workspace admin** — SSO with group→role mapping, branding editor, member/role management, messaging connectors, and outage announcements.
 
 ## Repository layout
 
@@ -100,11 +100,11 @@ dotnet ef database update --project src/Trackly.Infrastructure --startup-project
 
 Phases 1–6, 7A, 7B and 7C complete (see `docs/trackly-plan.md` → Implementation Phases):
 
-- **1 — Foundation:** scaffold, magic-link + 6-digit auth, workspace signup, session cookies.
+- **1 — Foundation:** scaffold, magic-link + 6-digit auth, first-run setup, session cookies.
 - **2 — Ticketing:** tickets/comments/categories/attachments, private notes, round-robin, watchers, customer portal + three-pane agent workspace.
 - **3 — Guest flow + branding:** OTP guest submission, magic-link tracking, workspace branding, invitations.
 - **4 — Email:** outbound notifications, inbound parse webhook + IMAP polling, encrypted secrets, admin email settings.
-- **5 — SSO:** per-workspace OIDC (auth-code + PKCE) and SAML, JIT provisioning + group→role mapping, domain verification + login-page routing.
+- **5 — SSO:** OIDC (auth-code + PKCE) and SAML, JIT provisioning + group→role mapping.
 - **6 — Problems, announcements, embeddable widget, dashboard stats.**
 - **7A — Service desk fundamentals:** tags, teams (team round-robin), SLA policies with live countdown, knowledge base + submit-form deflection, canned responses, automation rules.
 - **7B — AI copilot (Claude API):** agent-reviewed reply drafting, thread summarization, triage suggestions (priority/category/tags/sentiment), and KB-article drafting from resolved tickets. Per-workspace toggle + deployment key both required; private notes and other workspaces' data are never sent to the model.

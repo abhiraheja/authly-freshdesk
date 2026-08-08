@@ -40,6 +40,7 @@ store. Empty strings in the committed `appsettings.json` are placeholders.
 | Key | Purpose | Prod requirement | Secret |
 |-----|---------|------------------|--------|
 | `ConnectionStrings:Trackly` | PostgreSQL connection string | per-env | secret |
+| `Trackly:AutoMigrate` | Apply EF migrations on boot. Defaults to **true**, which is what a self-hosted container needs — it is pointed at an empty database with no separate migration step. Set false only if you apply migrations out of band, or run several replicas and want exactly one touching DDL | default true | no |
 | `Security:MasterKey` | base64 **32-byte** AES-256-GCM key for secrets at rest | per-env, generate once, back up | secret |
 | `Ai:ApiKey` | Anthropic (Claude) API key for the AI copilot. Unset ⇒ AI features stay off everywhere | per-env (only if using AI) | secret |
 | `Ai:Model` | Claude model id for the copilot (defaults to `claude-opus-5`) | optional | no |
@@ -293,7 +294,8 @@ worker on all but one) if any workspace uses mailbox polling.
 ## 7. Pre-flight checklist (run per environment)
 
 - [ ] `ConnectionStrings:Trackly` set; DB reachable
-- [ ] Migrations applied (`dotnet ef database update`) — **not automatic here**
+- [ ] Migrations applied — automatic on boot unless `Trackly:AutoMigrate` is false, in which case run `dotnet ef database update` yourself
+- [ ] **First-run setup done** — open the app, land on `/setup`, create the workspace + first admin. This signs you in inline (no email), so it works before SMTP exists. It answers `409` afterwards; if it does not, the installation was never claimed and **anyone who reaches it becomes your administrator**
 - [ ] `Security:MasterKey` set to a real base64 32-byte key, stored + backed up
 - [ ] `App:FrontendBaseUrl` = the public SPA URL (test a magic-link email points there)
 - [ ] `Storage:LocalPath` on a persistent, backed-up volume (single instance) — still the default and the fallback even when workspaces use a cloud provider
@@ -332,9 +334,9 @@ Append here as phases land, so nothing is missed later.
   SAML IdP metadata, and group→role mappings are data, not env. OIDC to a
   non-loopback IdP requires HTTPS on the discovery URL. SAML AuthnRequests are
   unsigned (no SP signing cert needed); the IdP **response** signature is
-  validated against the IdP metadata cert. Domain routing needs outbound DNS
-  (TXT lookups) from the API host. **Both OIDC and SAML must be verified against a
-  real IdP** — there is no automated substitute for a live identity provider.
+  validated against the IdP metadata cert. **Both OIDC and SAML must be verified
+  against a real IdP** — there is no automated substitute for a live identity
+  provider.
 - **Phase 6 (problems / announcements / widget / dashboard):**
   - `GET /widget.js` and `GET /api/public/workspaces/{slug}/widget` are public and
     must be reachable over HTTPS from wherever customers embed the widget. The

@@ -45,5 +45,4 @@ export const adminRoutes: Routes = [
   { path: 'settings/email', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.email', from: 'frontend/src/pages/admin/EmailSettingsPage.tsx' } },
   { path: 'settings/branding', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.branding', from: 'frontend/src/pages/admin/BrandingSettingsPage.tsx' } },
   { path: 'settings/sso', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.sso', from: 'frontend/src/pages/admin/SsoSettingsPage.tsx' } },
-  { path: 'settings/domains', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.domains', from: 'frontend/src/pages/admin/DomainsPage.tsx' } },
 ];

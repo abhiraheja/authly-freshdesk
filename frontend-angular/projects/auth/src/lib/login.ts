@@ -11,7 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
@@ -22,22 +22,20 @@ import {
   errorMessage,
   homePathFor,
   type User,
-  type WorkspaceSummary,
 } from '@trackly/core';
 import { Alert, Button, Icon, InputDirective, LabelDirective, Spinner } from '@trackly/ui';
 import { AuthLayout } from './auth-layout';
 
-type Phase = 'email' | 'code' | 'choose';
+type Phase = 'email' | 'code';
 
 /**
- * Passwordless sign-in, in three phases on one screen: enter an email → enter
- * the 6-digit code from the email → (rarely) pick which workspace.
+ * Passwordless sign-in, in two phases on one screen: enter an email → enter the
+ * 6-digit code from the email.
  *
- * On Trackly's own login the email's domain is checked for SSO first; if it
- * routes to a workspace's IdP we hand off there instead of sending a link. A
- * workspace-branded login (`?workspace=slug`) skips discovery — the workspace is
- * already known — and wears that workspace's brand, forced to light mode
- * (invariant 6).
+ * If this installation has SSO configured we hand off to the IdP instead of
+ * sending a link. A workspace-branded login (`?workspace=slug`) skips that — it
+ * is a customer-facing surface — and wears the workspace's brand, forced to
+ * light mode (invariant 6).
  *
  * Trackly has no password field and never will.
  */
@@ -46,7 +44,6 @@ type Phase = 'email' | 'code' | 'choose';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule,
-    RouterLink,
     TranslocoPipe,
     AuthLayout,
     Alert,
@@ -108,19 +105,6 @@ type Phase = 'email' | 'code' | 'choose';
           <p class="mt-4 text-meta leading-relaxed text-muted-foreground">
             {{ 'login.magicLinkHint' | transloco }}
           </p>
-
-          <!-- Never advertise Trackly on a workspace's own sign-in page. -->
-          @if (!accent()) {
-            <p class="mt-8 text-body">
-              @if (isSignup()) {
-                {{ 'login.haveWorkspace' | transloco }}
-                <a routerLink="/login" class="font-semibold text-primary hover:underline">{{ 'login.signInLink' | transloco }}</a>
-              } @else {
-                {{ 'login.newToTrackly' | transloco }}
-                <a routerLink="/signup" class="font-semibold text-primary hover:underline">{{ 'login.startFree' | transloco }}</a>
-              }
-            </p>
-          }
         }
 
         <!-- ─────────── 2. Code ─────────── -->
@@ -191,36 +175,6 @@ type Phase = 'email' | 'code' | 'choose';
           </p>
         }
 
-        <!-- ─────────── 3. Choose a workspace ─────────── -->
-        @case ('choose') {
-          <h1 class="font-display text-[30px] font-extrabold leading-tight tracking-tight">
-            {{ 'login.chooseWorkspace' | transloco }}
-          </h1>
-          <p class="mt-2 text-[15px] text-muted-foreground">
-            {{ 'login.belongsToMany' | transloco: { email: email() } }}
-          </p>
-
-          <div class="mt-8 space-y-2">
-            @for (workspace of workspaces(); track workspace.slug) {
-              <button
-                type="button"
-                class="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-4 text-left transition-colors hover:border-primary hover:bg-accent disabled:opacity-50"
-                [disabled]="busy()"
-                (click)="verify(workspace.slug)"
-              >
-                <span class="min-w-0 flex-1">
-                  <span class="block truncate font-semibold">{{ workspace.name }}</span>
-                  <span class="block truncate text-meta text-muted-foreground">{{ workspace.slug }}</span>
-                </span>
-                <tk-icon name="chevron-right" [size]="16" class="shrink-0 text-muted-foreground" />
-              </button>
-            }
-          </div>
-
-          @if (error(); as message) {
-            <tk-alert tone="danger" class="mt-4">{{ message }}</tk-alert>
-          }
-        }
       }
 
       <ng-container auth-footer>
@@ -242,12 +196,8 @@ export class Login {
   /** Re-resolve TS-side copy when the language changes. */
   private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
 
-  private readonly routeData = toSignal(this.route.data, {
-    initialValue: {} as Record<string, unknown>,
-  });
   private readonly query = toSignal(this.route.queryParamMap, { initialValue: null });
 
-  protected readonly isSignup = computed(() => this.routeData()['mode'] === 'signup');
   /** Set when the visitor arrived from a workspace's branded link. */
   private readonly workspaceSlug = computed(() => this.query()?.get('workspace') ?? undefined);
   private readonly returnUrl = computed(() => this.query()?.get('returnUrl') ?? null);
@@ -265,7 +215,6 @@ export class Login {
   protected readonly phase = signal<Phase>('email');
   protected readonly email = signal('');
   protected readonly code = signal('');
-  protected readonly workspaces = signal<readonly WorkspaceSummary[]>([]);
   protected readonly error = signal<string | null>(null);
   protected readonly busy = signal(false);
   protected readonly checkingSso = signal(false);
@@ -273,10 +222,9 @@ export class Login {
   protected readonly isValidEmail = computed(() => /.+@.+\..+/.test(this.email()));
 
   /** One key per whole sentence; the workspace name travels as a parameter. */
-  protected readonly headlineKey = computed(() => {
-    if (this.isSignup()) return 'login.createAccount';
-    return this.branding.value()?.workspaceName ? 'login.signInTo' : 'login.signIn';
-  });
+  protected readonly headlineKey = computed(() =>
+    this.branding.value()?.workspaceName ? 'login.signInTo' : 'login.signIn',
+  );
 
   /**
    * A workspace's own `welcomeText` is admin-authored content, not UI copy, so
@@ -284,13 +232,10 @@ export class Login {
    */
   protected readonly subhead = computed(() => {
     this.lang();
-    if (this.isSignup()) return this.transloco.translate('login.signupSubhead');
     return this.branding.value()?.welcomeText || this.transloco.translate('login.welcomeBack');
   });
 
-  protected readonly panelTitleKey = computed(() =>
-    this.isSignup() ? 'login.panel.signUpTitle' : 'login.panel.signInTitle',
-  );
+  protected readonly panelTitleKey = computed(() => 'login.panel.signInTitle');
 
   private readonly emailInput = viewChild<ElementRef<HTMLInputElement>>('emailInput');
   private readonly codeInput = viewChild<ElementRef<HTMLInputElement>>('codeInput');
@@ -332,12 +277,13 @@ export class Login {
     if (!this.isValidEmail() || this.busy()) return;
     this.error.set(null);
 
-    // Branded logins already know their workspace, so discovery is noise there.
+    // A branded login is a customer-facing surface; customers are not the people
+    // an IdP knows about, so it stays on the magic link.
     if (!this.workspaceSlug()) {
       this.checkingSso.set(true);
       this.busy.set(true);
       try {
-        const discovery = await this.auth.discoverSso(this.email());
+        const discovery = await this.auth.discoverSso();
         if (discovery?.startUrl) {
           window.location.href = discovery.startUrl;
           return;
@@ -365,30 +311,16 @@ export class Login {
     }
   }
 
-  protected async verify(workspaceSlug?: string): Promise<void> {
+  protected async verify(): Promise<void> {
     this.busy.set(true);
     this.error.set(null);
     try {
       const result = await this.auth.verify({
         email: this.email(),
         code: this.code(),
-        workspaceSlug: workspaceSlug ?? this.workspaceSlug(),
+        workspaceSlug: this.workspaceSlug(),
       });
-
-      switch (result.status) {
-        case 'ok':
-          await this.complete(result.user);
-          break;
-        case 'choose_workspace':
-          this.workspaces.set(result.workspaces);
-          this.phase.set('choose');
-          break;
-        case 'signup_required':
-          await this.router.navigate(['/onboarding/workspace'], {
-            state: { email: result.email, code: this.code() },
-          });
-          break;
-      }
+      await this.complete(result.user);
     } catch (err) {
       this.error.set(errorMessage(err, this.transloco.translate('login.codeFailed')));
     } finally {
