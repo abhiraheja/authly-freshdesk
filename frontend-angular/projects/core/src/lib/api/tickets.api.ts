@@ -985,7 +985,7 @@ export class TicketsApi {
 
   // ── Activity ──────────────────────────────────────────────────────────────
 
-  /** Oldest first — this is read as a story, and a story runs forwards. */
+  /** Newest first — an agent opening a ticket wants what just happened. */
   ticketActivity(ticketId: string): Promise<TicketActivity[]> {
     return this.api.get<TicketActivity[]>(`/api/tickets/${ticketId}/activity`);
   }

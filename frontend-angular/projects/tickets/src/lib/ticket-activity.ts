@@ -37,7 +37,10 @@ const SHAPES: Record<string, { icon: IconName; tint: string; pair: boolean }> = 
 const FALLBACK = { icon: 'circle' as IconName, tint: 'text-muted-foreground', pair: false };
 
 /**
- * The Activity tab: everything that has happened to this ticket, oldest first.
+ * The Activity tab: everything that has happened to this ticket, newest first.
+ *
+ * The order is the server's — this renders the list as it arrives, so there is
+ * one place that decides it rather than two that can disagree.
  *
  * **The server sends facts; this builds the sentence.** A row holds a type and
  * two labels, so the same history reads correctly in English and Hindi. An entry

@@ -57,17 +57,22 @@ public class ActivityLog(TracklyDbContext db)
     }
 
     /// <summary>
-    /// The feed for one ticket, oldest first.
+    /// The feed for one ticket, newest first.
     ///
-    /// Oldest first, unlike the bell: this is read as a story of what happened
-    /// to the ticket, and a story runs forwards. It also puts "created" at the
-    /// top, which is where anyone looks for it.
+    /// This used to run oldest-first, on the reasoning that the feed is a story
+    /// and a story runs forwards. In use that lost: an agent opening a ticket
+    /// wants "what just happened", and on a busy ticket the newest row was the
+    /// one furthest down — reached by scrolling past everything already known.
+    /// Newest-first also matches the notification bell, so the product no longer
+    /// disagrees with itself about which end of a feed is the interesting one.
     /// </summary>
     public async Task<IReadOnlyList<TicketActivityDto>> ForTicketAsync(
         Guid workspaceId, Guid ticketId, CancellationToken ct)
         => await db.TicketActivities
             .Where(a => a.WorkspaceId == workspaceId && a.TicketId == ticketId)
-            .OrderBy(a => a.CreatedAt).ThenBy(a => a.Id)
+            // Id breaks ties: several activities can share a timestamp within one
+            // request, and a stable order is what stops rows swapping on reload.
+            .OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id)
             .Select(a => new TicketActivityDto(
                 a.Id,
                 a.Type,

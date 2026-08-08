@@ -1016,7 +1016,7 @@ and a **⋯** menu with pin and flag.
 **Where:** the **Activity** tab on any ticket, beside Conversation, Notes and
 Attachments.
 
-The audit trail — every change, oldest first, with who made it and when. Status
+The audit trail — every change, newest first, with who made it and when. Status
 moves, priority, assignee, department, category, subject, watchers, replies,
 notes, files, related work, time logged, resolutions and reopens.
 

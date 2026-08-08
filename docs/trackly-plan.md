@@ -1386,7 +1386,7 @@ in both.
 
 ### The activity log
 
-`GET /api/tickets/{id}/activity` — agent/admin only, oldest first. Rows are
+`GET /api/tickets/{id}/activity` — agent/admin only, newest first. Rows are
 written by `ActivityLog`, which **queues and never saves**: the caller commits
 them in the same `SaveChanges` as the change they describe. An entry that landed
 while its change rolled back is worse than no entry — it is a log that lies, and
