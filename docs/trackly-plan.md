@@ -1394,6 +1394,71 @@ and come back null on customer and guest surfaces.
 Facet groups are each counted with every filter applied **except their own** —
 that is what makes the rail navigable rather than a dead end.
 
+The bar above the table carries the four filters people reach for constantly —
+status, priority, assignee, channel — and everything else lives behind **More**,
+which is the facet panel. Both write to the **same URL params**, so they are one
+filter state rather than two that can disagree: a pick on the bar shows as a tick
+in the panel and is counted in its badge. The bar's selects are single-value; a
+group holding two or more shows its "All" row rather than picking one of them to
+display, because there is no honest single answer and the panel is where a
+multi-select is both made and read.
+
+The channel select reads the workspace's configured `ticket_options`, **not** the
+channel facet. The facet only returns values tickets currently carry, so a
+workspace that has just switched WhatsApp on would have no way to filter for it
+until the first WhatsApp ticket arrived — and the facets are only fetched once
+the panel has been opened, while this select is always on screen.
+
+### Bulk actions
+
+`POST /api/tickets/bulk` — one action across a selection, agent/admin, capped at
+**100 tickets** (the list pages at 20; five pages' worth still finishes inside a
+request). Actions: `assign`, `priority`, `status`, `tag`, `pin`, `flag`, `delete`.
+
+Three decisions worth keeping:
+
+- **Every action routes through the single-ticket path.** Assign, priority and
+  status build an `UpdateTicketRequest` and call `TicketService.UpdateAsync` once
+  per ticket. A single `ExecuteUpdate` would obviously be faster and would also
+  skip the workflow rules, the activity log, the SLA clock, the watcher
+  notifications and the resolution email — and skip them *silently*. Nothing
+  about a bulk assign that sent no notifications looks wrong until somebody asks
+  why they were never told about forty tickets.
+- **The result is partial by design.** `{ succeeded, failed[], requested }`, where
+  each failure names the ticket and the rule that refused it. All-or-nothing
+  sounds safer and is worse: one forbidden transition out of forty would undo
+  thirty-nine legitimate changes, and the agent's only recourse would be
+  deselecting rows by guesswork. Each ticket is already its own transaction, so
+  partial is also what the database actually does. **The client must read the
+  result** — the request resolves successfully when some of the batch failed.
+- **`tag` adds, never replaces.** Replacing would strip every label forty tickets
+  already carried because somebody wanted to add "escalated" to all of them.
+
+`delete` is **admin-only** and is the only hard delete of a ticket in Trackly.
+Most children go by database cascade, but two things cannot and must be cleared
+by hand first, both because their incoming foreign key is `NO ACTION` (PostgreSQL
+refuses a schema with two cascade paths into one table):
+
+- `ticket_relations.related_ticket_id` — links pointing *at* the ticket.
+- `comment_mentions.ticket_id` — **not** cleared by the comment cascade, despite
+  what the model comment used to claim. PostgreSQL checks the ticket's
+  referencing keys against the row being deleted, while the cascade that would
+  empty `comment_mentions` hangs off `comments`, one level further down. The
+  constraint fires first and the delete is refused.
+
+Both are **loaded and `RemoveRange`d, not `ExecuteDelete`d**. `ExecuteDelete`
+writes past the change tracker, so a relation the request already loaded is still
+there when the ticket is removed and EF refuses the save with "the association
+has been severed" for a row the database no longer has; it also commits its own
+transaction, so a failure in between would leave the links gone and the ticket
+intact. Attachment blobs are deleted **after** the row commits — the other order
+leaves a live ticket whose attachments 404.
+
+**Selection is scoped to what is on screen.** The client holds ids, not tickets,
+and intersects them with the current page before acting. The header tick selects
+that page only: a tick that silently picked up 248 unseen tickets and then
+offered Delete is not a convenience.
+
 > **EF note.** Every facet groups in SQL and shapes in memory
 > (`GroupBy(...).Select(g => new { ... primitives ... }).ToListAsync()`, then map).
 > Projecting straight into a record and ordering by one of its properties does
@@ -1407,6 +1472,7 @@ that is what makes the rail navigable rather than a dead end.
 | GET    | `/api/tickets/channels` | Session | agent/admin — channel suggestions (used + built-in) |
 | GET    | `/api/tickets/{id}` | Session | owner or agent/admin |
 | PATCH  | `/api/tickets/{id}` | Session | agent/admin |
+| POST   | `/api/tickets/bulk` | Session | agent/admin; `delete` admin-only. Returns a partial result, never 204 |
 | POST   | `/api/tickets/{id}/comments` | Session | owner or agent/admin |
 | POST   | `/api/guest/otp/send` | None | Public — send 6-digit OTP to guest email (rate-limited) |
 | POST   | `/api/guest/otp/verify` | None | Public — verify OTP, returns short-lived submission token |

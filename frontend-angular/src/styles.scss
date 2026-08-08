@@ -1153,7 +1153,11 @@ select.input-sm {
 .control-input:focus-visible + .radio-dot,
 .control-input:focus-visible + .switch-track {
   outline: none;
-  box-shadow: 0 0 0 3px rgb(var(--ring) / 0.25);
+  /* 2px, not 3. A checkbox is keyboard-operable (Space toggles it), so some
+     browsers keep :focus-visible after a plain mouse click — and at 3px the
+     halo made a ticked row selector read as a bigger control than the ones
+     beside it. Narrow enough not to change the shape, wide enough to find. */
+  box-shadow: 0 0 0 2px rgb(var(--ring) / 0.35);
 }
 
 /* ---- Field (tk-field) ---- */
@@ -1490,19 +1494,119 @@ input[type='password']::-ms-clear {
 .table-hover tbody tr.row-blank:hover {
   background: transparent;
 }
-/* Row actions stay hidden until the row is hovered or focused within — but are
-   always visible on touch, where there is no hover. */
+/* Row actions are always visible.
+ *
+ * They used to fade in on row hover, which reads as tidy and is not: the column
+ * is headed ACTIONS, so an agent scanning the table sees a heading over an empty
+ * column and has no reason to believe anything is under it. Reveal-on-hover only
+ * works for an affordance people already know is there, and it costs a hover
+ * (and, on touch, a whole media query) to find out what a row can even do.
+ *
+ * The restraint that fade was reaching for lives in the colour instead — muted
+ * at rest, accented on hover — so the buttons stay quiet without hiding. */
 .row-actions {
-  opacity: 0;
   transition: opacity var(--motion-fast) var(--motion-ease);
 }
-tr:hover .row-actions,
-tr:focus-within .row-actions {
-  opacity: 1;
+tr:has(.row-actions) td {
+  /* Icon buttons are 2rem; without this the cell's own padding decides the row
+     height and the buttons sit in a taller box than they need. */
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
 }
-@media (hover: none) {
-  .row-actions {
-    opacity: 1;
+
+/* The select column. Fixed and narrow, so the ticket subject beside it starts
+   at the same x on every table that has one — a checkbox column that sizes
+   itself to its content is a column that moves when the header tick appears. */
+.col-select {
+  width: 2.75rem;
+  padding-right: 0 !important;
+}
+
+/* ---------------------------- Bulk bar ---------------------------- */
+
+/* Shown above the table once rows are ticked. IN THE FLOW, not floating: a
+   floating bar covers the rows still being decided about, and on a short list it
+   can cover the entire result. This pushes the table down by its own height. */
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.625rem 1rem;
+  border: 1px solid rgb(var(--primary) / 0.2);
+  /* --radius-panel, the same token the card below it uses. An earlier version
+     said --radius-card, which does not exist — an undefined custom property
+     makes the declaration invalid and the corners came out square, with nothing
+     in the build to say so. Check the token exists; there is no error for this. */
+  border-radius: var(--radius-panel);
+  background: rgb(var(--primary) / 0.1);
+  font-size: 0.875rem;
+}
+.bulk-count {
+  font-weight: 600;
+  color: rgb(var(--primary));
+}
+/* A real element, not a pseudo-element on the count: the bar wraps on a narrow
+   screen, and a rule welded to the text would wrap with it and end up dividing
+   nothing. */
+.bulk-divider {
+  width: 1px;
+  height: 1rem;
+  flex: none;
+  background: rgb(var(--primary) / 0.2);
+}
+/* Text-weight, but they still have to behave like buttons.
+ *
+ * An underline-on-hover and nothing else was too little: there was no press
+ * state at all, so a click landed with no acknowledgement and the whole bar felt
+ * dead under the finger. The tint here is deliberately lighter than a real
+ * button's — the bar is already tinted, and two solid backgrounds argue — but a
+ * hover, an active and a focus state all have to exist. `currentColor` does the
+ * work so the danger variant needs no second set of rules. */
+.bulk-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  /* margin-block, NOT the `margin` shorthand. The shorthand also writes
+     margin-left, and this layer is loaded after Tailwind — so it silently beat
+     the `ml-auto` on Clear selection and dragged it back in beside More. A
+     shorthand here reaches further than it looks. */
+  margin-block: -0.25rem;
+  border-radius: var(--radius-chip);
+  color: rgb(var(--primary));
+  cursor: pointer;
+  transition:
+    background var(--motion-fast) var(--motion-ease),
+    transform var(--motion-fast) var(--motion-ease);
+}
+.bulk-action:hover:not(:disabled) {
+  background: color-mix(in srgb, currentColor 14%, transparent);
+}
+/* The press. Darker and 1px down — small enough to read as the control
+   physically moving rather than as a second hover state. */
+.bulk-action:active:not(:disabled) {
+  background: color-mix(in srgb, currentColor 22%, transparent);
+  transform: translateY(1px);
+}
+.bulk-action:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 45%, transparent);
+}
+.bulk-action:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+/* Delete is on the surface rather than behind the overflow menu, because
+   burying the one irreversible action does not make it safer — it makes it
+   surprising. The colour is the warning, and the confirmation is the guard. */
+.bulk-action.is-danger {
+  color: rgb(var(--danger));
+}
+@media (prefers-reduced-motion: reduce) {
+  .bulk-action:active:not(:disabled) {
+    transform: none;
   }
 }
 

@@ -878,17 +878,65 @@ Clicking the active column flips the direction. Two things worth knowing:
   ticket with no policy is not the most urgent and it is not the least; floating
   it to the top would bury the ones that do have a clock.
 
-**Filters** live in the rail on the left (or behind the **Filters** button on a
-narrow screen). Every value shows a count, and you can tick more than one in a
-group — "Open **or** Pending", "Priya **or** unassigned".
+**Filters.** The four you reach for constantly — status, priority, assignee and
+channel — sit on the bar above the table. Everything else (department, category,
+tags, and picking more than one value in any group) is behind **More**.
 
-The counts are the useful part: each group is counted **ignoring its own
-filter**. So after picking "Open" you can still see there are 12 Pending, and
-add them. A filter list that counted itself would show every other option at
-zero and there would be no way back out except clearing everything.
+They are the same filter, not two. Choosing "Priya" on the bar shows as a tick
+inside More, and the number on the More button counts it. The bar's dropdowns
+hold one value each; if you have ticked two or more inside More, the bar's
+dropdown falls back to showing "All" rather than picking one of them to display —
+the panel is where a multi-value choice is both made and read.
+
+Inside More every value shows a count, and you can tick several in a group —
+"Open **or** Pending", "Priya **or** unassigned". The counts are the useful part:
+each group is counted **ignoring its own filter**. So after picking "Open" you
+can still see there are 12 Pending, and add them. A filter list that counted
+itself would show every other option at zero and there would be no way back out
+except clearing everything.
 
 Everything is in the URL, so a filtered, sorted view is a link you can send
 someone, and Back works.
+
+The footer always shows **Showing 1–20 of 248** even when there is only one page
+— it is the only place that tells you how many results your filter actually
+found.
+
+### Working on many tickets at once
+
+Tick the box on any row and a bar appears above the table: **"20 selected"**,
+then what you can do to them.
+
+| Action | Who | What it does |
+|---|---|---|
+| **Assign** | Agent, admin | Hands all of them to one agent, or to nobody |
+| **Resolve** | Agent, admin | Asks for one resolution note and applies it to all of them |
+| **More → Priority** | Agent, admin | Sets Urgent / High / Medium / Low |
+| **More → Pin, Unpin** | Agent, admin | Your own bookmarks — nobody else sees them |
+| **More → Flag, Clear flag** | Agent, admin | The team's marker, visible to everyone |
+| **More → Delete** | **Admin only** | Removes the tickets and everything in them, permanently |
+
+Four things to know before you use it:
+
+- **The tick on the header row selects this page, not all 248.** A tick that
+  quietly picked up tickets you have never looked at — and then offered you
+  Delete — is not a convenience. Change the page and select there too if you
+  want more.
+- **Resolving in bulk writes one note to every ticket.** The dialog says so. If
+  the note only makes sense on the ticket you happened to be looking at, resolve
+  them individually. Every customer is emailed, exactly as they would be one at
+  a time.
+- **Some can fail, and Trackly tells you which.** If your workflow does not allow
+  Open → Closed, those tickets are refused and the rest still go through. You get
+  "Updated 17. 3 could not be: …" and **the three that failed stay ticked**, so
+  you can see which they were.
+- **Delete cannot be undone.** The conversation, attachments, private notes,
+  time entries and history all go with the ticket. There is no archive and no
+  bin. It is the only permanent deletion in Trackly, which is why it is admin-only
+  and behind a confirmation.
+
+Each row also has its own buttons on the right: **view**, **assign**, **resolve**,
+and a **⋯** menu with pin and flag.
 
 ### Activity: what happened to this ticket
 

@@ -35,7 +35,15 @@ export interface ResolvePayload {
   imports: [FormsModule, TranslocoPipe, Alert, Button, Field, InputDirective, LabelDirective, Modal, Spinner],
   template: `
     <tk-modal [(open)]="open" [heading]="heading()" [persistent]="saving()">
-      @if (subject(); as name) {
+      <!-- Bulk mode says so plainly, and says what the note will do. One note
+           recorded on twenty tickets is a real limitation of resolving them
+           together; an agent who is not told will write a note that only makes
+           sense on the ticket they happened to be looking at. -->
+      @if (appliesTo() > 1) {
+        <tk-alert tone="warning" class="mb-4">
+          {{ 'tickets.resolveDialog.bulkWarning' | transloco: { count: appliesTo() } }}
+        </tk-alert>
+      } @else if (subject(); as name) {
         <p class="mb-4 text-body text-muted-foreground">
           {{ 'tickets.resolveDialog.about' | transloco: { subject: name } }}
         </p>
@@ -156,6 +164,12 @@ export class ResolveDialog {
   readonly status = input<'resolved' | 'closed'>('resolved');
   /** Named in the body when the caller is a list, where the row is ambiguous. */
   readonly subject = input<string>();
+  /**
+   * How many tickets this one note will be written to. 0 or 1 is the normal
+   * single-ticket case; more switches the dialog into bulk mode, where it warns
+   * instead of naming a subject it cannot name.
+   */
+  readonly appliesTo = input(0);
   readonly saving = input(false);
   /** Server-side failure. Cleared by the caller when it retries. */
   readonly error = input<string | null>(null);

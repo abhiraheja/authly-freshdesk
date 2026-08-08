@@ -186,6 +186,59 @@ export interface Watcher {
   addedAt: string;
 }
 
+/**
+ * What a bulk action is. One per request — the server refuses a payload that
+ * tries to do two, because there is no honest way to report a batch where the
+ * assign worked and the resolve did not.
+ */
+export type TicketBulkAction =
+  | 'assign'
+  | 'priority'
+  | 'status'
+  | 'tag'
+  | 'pin'
+  | 'flag'
+  | 'delete';
+
+export interface TicketBulkRequest {
+  ids: string[];
+  action: TicketBulkAction;
+  /** Omit and set `unassign` to take the ticket off whoever has it. */
+  assigneeId?: string | null;
+  unassign?: boolean;
+  priority?: string;
+  status?: string;
+  /**
+   * Shared by every ticket in the batch when the status ends the work. One note
+   * for many tickets is a real limitation; say so in the UI.
+   */
+  resolutionNote?: string;
+  resolutionSummary?: string;
+  /** Added to what each ticket already carries — never a replacement. */
+  tags?: string[];
+  /** For the two toggles: true sets, false clears. */
+  on?: boolean;
+  reason?: string | null;
+}
+
+export interface TicketBulkFailure {
+  id: string;
+  /** Named, so the agent can act on it. Falls back to the short id. */
+  subject: string;
+  reason: string;
+}
+
+/**
+ * **Partial results are the normal case**, not an error path. A batch that hit
+ * a workflow rule on three of forty resolves with `succeeded: 37` and three
+ * entries in `failed` — the request did not fail, so nothing rejects.
+ */
+export interface TicketBulkResult {
+  succeeded: number;
+  failed: TicketBulkFailure[];
+  requested: number;
+}
+
 export interface TicketDetail extends Omit<TicketSummary, 'commentCount'> {
   description: string;
   watchers: Watcher[];
@@ -914,6 +967,20 @@ export class TicketsApi {
     return flagged
       ? this.api.put<void>(`/api/tickets/${ticketId}/flag`, { reason })
       : this.api.delete<void>(`/api/tickets/${ticketId}/flag`);
+  }
+
+  // ── Bulk ──────────────────────────────────────────────────────────────────
+
+  /**
+   * One action across a selection.
+   *
+   * **Always inspect the result.** This resolves successfully when some of the
+   * batch failed — a workflow can refuse one transition out of forty — so a
+   * caller that only catches rejections will report a clean sweep that did not
+   * happen. `failed` names each ticket and why.
+   */
+  bulk(request: TicketBulkRequest): Promise<TicketBulkResult> {
+    return this.api.post<TicketBulkResult>('/api/tickets/bulk', request);
   }
 
   // ── Activity ──────────────────────────────────────────────────────────────

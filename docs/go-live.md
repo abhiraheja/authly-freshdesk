@@ -276,6 +276,17 @@ worker on all but one) if any workspace uses mailbox polling.
 - `POST /api/dev/seed` (demo-data seeder) is **Development-only** — it 404s when
   `ASPNETCORE_ENVIRONMENT` isn't Development, so it can't run in prod. Nothing to
   do beyond keeping the environment set correctly.
+- **Bulk delete is the only irreversible action in Trackly** (`POST
+  /api/tickets/bulk` with `action: "delete"`, up to 100 tickets, **admin only**).
+  There is no archive, no soft delete and no bin: the ticket, its conversation,
+  attachments, private notes, time entries and activity log all go, and the
+  attachment blobs are removed from the bucket too. Nothing needs configuring —
+  but two things follow from it in production:
+  - **Database backups are the only undo.** Confirm PITR or nightly dumps are
+    actually running and restorable *before* handing an admin account to anyone.
+  - **Keep the admin role scarce.** Everything else destructive in Trackly is
+    reachable by agents; this is not, and that is the only thing standing
+    between a mis-click and a permanent loss.
 
 ---
 
@@ -294,6 +305,7 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] One API instance if any workspace uses IMAP polling **or live chat** (or add a SignalR backplane) — until leader election / a backplane exists
 - [ ] Proxy allows the WebSocket upgrade on `/hubs/*` (live chat)
 - [ ] Inbound webhook endpoint publicly reachable over HTTPS (if any tenant uses Option A)
+- [ ] Database backups verified **restorable** — bulk delete has no undo (§6)
 - [ ] Smoke test: sign in, create a ticket, agent reply → notification email sent, inbound reply → comment added
 
 ---

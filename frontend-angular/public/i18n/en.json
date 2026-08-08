@@ -179,7 +179,8 @@
       "confirmClose": "Close ticket",
       "summary": "What should the customer be told?",
       "summaryHint": "Optional, and the only part of this the customer ever sees. Plain words — no root cause, no ticket numbers.",
-      "summaryPlaceholder": "We restarted the payments service. Your invoice has been emailed and should arrive within a few minutes."
+      "summaryPlaceholder": "We restarted the payments service. Your invoice has been emailed and should arrive within a few minutes.",
+      "bulkWarning": "This note will be recorded on all {{count}} selected tickets, and each customer will be told the ticket is resolved."
     },
     "resolution": {
       "heading": "Resolution",
@@ -199,7 +200,9 @@
     },
     "actions": {
       "view": "View ticket",
-      "resolve": "Mark resolved"
+      "resolve": "Mark resolved",
+      "assign": "Assign to",
+      "more": "More actions"
     },
     "columns": {
       "ticket": "Ticket",
@@ -211,7 +214,8 @@
       "updated": "Updated",
       "department": "Dept",
       "category": "Category",
-      "actions": "Actions"
+      "actions": "Actions",
+      "channel": "Channel"
     },
     "empty": {
       "noMatchTitle": "No tickets match",
@@ -367,7 +371,8 @@
       "heading": "Filters",
       "none": "Nothing to filter by yet.",
       "showAll": "Show all {{count}}",
-      "showLess": "Show less"
+      "showLess": "Show less",
+      "more": "More"
     },
     "relations": {
       "title": "Related tickets",
@@ -451,6 +456,33 @@
       "unflag": "Clear the flag",
       "flagged": "Flagged",
       "reasonPrompt": "Why does this ticket need attention? (optional)"
+    },
+    "allAssignees": "Any assignee",
+    "allChannels": "All channels",
+    "selectAll": "Select every ticket on this page",
+    "selectRow": "Select {{subject}}",
+    "bulk": {
+      "region": "Actions for the selected tickets",
+      "count": "{{count}} selected",
+      "countOne": "1 selected",
+      "working": "Working…",
+      "assign": "Assign",
+      "unassign": "Unassign",
+      "noAgents": "No agents in this workspace yet.",
+      "resolve": "Resolve",
+      "more": "More",
+      "pin": "Pin for me",
+      "unpin": "Unpin",
+      "flag": "Flag for the team",
+      "unflag": "Clear the flag",
+      "delete": "Delete",
+      "clear": "Clear selection",
+      "deleteHeading": "Delete {{count}} tickets?",
+      "deleteBody": "Their conversations, attachments, notes and history go with them. This cannot be undone.",
+      "deleteConfirm": "Delete them",
+      "done": "Updated {{count}} tickets.",
+      "allFailed": "None of the {{count}} tickets could be updated. {{reason}}",
+      "partial": "Updated {{done}}. {{failed}} could not be: {{reason}}"
     }
   },
   "status": {

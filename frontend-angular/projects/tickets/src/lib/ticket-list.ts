@@ -23,9 +23,13 @@ import {
   slaState,
   timeAgo,
   toneFor,
+  type TicketBulkRequest,
+  type TicketBulkResult,
   type TicketListParams,
+  type TicketOption,
   type TicketSort,
   type TicketSummary,
+  type UserSummary,
 } from '@trackly/core';
 import {
   Alert,
@@ -33,7 +37,10 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
+  ConfirmService,
   Drawer,
+  Dropdown,
   EmptyState,
   Icon,
   Pagination,
@@ -45,6 +52,7 @@ import {
   type IconName,
 } from '@trackly/ui';
 import { ResolveDialog, type ResolvePayload } from './resolve-dialog';
+import { TicketBulkBar, type BulkCommand } from './ticket-bulk-bar';
 import {
   TicketFacetsRail,
   UNASSIGNED_FACET,
@@ -125,7 +133,9 @@ function orUndefined(values: string[]): string[] | undefined {
     Badge,
     Button,
     Card,
+    Checkbox,
     Drawer,
+    Dropdown,
     EmptyState,
     Icon,
     Pagination,
@@ -134,6 +144,7 @@ function orUndefined(values: string[]): string[] | undefined {
     SelectOption,
     SkeletonDirective,
     TableDirective,
+    TicketBulkBar,
     TicketFacetsRail,
   ],
   template: `
@@ -199,13 +210,44 @@ function orUndefined(values: string[]): string[] | undefined {
           <tk-option value="low" [label]="'priority.low' | transloco" />
         </tk-select>
 
-        <!-- Filters live behind this button, at every width. They were a
-             permanent left rail first; on a real workspace that spent a third
-             of the screen on a control used a few times a day, while the table
-             — the thing people are actually reading — got squeezed. -->
+        <!-- Assignee and channel write to the SAME url params the filter panel
+             uses, so the two are one filter state rather than two that can
+             disagree. Picking here shows as a tick in the panel, and the
+             panel's count includes it. -->
+        <tk-select
+          auto
+          size="sm"
+          [ariaLabel]="'tickets.columns.assignee' | transloco"
+          [value]="singleFacet('assignee')"
+          (valueChange)="setFacetSingle('assignee', $event)"
+        >
+          <tk-option value="" [label]="'tickets.allAssignees' | transloco" />
+          <tk-option [value]="unassignedValue" [label]="'tickets.unassigned' | transloco" />
+          @for (agent of agents.value() ?? []; track agent.id) {
+            <tk-option [value]="agent.id" [label]="agent.name || agent.email || ''" />
+          }
+        </tk-select>
+
+        <tk-select
+          auto
+          size="sm"
+          [ariaLabel]="'tickets.columns.channel' | transloco"
+          [value]="singleFacet('channel')"
+          (valueChange)="setFacetSingle('channel', $event)"
+        >
+          <tk-option value="" [label]="'tickets.allChannels' | transloco" />
+          @for (option of channelOptions(); track option.value) {
+            <tk-option [value]="option.value" [label]="option.label" />
+          }
+        </tk-select>
+
+        <!-- Everything the four selects above don't cover — team, category,
+             tags, and multi-select on any of them. Called "More" because that
+             is what it now is: the common filters are on the bar, and this is
+             the rest of them. -->
         <button tkButton variant="outline" size="sm" (click)="openFilters()">
-          <tk-icon name="filter" [size]="15" />
-          {{ 'tickets.filters.heading' | transloco }}
+          <tk-icon name="sliders-horizontal" [size]="15" />
+          {{ 'tickets.filters.more' | transloco }}
           @if (facetCount(); as n) {
             <span class="rounded-full bg-primary px-1.5 text-meta font-bold text-primary-foreground">{{ n }}</span>
           }
@@ -225,13 +267,35 @@ function orUndefined(values: string[]): string[] | undefined {
         </button>
       </tk-alert>
     } @else {
+      @if (selectedCount()) {
+        <tk-ticket-bulk-bar
+          [count]="selectedCount()"
+          [agents]="agents.value() ?? []"
+          [busy]="bulkBusy()"
+          [canDelete]="isAdmin()"
+          (commanded)="onBulk($event)"
+          (cleared)="clearSelection()"
+        />
+      }
+
       <tk-card flush>
         <div class="overflow-x-auto">
-          <table tkTable hover class="min-w-[900px]">
+          <table tkTable hover class="min-w-[960px]">
             <thead>
               <!-- Sortable headers carry aria-sort so a screen reader knows
                    which column is ordering the table and which way. -->
               <tr>
+                <th scope="col" class="col-select">
+                  <!-- Selects THIS PAGE, not the whole result set. A tick that
+                       silently picked up 248 tickets the agent has never seen —
+                       and then offered Delete — is not a convenience. -->
+                  <tk-checkbox
+                    [checked]="allOnPageSelected()"
+                    [indeterminate]="someOnPageSelected()"
+                    [ariaLabel]="'tickets.selectAll' | transloco"
+                    (checkedChange)="togglePage($event)"
+                  />
+                </th>
                 <th scope="col" [attr.aria-sort]="ariaSort('subject')">
                   <button type="button" class="th-sort" (click)="sortBy('subject')">
                     {{ 'tickets.columns.ticket' | transloco }}
@@ -290,8 +354,9 @@ function orUndefined(values: string[]): string[] | undefined {
                   <tr class="row-blank">
                     <!-- Spelled out rather than looped: the four responsive
                          columns have to disappear here exactly as they do in the
-                         header, or a narrow viewport gets 10 skeleton cells under
-                         6 headings and every column shifts left. -->
+                         header, or a narrow viewport gets 11 skeleton cells under
+                         7 headings and every column shifts left. -->
+                    <td class="col-select"><span tkSkeleton class="size-[1.125rem] rounded"></span></td>
                     <td><span tkSkeleton class="h-4 w-full max-w-[220px]"></span></td>
                     <td><span tkSkeleton class="h-4 w-full max-w-[140px]"></span></td>
                     <td class="hidden xl:table-cell"><span tkSkeleton class="h-4 w-20"></span></td>
@@ -307,6 +372,16 @@ function orUndefined(values: string[]): string[] | undefined {
               } @else {
                 @for (ticket of rows(); track ticket.id) {
                   <tr class="cursor-pointer" (click)="open(ticket)">
+                    <!-- Swallows the click like the actions cell does: ticking a
+                         row must not also navigate away from the list you are
+                         building a selection in. -->
+                    <td class="col-select" (click)="$event.stopPropagation()">
+                      <tk-checkbox
+                        [checked]="isSelected(ticket.id)"
+                        [ariaLabel]="'tickets.selectRow' | transloco: { subject: ticket.subject }"
+                        (checkedChange)="toggleRow(ticket.id, $event)"
+                      />
+                    </td>
                     <td>
                       <span class="flex items-start gap-2.5">
                         <!-- Pinning from the list is the point of pinning: it is
@@ -409,31 +484,95 @@ function orUndefined(values: string[]): string[] | undefined {
                     <td class="col-right" (click)="$event.stopPropagation()">
                       <span class="row-actions inline-flex items-center gap-0.5">
                         <a
-                          class="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-primary"
+                          class="grid size-8 place-items-center rounded-lg transition active:scale-90 text-muted-foreground hover:bg-accent hover:text-primary"
                           [routerLink]="['/dashboard/tickets', ticket.id]"
                           [attr.aria-label]="'tickets.actions.view' | transloco"
+                          [title]="'tickets.actions.view' | transloco"
                         >
                           <tk-icon name="eye" [size]="16" />
                         </a>
+
+                        <!-- Assign, from the row. The single most common thing
+                             done to a ticket from a queue, and making it a
+                             detour through the ticket screen is why triage
+                             queues stay untriaged. -->
+                        <tk-dropdown align="end">
+                          <button
+                            type="button"
+                            class="grid size-8 place-items-center rounded-lg transition active:scale-90 text-muted-foreground hover:bg-accent hover:text-primary"
+                            dropdown-trigger
+                            [attr.aria-label]="'tickets.actions.assign' | transloco"
+                            [title]="'tickets.actions.assign' | transloco"
+                          >
+                            <tk-icon name="user-plus" [size]="16" />
+                          </button>
+                          <div dropdown-menu class="max-h-72 w-56 overflow-y-auto text-left">
+                            @for (agent of agents.value() ?? []; track agent.id) {
+                              <button
+                                type="button"
+                                class="menu-item"
+                                [class.active]="ticket.assignee?.id === agent.id"
+                                (click)="assignTo(ticket, agent.id)"
+                              >
+                                {{ agent.name || agent.email }}
+                              </button>
+                            } @empty {
+                              <p class="px-3 py-2 text-meta text-muted-foreground">
+                                {{ 'tickets.bulk.noAgents' | transloco }}
+                              </p>
+                            }
+                            @if (ticket.assignee) {
+                              <div class="menu-sep"></div>
+                              <button type="button" class="menu-item" (click)="assignTo(ticket, null)">
+                                {{ 'tickets.bulk.unassign' | transloco }}
+                              </button>
+                            }
+                          </div>
+                        </tk-dropdown>
+
                         <button
                           type="button"
-                          class="grid size-8 place-items-center rounded-lg text-muted-foreground hover:bg-accent hover:text-success disabled:opacity-40"
+                          class="grid size-8 place-items-center rounded-lg transition active:scale-90 text-muted-foreground hover:bg-accent hover:text-success disabled:opacity-40"
                           [attr.aria-label]="'tickets.actions.resolve' | transloco"
+                          [title]="'tickets.actions.resolve' | transloco"
                           [disabled]="isFinished(ticket)"
                           (click)="resolve(ticket)"
                         >
                           <tk-icon name="check-circle" [size]="16" />
                         </button>
+
+                        <tk-dropdown align="end">
+                          <button
+                            type="button"
+                            class="grid size-8 place-items-center rounded-lg transition active:scale-90 text-muted-foreground hover:bg-accent hover:text-foreground"
+                            dropdown-trigger
+                            [attr.aria-label]="'tickets.actions.more' | transloco"
+                            [title]="'tickets.actions.more' | transloco"
+                          >
+                            <tk-icon name="more-horizontal" [size]="16" />
+                          </button>
+                          <div dropdown-menu class="w-48 text-left">
+                            <button type="button" class="menu-item" (click)="togglePin(ticket)">
+                              <tk-icon name="pin" [size]="15" [filled]="ticket.isPinned" />
+                              {{ (ticket.isPinned ? 'tickets.pin.unpin' : 'tickets.pin.pin') | transloco }}
+                            </button>
+                            <button type="button" class="menu-item" (click)="toggleFlag(ticket)">
+                              <tk-icon name="flag" [size]="15" [filled]="!!ticket.flaggedAt" />
+                              {{ (ticket.flaggedAt ? 'tickets.flag.unflag' : 'tickets.flag.flag') | transloco }}
+                            </button>
+                          </div>
+                        </tk-dropdown>
                       </span>
                     </td>
                   </tr>
                 } @empty {
-                  <!-- colspan MUST equal the header count (10). Too low and the
+                  <!-- colspan MUST equal the header count (11). Too low and the
                        leftover columns render as bare white cells beside the
                        empty state — which is exactly what a stale 7 looked
-                       like. Responsively-hidden columns still count. -->
+                       like. Responsively-hidden columns still count, and so does
+                       the select column. -->
                   <tr class="row-blank">
-                    <td colspan="10" class="p-0">
+                    <td colspan="11" class="p-0">
                       @if (hasFilters()) {
                         <tk-empty-state
                           icon="filter"
@@ -461,7 +600,12 @@ function orUndefined(values: string[]): string[] | undefined {
           </table>
         </div>
 
-        @if (total() > pageSize) {
+        <!-- Shown whenever there is anything to show, not only past page one.
+             The pager is also the count — "Showing 1–20 of 248" — and hiding it
+             on a single page took away the one place that says how many results
+             there are at all. With one page the arrows simply sit disabled,
+             which is the truth about where you are. -->
+        @if (total() > 0) {
           <tk-pagination
             card-footer
             [page]="pageNumber()"
@@ -491,6 +635,7 @@ function orUndefined(values: string[]): string[] | undefined {
     <tk-resolve-dialog
       [(open)]="resolveOpen"
       [subject]="resolving()?.subject"
+      [appliesTo]="bulkResolving() ? selectedCount() : 0"
       [saving]="resolveSaving()"
       [error]="resolveError()"
       (confirmed)="applyResolution($event)"
@@ -504,12 +649,57 @@ export class TicketList {
   private readonly transloco = inject(TranslocoService);
   private readonly toast = inject(ToastService);
 
+  private readonly confirm = inject(ConfirmService);
+
   protected readonly resolveOpen = signal(false);
   protected readonly resolving = signal<TicketSummary | null>(null);
+  /** True when the dialog is resolving the whole selection rather than one row. */
+  protected readonly bulkResolving = signal(false);
   protected readonly resolveSaving = signal(false);
   protected readonly resolveError = signal<string | null>(null);
   /** Re-resolve TS-side copy when the language changes. */
   private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
+
+  protected readonly isAdmin = this.session.isAdmin;
+
+  /**
+   * Who a ticket can be given to. Loaded once for the page and shared by the
+   * filter bar, the row menus and the bulk bar — three copies of the same list
+   * would be three requests and, worse, three chances to disagree.
+   *
+   * Keyed on the signed-in user so it waits for the session: `/api/users` is
+   * agent-only, and firing it before `/me` has answered is a guaranteed 403.
+   */
+  protected readonly agents = resource({
+    params: () => ({ me: this.session.user()?.id ?? '' }),
+    loader: ({ params }): Promise<UserSummary[]> =>
+      params.me ? this.api.agents() : Promise.resolve([]),
+  });
+
+  protected readonly unassignedValue = UNASSIGNED_FACET;
+
+  /**
+   * The workspace's channels, from its own configuration rather than from the
+   * facet counts.
+   *
+   * The facets would be the obvious source and are the wrong one: they only
+   * return values that tickets currently carry, so a workspace that has just
+   * turned on WhatsApp would have no way to filter for it until the first
+   * WhatsApp ticket arrives. They also only load once the More panel has been
+   * opened, and this select is on the bar.
+   */
+  private readonly channels = resource({
+    params: () => ({ me: this.session.user()?.id ?? '' }),
+    loader: ({ params }): Promise<TicketOption[]> =>
+      params.me ? this.api.ticketOptions('channel') : Promise.resolve([]),
+  });
+
+  protected readonly channelOptions = computed(() =>
+    (this.channels.value() ?? []).map((option) => ({
+      value: option.value,
+      label: option.label,
+    })),
+  );
 
   /**
    * Bound from the query string by `withComponentInputBinding()`.
@@ -702,6 +892,71 @@ export class TicketList {
   protected readonly total = computed(() => this.tickets.value()?.total ?? 0);
   protected readonly errorText = computed(() => errorMessage(this.tickets.error()));
 
+  // ── Selection ─────────────────────────────────────────────────────────────
+  //
+  // Ids, not tickets: a selected row can be re-fetched, re-sorted or filtered
+  // out from under the selection, and holding the objects would mean acting on
+  // a stale copy of a ticket somebody else has since changed.
+
+  private readonly selection = signal<ReadonlySet<string>>(new Set());
+
+  /**
+   * Only what is on screen counts.
+   *
+   * The set survives a reload (so a bulk assign doesn't lose the selection
+   * while the list refreshes) but anything filtered or paged away is not
+   * counted and never acted on — an action must only ever reach rows the agent
+   * can see. This is the single rule that keeps "20 selected" honest.
+   */
+  protected readonly selectedIds = computed(() => {
+    const chosen = this.selection();
+    return this.rows().filter((t) => chosen.has(t.id)).map((t) => t.id);
+  });
+
+  protected readonly selectedCount = computed(() => this.selectedIds().length);
+
+  protected readonly allOnPageSelected = computed(() => {
+    const rows = this.rows();
+    return rows.length > 0 && this.selectedCount() === rows.length;
+  });
+
+  /** Some but not all — the header tick's dash state. */
+  protected readonly someOnPageSelected = computed(
+    () => this.selectedCount() > 0 && !this.allOnPageSelected(),
+  );
+
+  protected readonly bulkBusy = signal(false);
+
+  protected isSelected(id: string): boolean {
+    return this.selection().has(id);
+  }
+
+  protected toggleRow(id: string, checked: boolean): void {
+    this.selection.update((current) => {
+      const next = new Set(current);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
+  }
+
+  /** The header tick. Adds or removes this page only — never the whole result. */
+  protected togglePage(checked: boolean): void {
+    const ids = this.rows().map((t) => t.id);
+    this.selection.update((current) => {
+      const next = new Set(current);
+      for (const id of ids) {
+        if (checked) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+  }
+
+  protected clearSelection(): void {
+    this.selection.set(new Set());
+  }
+
   protected readonly hasFilters = computed(
     () => !!(this.view() || this.priority() || this.q() || this.facetCount()),
   );
@@ -805,6 +1060,29 @@ export class TicketList {
   }
 
   /**
+   * The bar's single-value view of a facet group.
+   *
+   * A group holding two or more values has no single answer, so the select
+   * shows its "All" row rather than picking one of them to display. The panel
+   * is where a multi-select is both made and read; the bar is the quick one.
+   */
+  protected singleFacet(key: FacetKey): string {
+    const values = this.facetValues(key);
+    return values.length === 1 ? values[0] : '';
+  }
+
+  /** Replaces the group with one value, or clears it. */
+  protected setFacetSingle(key: FacetKey, value: string): void {
+    void this.router.navigate([], {
+      queryParams: {
+        [TicketList.FACET_PARAM[key]]: value || null,
+        page: null,
+      },
+      queryParamsHandling: 'merge',
+    });
+  }
+
+  /**
    * Ticks or unticks one value.
    *
    * Picking a status also clears a status-shaped saved view, because the two
@@ -886,10 +1164,18 @@ export class TicketList {
   protected resolve(ticket: TicketSummary): void {
     this.resolveError.set(null);
     this.resolving.set(ticket);
+    // Cleared, always. The dialog is shared with the bulk path, and a leftover
+    // true here would send one row's note to the whole selection.
+    this.bulkResolving.set(false);
     this.resolveOpen.set(true);
   }
 
   protected async applyResolution(payload: ResolvePayload): Promise<void> {
+    if (this.bulkResolving()) {
+      await this.applyBulkResolution(payload);
+      return;
+    }
+
     const ticket = this.resolving();
     if (!ticket) return;
 
@@ -911,6 +1197,162 @@ export class TicketList {
       this.resolveError.set(errorMessage(err));
     } finally {
       this.resolveSaving.set(false);
+    }
+  }
+
+  // ── Bulk ──────────────────────────────────────────────────────────────────
+
+  /**
+   * The bar has already decided what to do; this carries it out.
+   *
+   * Resolve is the one that does not run straight away — it needs a note, and
+   * the API rejects a status change into a terminal state without one, so it
+   * opens the same dialog the single-ticket path uses.
+   */
+  protected async onBulk(command: BulkCommand): Promise<void> {
+    if (command.kind === 'resolve') {
+      this.resolveError.set(null);
+      this.resolving.set(null);
+      this.bulkResolving.set(true);
+      this.resolveOpen.set(true);
+      return;
+    }
+
+    if (command.kind === 'delete') {
+      const count = this.selectedCount();
+      const confirmed = await this.confirm.ask({
+        heading: this.transloco.translate('tickets.bulk.deleteHeading', { count }),
+        // Names the consequence, not just the count. Everything on a ticket goes
+        // with it, and an agent who reads "delete 20 tickets" is not
+        // necessarily picturing the conversations inside them.
+        message: this.transloco.translate('tickets.bulk.deleteBody'),
+        confirmLabel: this.transloco.translate('tickets.bulk.deleteConfirm'),
+        tone: 'danger',
+      });
+      if (!confirmed) return;
+    }
+
+    await this.runBulk(this.toRequest(command));
+  }
+
+  /** `BulkCommand` → the wire shape. Resolve is absent — it goes via the dialog. */
+  private toRequest(command: Exclude<BulkCommand, { kind: 'resolve' }>): TicketBulkRequest {
+    const ids = this.selectedIds();
+    switch (command.kind) {
+      case 'assign':
+        return {
+          ids,
+          action: 'assign',
+          assigneeId: command.assigneeId,
+          // Not `!assigneeId` — the server needs to be told that "nobody" was
+          // chosen, because a missing id and a chosen nobody look identical.
+          unassign: command.assigneeId === null,
+        };
+      case 'priority':
+        return { ids, action: 'priority', priority: command.priority };
+      case 'pin':
+        return { ids, action: 'pin', on: command.on };
+      case 'flag':
+        return { ids, action: 'flag', on: command.on };
+      case 'delete':
+        return { ids, action: 'delete' };
+    }
+  }
+
+  private async applyBulkResolution(payload: ResolvePayload): Promise<void> {
+    this.resolveSaving.set(true);
+    this.resolveError.set(null);
+    try {
+      const result = await this.api.bulk({
+        ids: this.selectedIds(),
+        action: 'status',
+        status: payload.status,
+        resolutionNote: payload.note,
+        resolutionSummary: payload.summary,
+      });
+      this.resolveOpen.set(false);
+      this.report(result);
+    } catch (err) {
+      this.resolveError.set(errorMessage(err));
+    } finally {
+      this.resolveSaving.set(false);
+      this.bulkResolving.set(false);
+    }
+  }
+
+  private async runBulk(request: TicketBulkRequest): Promise<void> {
+    if (this.bulkBusy() || request.ids.length === 0) return;
+    this.bulkBusy.set(true);
+    try {
+      this.report(await this.api.bulk(request));
+    } catch (err) {
+      this.toast.error(errorMessage(err));
+    } finally {
+      this.bulkBusy.set(false);
+    }
+  }
+
+  /**
+   * Says what actually happened.
+   *
+   * **A partial batch is a warning, not a success.** The request resolved, so a
+   * caller that only reported the absence of a thrown error would tell the agent
+   * twenty tickets were resolved when three of them were refused — and those
+   * three would sit in the queue with nobody looking for them. The first
+   * failure's reason is shown because it is almost always the reason for all of
+   * them, and a toast has room for one sentence.
+   */
+  private report(result: TicketBulkResult): void {
+    const failed = result.failed.length;
+    if (failed === 0) {
+      this.toast.success(
+        this.transloco.translate('tickets.bulk.done', { count: result.succeeded }),
+      );
+      this.clearSelection();
+    } else if (result.succeeded === 0) {
+      this.toast.error(
+        this.transloco.translate('tickets.bulk.allFailed', {
+          count: failed,
+          reason: result.failed[0].reason,
+        }),
+      );
+    } else {
+      this.toast.warning(
+        this.transloco.translate('tickets.bulk.partial', {
+          done: result.succeeded,
+          failed,
+          reason: result.failed[0].reason,
+        }),
+      );
+      // Deliberately NOT cleared. The tickets that failed are still ticked, so
+      // the agent can read which ones they were and try something else with
+      // them — clearing here would lose exactly the information they need.
+    }
+    this.tickets.reload();
+  }
+
+  // ── Row actions ───────────────────────────────────────────────────────────
+
+  /** Assign one ticket from its row menu. Null hands it back to the queue. */
+  protected async assignTo(ticket: TicketSummary, agentId: string | null): Promise<void> {
+    if (ticket.assignee?.id === agentId) return;
+    try {
+      await this.api.update(ticket.id, {
+        assigneeId: agentId ?? undefined,
+        unassign: agentId === null,
+      });
+      this.tickets.reload();
+    } catch (err) {
+      this.toast.error(errorMessage(err));
+    }
+  }
+
+  protected async toggleFlag(ticket: TicketSummary): Promise<void> {
+    try {
+      await this.api.setFlagged(ticket.id, !ticket.flaggedAt);
+      this.tickets.reload();
+    } catch (err) {
+      this.toast.error(errorMessage(err));
     }
   }
 

@@ -9,7 +9,9 @@ namespace Trackly.Api.Controllers;
 [ApiController]
 [Route("api/tickets")]
 [Authorize]
-public class TicketsController(TicketService tickets, AttachmentService attachments, TagService tags, CsatService csat) : ControllerBase
+public class TicketsController(
+    TicketService tickets, AttachmentService attachments, TagService tags,
+    CsatService csat, TicketBulkService bulk) : ControllerBase
 {
     public record SetTagsRequest(List<string> Tags);
 
@@ -72,6 +74,19 @@ public class TicketsController(TicketService tickets, AttachmentService attachme
         var ticket = await tickets.UpdateAsync(User.GetActor(), id, request, ct);
         return ticket is null ? NotFound() : Ok(ticket);
     }
+
+    /// <summary>
+    /// One action applied to a selection from the ticket list.
+    ///
+    /// <b>Returns 200 with a report, not 204.</b> A bulk write is partial by
+    /// design — a workflow can refuse one transition out of forty — so the
+    /// response says how many went through and names each one that did not.
+    /// A 204 here would be the endpoint claiming success it cannot vouch for.
+    /// </summary>
+    [HttpPost("bulk")]
+    [Authorize(Policy = "AgentOrAdmin")]
+    public async Task<IActionResult> Bulk([FromBody] TicketBulkRequest request, CancellationToken ct)
+        => Ok(await bulk.RunAsync(User.GetActor(), request, ct));
 
     // ---- Time spent ----
     //

@@ -501,8 +501,17 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasOne(m => m.User).WithMany().HasForeignKey(m => m.UserId)
                 .OnDelete(DeleteBehavior.Cascade);
-            // NoAction: the comment's own cascade already removes these rows, and
-            // a second path from tickets makes PostgreSQL refuse the schema.
+            // NoAction because a second cascade path from tickets is a schema
+            // PostgreSQL refuses to create.
+            //
+            // This used to say the comment's own cascade already removed these
+            // rows, so deleting a ticket was safe. It is not: PostgreSQL checks
+            // the ticket's referencing keys against the row being deleted, while
+            // the cascade that would empty this table hangs off `comments`, one
+            // level further down — so the constraint fires first and the delete
+            // is refused. Anything that deletes a ticket must clear these rows
+            // itself, exactly as it does for ticket_relations. See
+            // TicketBulkService.DeleteAsync, which is the only such caller.
             e.HasOne(m => m.Ticket).WithMany().HasForeignKey(m => m.TicketId)
                 .OnDelete(DeleteBehavior.NoAction);
         });
