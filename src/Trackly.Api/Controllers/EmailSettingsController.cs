@@ -40,6 +40,7 @@ public class EmailSettingsController(TracklyDbContext db) : ControllerBase
     public async Task<IActionResult> TestEmail(
         [FromServices] IWorkspaceEmailSender sender,
         [FromServices] EmailProviderService providers,
+        [FromServices] EmailTemplateService templates,
         CancellationToken ct)
     {
         var to = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
@@ -48,23 +49,30 @@ public class EmailSettingsController(TracklyDbContext db) : ControllerBase
 
         var config = await GetOrCreateConfigAsync(ct);
 
-        // The one resolver every outbound path uses: the designated sending
-        // provider, else null meaning the shared deployment relay. Resolving it
-        // here a second way is how the test comes back green for a transport
-        // nothing actually sends through.
-        var smtp = await providers.ResolveSenderAsync(User.GetWorkspaceId(), ct);
-
         try
         {
+            // The one resolver every outbound path uses: the designated sending
+            // provider, else null meaning the shared deployment relay. Resolving
+            // it here a second way is how the test comes back green for a
+            // transport nothing actually sends through.
+            //
+            // Inside the try because resolving renews an OAuth access token, and
+            // a connection that cannot be renewed throws. That is a failed test,
+            // not a failed request — the admin needs the message, not a 500.
+            var smtp = await providers.ResolveSenderAsync(User.GetWorkspaceId(), ct);
+
+            // Through the template pipeline like everything else, so the message
+            // that proves email works is also the message that shows what the
+            // workspace's email actually looks like — layout, logo and colour.
+            // A bare-text probe would pass while the branded layout was broken.
+            var rendered = await templates.RenderAsync(
+                User.GetWorkspaceId(), "email_test", new Dictionary<string, string?>(), ct);
+
             await sender.SendAsync(smtp, new EmailMessage(
                 to,
-                "Trackly email test",
-                """
-                This is a test message from Trackly.
-
-                If you are reading it, outbound email works and sign-in codes,
-                invitations and ticket notifications can reach people.
-                """,
+                rendered.Subject,
+                rendered.Text,
+                HtmlBody: rendered.Html,
                 FromEmail: config.FromEmail,
                 FromName: config.FromName), ct);
         }

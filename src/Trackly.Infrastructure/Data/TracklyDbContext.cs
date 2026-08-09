@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Trackly.Core.Email;
 using Trackly.Core.Entities;
 
 namespace Trackly.Infrastructure.Data;
@@ -43,6 +44,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<EmailConfig> EmailConfigs => Set<EmailConfig>();
     public DbSet<EmailProvider> EmailProviders => Set<EmailProvider>();
     public DbSet<EmailOAuthState> EmailOAuthStates => Set<EmailOAuthState>();
+    public DbSet<EmailTemplate> EmailTemplates => Set<EmailTemplate>();
     public DbSet<StorageConfig> StorageConfigs => Set<StorageConfig>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<InboundEmailEvent> InboundEmailEvents => Set<InboundEmailEvent>();
@@ -622,6 +624,24 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.HasIndex(s => s.ExpiresAt); // cleanup sweeps
             e.HasOne(s => s.Workspace).WithMany().HasForeignKey(s => s.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EmailTemplate>(e =>
+        {
+            e.ToTable("email_templates");
+            // One customisation per key per language. Rows exist only for keys an
+            // admin actually changed — everything else renders from the catalogue.
+            e.HasIndex(t => new { t.WorkspaceId, t.Key, t.Locale }).IsUnique();
+            e.Property(t => t.Locale).HasDefaultValue(EmailTemplateCatalog.DefaultLocale);
+            e.Property(t => t.IsActive).HasDefaultValue(true);
+            e.Property(t => t.Standalone).HasDefaultValue(false);
+            e.HasOne(t => t.Workspace).WithMany().HasForeignKey(t => t.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // SetNull: an agent leaving must not delete the template they last
+            // edited. The attribution is a convenience, the template is the asset.
+            e.HasOne(t => t.UpdatedBy).WithMany().HasForeignKey(t => t.UpdatedById)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<StorageConfig>(e =>

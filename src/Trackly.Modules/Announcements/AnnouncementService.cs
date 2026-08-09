@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Trackly.Core.Entities;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
+using Trackly.Infrastructure.Text;
 using Trackly.Modules.Email;
 using Trackly.Modules.Tickets;
 
@@ -15,6 +16,7 @@ public class AnnouncementService(
     TracklyDbContext db,
     IWorkspaceEmailSender sender,
     EmailProviderService providers,
+    EmailTemplateService templates,
     ILogger<AnnouncementService> logger)
 {
     public async Task<IReadOnlyList<AnnouncementSummaryDto>> ListAsync(Actor actor, CancellationToken ct)
@@ -99,6 +101,27 @@ public class AnnouncementService(
             .Select(u => new { u.Id, u.Email })
             .ToListAsync(ct);
 
+        // Resolve the transport and render the message *before* claiming.
+        //
+        // Both can throw — an OAuth connection that cannot be renewed is the
+        // usual way — and claiming first would stamp SentAt, write a row per
+        // recipient, and then abandon them all as permanently Pending with the
+        // announcement marked sent. Failing before the claim leaves it untouched
+        // and retryable on the next tick.
+        var (smtp, fromEmail, fromName) = await ResolveSenderAsync(announcement.WorkspaceId, ct);
+
+        // Rendered once, not per recipient: the body is identical for everyone
+        // and the template carries no per-person variable, so rendering inside
+        // the loop would re-query branding for every delivery.
+        var rendered = await templates.RenderAsync(announcement.WorkspaceId, "announcement",
+            new Dictionary<string, string?>
+            {
+                ["title"] = announcement.Subject,
+                // Admin-authored plain text: encoded and paragraphed, because the
+                // wrapper is HTML now and raw newlines would collapse.
+                ["body"] = RichText.ToHtmlParagraphs(announcement.Body),
+            }, ct);
+
         // Claim before sending so a second worker tick can't pick it up again.
         announcement.RecipientCount = recipients.Count;
         announcement.SentAt = DateTime.UtcNow;
@@ -111,7 +134,6 @@ public class AnnouncementService(
         db.AnnouncementDeliveries.AddRange(deliveries);
         await db.SaveChangesAsync(ct);
 
-        var (smtp, fromEmail, fromName) = await ResolveSenderAsync(announcement.WorkspaceId, ct);
         var success = 0;
         var failure = 0;
         foreach (var delivery in deliveries)
@@ -119,8 +141,8 @@ public class AnnouncementService(
             try
             {
                 await sender.SendAsync(smtp, new EmailMessage(
-                    delivery.Email, announcement.Subject, announcement.Body,
-                    HtmlBody: null, ToName: null, FromEmail: fromEmail, FromName: fromName), ct);
+                    delivery.Email, rendered.Subject, rendered.Text,
+                    HtmlBody: rendered.Html, ToName: null, FromEmail: fromEmail, FromName: fromName), ct);
                 delivery.Status = DeliveryStatus.Sent;
                 delivery.SentAt = DateTime.UtcNow;
                 success++;

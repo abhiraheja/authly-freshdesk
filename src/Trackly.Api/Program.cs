@@ -42,6 +42,8 @@ builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<Trackly.Modules.Notifications.NotificationFeed>();
 builder.Services.AddScoped<InboundEmailService>();
 builder.Services.AddScoped<EmailProviderService>();
+builder.Services.AddScoped<EmailBrandResolver>();
+builder.Services.AddScoped<EmailTemplateService>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<TicketBulkService>();
 builder.Services.AddScoped<AttachmentService>();

@@ -156,6 +156,28 @@ public static class RichText
         return text.Trim();
     }
 
+    /// <summary>
+    /// Plain text → the minimal HTML that preserves how it was typed.
+    ///
+    /// The inverse of <see cref="ToPlainText"/>, and needed for the same reason
+    /// in reverse: notification emails are HTML now, and a plain-text comment
+    /// dropped into one arrives as a single run-on paragraph with any
+    /// <c>&lt;</c> the author typed interpreted as a tag. Encoding first is what
+    /// makes the result safe to interpolate raw alongside comment bodies that
+    /// were already sanitised on write.
+    /// </summary>
+    public static string ToHtmlParagraphs(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return string.Empty;
+
+        var paragraphs = Regex.Split(text.Replace("\r\n", "\n").Replace('\r', '\n'), @"\n{2,}")
+            .Select(p => p.Trim())
+            .Where(p => p.Length > 0)
+            .Select(p => $"<p>{WebUtility.HtmlEncode(p).Replace("\n", "<br>")}</p>");
+
+        return string.Concat(paragraphs);
+    }
+
     /// <summary>The class the composer marks a mention with.</summary>
     public const string MentionClass = "mention";
 

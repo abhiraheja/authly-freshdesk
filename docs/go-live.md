@@ -53,7 +53,7 @@ store. Empty strings in the committed `appsettings.json` are placeholders.
 | `Ai:ApiKey` | Anthropic (Claude) API key for the AI copilot. Unset ⇒ AI features stay off everywhere | per-env (only if using AI) | secret |
 | `Ai:Model` | Claude model id for the copilot (defaults to `claude-opus-5`) | optional | no |
 | `App:FrontendBaseUrl` | Absolute base URL of the SPA; used to build links in **emails** (magic links, invites, guest tracking, notifications) and SSO redirects | per-env (e.g. `https://app.trackly.com`) | no |
-| `App:ApiBaseUrl` | Public base URL of the API; used to build the **OIDC/SAML redirect (callback) URI** and the **mail OAuth callback URI**. Falls back to the request scheme+host if unset — set it explicitly behind a proxy | per-env (e.g. `https://app.trackly.com`) | no |
+| `App:ApiBaseUrl` | Public base URL of the API; used to build the **OIDC/SAML redirect (callback) URI**, the **mail OAuth callback URI**, and the **workspace logo URL in HTML emails**. Falls back to the request scheme+host if unset for the callbacks — but the logo has no request to fall back on, so leaving it unset means emails show the workspace name as text instead of the logo | per-env (e.g. `https://app.trackly.com`) | no |
 | `Storage:LocalPath` | Directory for uploaded attachments + logos | per-env (see §3) | no |
 | `Email:Smtp:Host` | Shared/deployment-level SMTP relay host. Empty ⇒ emails are logged, not sent | per-env | no |
 | `Email:Smtp:Port` | SMTP port | default 587 | no |
@@ -391,6 +391,8 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] **If Microsoft is connected:** its redirect URI is registered under Entra's **Web** platform, not *Single-page application*, and the **directory (tenant) ID** is filled in unless the app registration is multi-tenant. The SPA platform silently caps the refresh token at 24 hours; `/common` with a single-tenant app fails outright with `AADSTS50194`
 - [ ] `Security:MasterKey` set to a real base64 32-byte key, stored + backed up
 - [ ] `App:FrontendBaseUrl` = the public SPA URL (test a magic-link email points there); the SPA host must also serve `index.html` for `/oauth/callback`
+- [ ] `App:ApiBaseUrl` = the public API URL, and **reachable from outside** — mail clients fetch the workspace logo from it over the open internet. An address that only resolves inside the cluster gives every recipient a broken image
+- [ ] **Send a test email** and open it: the layout, logo and brand colour are what customers will see. This is also the send that satisfies invariant 8
 - [ ] `Storage:LocalPath` on a persistent, backed-up volume (single instance) — still the default and the fallback even when workspaces use a cloud provider
 - [ ] Any workspace on Azure/GCS has passed **Admin → Storage → Test connection**
 - [ ] Cloud buckets are **private** — unless a CDN is in use, in which case the exposure noted in §3 was a conscious decision

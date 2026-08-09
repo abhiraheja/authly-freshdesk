@@ -860,6 +860,8 @@ current documentation beats recollection every time.
 - [ ] A connected Microsoft card names the mailbox, including for a work account with no `email` claim
 - [ ] No secret is ever returned by any endpoint (`has*` booleans only)
 - [ ] Test button reports a real failure with a usable message
+- [ ] A card that is **connected but missing its OAuth client ID or secret** fails with a message naming that, not with the relay's own confusion. This was the bug behind a Google send returning Gmail's `5.7.0 Authentication Required`: `GetAccessTokenAsync` returned null (which callers read as "not an OAuth row"), the resolver fell through to the password branch, found no password either, and produced `SmtpSettings` with **no credentials at all** — so the sender skipped `AUTH` and sent anonymously. The same path silently stopped inbound polling
+- [ ] An unusable sending provider fails an announcement **before** deliveries are claimed, leaving it retryable rather than stamped sent with every delivery stuck `Pending`
 - [ ] A **send-only** card (SMTP relay, no IMAP details) can be tested — this was broken until the per-provider test learned to check sending
 - [ ] A card configured for both reports both failures at once, each labelled
 - [ ] After Phase 1, the test sends through the **designated sending provider**, not the shared relay

@@ -337,7 +337,21 @@ public class EmailProviderService(
         if (ReadTokens(provider) is not { } stored) return null;
 
         var descriptor = EmailProviderCatalog.Find(provider.Provider);
-        if (descriptor is null || AppFor(descriptor, provider) is not { } app) return null;
+
+        // Tokens but no app to renew them with. Returning null here — as this did
+        // — reads to the caller as "this row is not on OAuth", so it falls
+        // through to the password branch, finds no password either, and hands
+        // back SmtpSettings carrying no credentials at all. The sender then skips
+        // AUTH entirely and the admin gets the relay's own bafflement
+        // ("5.7.0 Authentication Required") instead of the actual problem. It
+        // also stops inbound polling with no error anywhere.
+        //
+        // The row is connected; it just cannot be used. That is a failure, and it
+        // has to say so.
+        if (descriptor is null || AppFor(descriptor, provider) is not { } app)
+            throw new InvalidOperationException(
+                $"{descriptor?.DisplayName ?? provider.Provider} is connected but its OAuth client ID or secret is "
+                + "missing, so its access token cannot be renewed. Re-enter the client ID and secret on the card, then reconnect.");
 
         if (stored.ExpiresAt - DateTime.UtcNow > RefreshMargin) return stored.AccessToken;
         if (stored.RefreshToken is not { Length: > 0 } refreshToken)

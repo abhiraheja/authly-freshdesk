@@ -13,11 +13,13 @@ namespace Trackly.Modules.Email;
 // misconfiguration) must never fail the ticket operation that triggered it, so
 // each public entry point swallows and logs its own exceptions. Recipients and
 // gating come from NotificationSettings; transport and threading headers come
-// from the workspace's EmailConfig.
+// from the workspace's EmailConfig; subject and body come from
+// EmailTemplateService, which resolves the admin's customisation or the built-in.
 public class NotificationService(
     TracklyDbContext db,
     IWorkspaceEmailSender sender,
     EmailProviderService providers,
+    EmailTemplateService templates,
     IConfiguration configuration,
     ILogger<NotificationService> logger)
 {
@@ -36,15 +38,13 @@ public class NotificationService(
             // Notify the auto-assigned agent. (Guests already got their submit
             // confirmation from GuestService; portal requesters get the create note.)
             if (ctx.Settings.NotifyAgentOnAssign && ticket.Assignee?.Email is { } agentEmail)
-                await SendAsync(ctx, agentEmail, ticket.Assignee.Name,
-                    $"[{Ref(ticket)}] Assigned to you — {ticket.Subject}",
-                    $"You have been assigned a new ticket.\n\n{Ref(ticket)} · {ticket.Subject}\n\n{AgentLink(ticket)}",
+                await SendAsync(ctx, agentEmail, ticket.Assignee.Name, "ticket_assigned",
+                    TicketVars(ticket, AgentLink(ticket), ("agent_name", ticket.Assignee.Name)),
                     ticketId, null, replyable: false);
 
             if (ctx.Settings.NotifyCustomerOnCreate && ticket.RequesterId is not null && ticket.Requester?.Email is { } custEmail)
-                await SendAsync(ctx, custEmail, ticket.Requester.Name,
-                    $"[{Ref(ticket)}] We received your request — {ticket.Subject}",
-                    $"Thanks — your request has been logged and a member of our team will respond soon.\n\n{Ref(ticket)} · {ticket.Subject}\n\n{PortalLink(ticket)}",
+                await SendAsync(ctx, custEmail, ticket.Requester.Name, "ticket_created_customer",
+                    TicketVars(ticket, PortalLink(ticket), ("customer_name", ticket.Requester.Name)),
                     ticketId, null, replyable: ctx.ReplyTo is not null);
         }
         catch (Exception ex) { logger.LogWarning(ex, "OnTicketCreated notify failed for {TicketId}", ticketId); }
@@ -72,29 +72,36 @@ public class NotificationService(
                 await db.SaveChangesAsync(ct);
             }
 
-            // Trackly's notifications are plain text, so a rich body has to be
-            // flattened. Sending the markup would show the customer the tags.
+            // Emails are HTML now, so a rich body goes through as markup rather
+            // than being flattened. It is already sanitised — RichText.SanitizeHtml
+            // ran on write — which is what makes it safe to pass as a raw
+            // `{{{body}}}` rather than an escaped one. A plain-text comment still
+            // has to be encoded and have its newlines turned into markup, or it
+            // arrives as one paragraph with tags showing.
             var body = comment.BodyFormat == CommentBodyFormat.Html
-                ? RichText.ToPlainText(comment.Body)
-                : comment.Body;
+                ? comment.Body
+                : RichText.ToHtmlParagraphs(comment.Body);
 
             if (authoredByAgent)
             {
                 if (!ctx.Settings.NotifyCustomerOnReply) return;
                 var (email, name) = Requester(ticket);
                 if (email is null) return;
-                await SendAsync(ctx, email, name,
-                    $"[{Ref(ticket)}] {ticket.Subject}",
-                    $"{body}\n\n---\n{(ctx.ReplyTo is not null ? "Reply to this email to respond." : PortalOrTrackingHint(ticket))}",
+                await SendAsync(ctx, email, name, "ticket_reply_customer",
+                    TicketVars(ticket, PortalOrTrackingLink(ticket),
+                        ("body", body),
+                        ("can_reply", ctx.ReplyTo is not null ? "true" : ""),
+                        ("customer_name", name)),
                     ticketId, messageId, replyable: ctx.ReplyTo is not null);
             }
             else
             {
                 if (!ctx.Settings.NotifyAgentOnReply) return;
                 foreach (var (email, name) in await AgentRecipientsAsync(ticket, ct))
-                    await SendAsync(ctx, email, name,
-                        $"[{Ref(ticket)}] {ticket.Subject}",
-                        $"{Requester(ticket).Name ?? "The customer"} replied:\n\n{body}\n\n{AgentLink(ticket)}",
+                    await SendAsync(ctx, email, name, "ticket_reply_agent",
+                        TicketVars(ticket, AgentLink(ticket),
+                            ("body", body),
+                            ("author_name", Requester(ticket).Name ?? "The customer")),
                         ticketId, messageId, replyable: ctx.ReplyTo is not null);
             }
         }
@@ -132,11 +139,12 @@ public class NotificationService(
                 .ToListAsync(ct);
             if (recipients.Count == 0) return;
 
-            var quoted = string.IsNullOrWhiteSpace(excerpt) ? "" : $"\n\n{excerpt.Trim()}";
+            var quoted = string.IsNullOrWhiteSpace(excerpt) ? "" : RichText.ToHtmlParagraphs(excerpt.Trim());
             foreach (var person in recipients)
-                await SendAsync(ctx, person.Email!, person.Name,
-                    $"[{Ref(ticket)}] {author ?? "Someone"} mentioned you — {ticket.Subject}",
-                    $"{author ?? "Someone"} mentioned you on {Ref(ticket)} · {ticket.Subject}.{quoted}\n\n{AgentLink(ticket)}",
+                await SendAsync(ctx, person.Email!, person.Name, "ticket_mention",
+                    TicketVars(ticket, AgentLink(ticket),
+                        ("author_name", author ?? "Someone"),
+                        ("excerpt", quoted)),
                     // replyable: false — an emailed reply would land as a public
                     // customer-visible comment, and a mention usually lives on an
                     // internal note. Answering means opening the ticket.
@@ -156,9 +164,10 @@ public class NotificationService(
 
             var (email, name) = Requester(ticket);
             if (email is null) return;
-            await SendAsync(ctx, email, name,
-                $"[{Ref(ticket)}] Status updated to {newStatus} — {ticket.Subject}",
-                $"Your ticket {Ref(ticket)} is now marked \"{newStatus}\".\n\n{PortalOrTrackingHint(ticket)}",
+            await SendAsync(ctx, email, name, "ticket_status_changed",
+                TicketVars(ticket, PortalOrTrackingLink(ticket),
+                    ("status", newStatus),
+                    ("customer_name", name)),
                 ticketId, null, replyable: ctx.ReplyTo is not null);
         }
         catch (Exception ex) { logger.LogWarning(ex, "OnStatusChanged notify failed for {TicketId}", ticketId); }
@@ -178,14 +187,11 @@ public class NotificationService(
             var (email, name) = Requester(ticket);
             if (email is null) return;
 
-            var body = $"Your ticket {Ref(ticket)} is now marked \"resolved\".";
-            if (csatToken is not null)
-                body += $"\n\nHow did we do? Rate your support experience:\n{CsatLink(ticket, csatToken)}";
-            body += $"\n\n{PortalOrTrackingHint(ticket)}";
-
-            await SendAsync(ctx, email, name,
-                $"[{Ref(ticket)}] Resolved — {ticket.Subject}",
-                body, ticketId, null, replyable: ctx.ReplyTo is not null);
+            await SendAsync(ctx, email, name, "ticket_resolved",
+                TicketVars(ticket, PortalOrTrackingLink(ticket),
+                    ("csat_url", csatToken is null ? null : CsatLink(ticket, csatToken)),
+                    ("customer_name", name)),
+                ticketId, null, replyable: ctx.ReplyTo is not null);
         }
         catch (Exception ex) { logger.LogWarning(ex, "OnResolved notify failed for {TicketId}", ticketId); }
     }
@@ -202,9 +208,8 @@ public class NotificationService(
 
             var agent = await db.Users.SingleOrDefaultAsync(u => u.Id == assigneeId, ct);
             if (agent?.Email is not { } email) return;
-            await SendAsync(ctx, email, agent.Name,
-                $"[{Ref(ticket)}] Assigned to you — {ticket.Subject}",
-                $"This ticket has been assigned to you.\n\n{Ref(ticket)} · {ticket.Subject}\n\n{AgentLink(ticket)}",
+            await SendAsync(ctx, email, agent.Name, "ticket_assigned",
+                TicketVars(ticket, AgentLink(ticket), ("agent_name", agent.Name)),
                 ticketId, null, replyable: false);
         }
         catch (Exception ex) { logger.LogWarning(ex, "OnAssignment notify failed for {TicketId}", ticketId); }
@@ -281,16 +286,21 @@ public class NotificationService(
     // ---- Send + helpers ------------------------------------------------------
 
     private async Task SendAsync(
-        Ctx ctx, string toEmail, string? toName, string subject, string body,
+        Ctx ctx, string toEmail, string? toName, string templateKey,
+        Dictionary<string, string?> variables,
         Guid ticketId, string? messageId, bool replyable)
     {
         var replyTo = replyable && ctx.ReplyTo is not null
             ? ctx.ReplyTo.Replace("{tid}", ticketId.ToString("N"))
             : null;
 
+        var rendered = await templates.RenderAsync(ctx.Workspace.Id, templateKey, variables, CancellationToken.None);
+
         await sender.SendAsync(ctx.Smtp, new EmailMessage(
-            toEmail, subject, body,
-            HtmlBody: null,
+            toEmail, rendered.Subject, rendered.Text,
+            // Both parts, always. The text alternative is derived from the same
+            // render, so the two cannot describe different things.
+            HtmlBody: rendered.Html,
             ToName: toName,
             FromEmail: ctx.FromEmail,
             FromName: ctx.FromName,
@@ -298,14 +308,42 @@ public class NotificationService(
             MessageId: messageId ?? NewMessageId(ticketId)));
     }
 
+    /// <summary>
+    /// The variables every ticket email shares, plus whatever the caller adds.
+    ///
+    /// Note what is *not* here: nothing derived from a comment's `is_internal`
+    /// flag, and no collection a template could walk. The dictionary is the
+    /// whole reachable surface, which is what makes invariant 5 structural
+    /// rather than a rule someone has to remember.
+    /// </summary>
+    private static Dictionary<string, string?> TicketVars(
+        Ticket t, string? url, params (string Key, string? Value)[] extra)
+    {
+        var variables = new Dictionary<string, string?>
+        {
+            ["ticket_ref"] = Ref(t),
+            ["ticket_subject"] = t.Subject,
+            ["ticket_url"] = url,
+        };
+        foreach (var (key, value) in extra)
+            variables[key] = value;
+        return variables;
+    }
+
     private static string Ref(Ticket t) => GuestService.Reference(t.Id);
     private string AgentLink(Ticket t) => $"{FrontendBaseUrl}/dashboard/tickets/{t.Id}";
     private string PortalLink(Ticket t) => $"{FrontendBaseUrl}/portal/tickets/{t.Id}";
     private string CsatLink(Ticket t, string token) => $"{FrontendBaseUrl}/csat/{t.Id}?token={token}";
 
-    private string PortalOrTrackingHint(Ticket t) => t.RequesterId is not null
-        ? $"View your ticket: {PortalLink(t)}"
-        : "Use the private tracking link from your original confirmation email to view this ticket.";
+    /// <summary>
+    /// The portal link for a signed-in requester, and null for a guest.
+    ///
+    /// Null rather than a link because a guest's ticket is reachable only
+    /// through the private tokened link in their original confirmation email,
+    /// and this is not the place to reissue one. The templates guard their
+    /// buttons with <c>{{#if ticket_url}}</c> for exactly this case.
+    /// </summary>
+    private string? PortalOrTrackingLink(Ticket t) => t.RequesterId is not null ? PortalLink(t) : null;
 
     // <ticket-uuid>.<comment-uuid>@trackly — carried on the comment for threading.
     // Stored canonical (no angle brackets); MimeKit adds the brackets in the header
