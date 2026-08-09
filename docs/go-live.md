@@ -316,6 +316,18 @@ only the **shared/deployment-level** pieces are environment config.
     have outbound network access to the IMAP host.
 - `new_ticket_via_email` toggle (off by default) turns cold inbound mail into
   tickets.
+- **Email templates** (`email_templates`) — the subject and body of every
+  message, edited at `/admin/settings/email/templates`. **No environment config,
+  and nothing to seed:** a key with no row renders the built-in from code, which
+  is what lets a default improved in a later release reach an install that never
+  customised it. Two operational consequences:
+  - **A customised template is data, so it is a restore concern, not a
+    redeploy concern.** It survives upgrades; it does not survive a database
+    restore to a point before the edit.
+  - **A release that retires a catalogue key leaves its row inert** rather than
+    breaking — nothing renders it and nothing errors. Removing a *variable* a
+    customised template still references is the case to watch: it renders empty,
+    silently. Grep `email_templates.body_html` before dropping one.
 
 **Infra implications:** the polling worker is an in-process `BackgroundService`, so
 running multiple API instances would poll each mailbox multiple times. Until a
@@ -393,6 +405,7 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] `App:FrontendBaseUrl` = the public SPA URL (test a magic-link email points there); the SPA host must also serve `index.html` for `/oauth/callback`
 - [ ] `App:ApiBaseUrl` = the public API URL, and **reachable from outside** — mail clients fetch the workspace logo from it over the open internet. An address that only resolves inside the cluster gives every recipient a broken image. (Emails only reference the logo when one has actually been uploaded; with no logo the layout prints the workspace name as text, so this matters from the moment branding is set, not before)
 - [ ] **Send a test email** and open it: the layout, logo and brand colour are what customers will see. This is also the send that satisfies invariant 8
+- [ ] **If any email template was customised:** open **Admin ▾ → Workspace → Email → Edit templates** and send a **Test** for each one showing *Customised*. Built-in templates are covered by the send above; a customised one is the only mail nobody has read since it was edited
 - [ ] `Storage:LocalPath` on a persistent, backed-up volume (single instance) — still the default and the fallback even when workspaces use a cloud provider
 - [ ] Any workspace on Azure/GCS has passed **Admin → Storage → Test connection**
 - [ ] Cloud buckets are **private** — unless a CDN is in use, in which case the exposure noted in §3 was a conscious decision
@@ -412,10 +425,20 @@ worker on all but one) if any workspace uses mailbox polling.
 Append here as phases land, so nothing is missed later.
 
 - **Phase 1–3:** `ConnectionStrings:Trackly`, `App:FrontendBaseUrl`,
-  `Storage:LocalPath`, shared `Email:Smtp:*` (magic-link + invite + guest mail).
+  `Storage:LocalPath`, shared `Email:Smtp:*`. Magic-link, invite and guest mail
+  used to go **straight** to that shared relay, ignoring whatever the admin had
+  connected; they now go through the workspace's sending provider and fall back
+  to `Email:Smtp:*` only when none is designated. So the shared relay is still
+  worth configuring — it is what carries sign-in mail on an install that never
+  connects a provider — but it is no longer the only thing that can.
 - **Phase 4 (email):** `Security:MasterKey` (secrets at rest), shared SMTP relay,
   the inbound webhook endpoint reachability, the IMAP-worker single-instance
   constraint. Per-workspace email config is data, not env.
+- **Email templates:** no new env keys and nothing to seed — a key with no row
+  renders the built-in from code. The one environment dependency is
+  `App:ApiBaseUrl`, which is what makes the workspace logo an absolute,
+  externally-fetchable URL in HTML mail. Customised templates are workspace data:
+  they survive upgrades, and a database restore is the only way to get one back.
 - **Cloud storage:** no new env keys — provider and credentials are per-workspace
   data, set in Admin → Storage. But they are encrypted with `Security:MasterKey`,
   so that key must exist and be backed up *before* any workspace configures one.

@@ -646,7 +646,9 @@ Any SMTP relay works: SendGrid, Mailgun, Postmark, AWS SES, or the enterprise's 
 
 **OAuth is an authentication mechanism, not a second transport.** Google and Microsoft (and Yahoo when its card lands) authenticate IMAP and SMTP with **SASL XOAUTH2** — MailKit's `SaslMechanismOAuth2` — so `ImapMailboxReader` and `WorkspaceEmailSender` each gained one branch and the inbound pipeline, threading, dedup and attachment handling are untouched. `SmtpSettings.AccessToken` / `MailboxConnection.AccessToken` carry it; exactly one of token or password is ever set. `EmailProviderService.GetAccessTokenAsync` renews inside a five-minute margin, serialised per provider row because Google rotates refresh tokens and two concurrent refreshes invalidate each other.
 
-**One resolver, and every sender uses it.** `EmailProviderService.ResolveSenderAsync` turns the designation into `SmtpSettings?`. `NotificationService`, `AnnouncementService` and the email test all call it, so the test proves the transport real mail goes through — anything else would be a false proof, and a false proof is what unlocks turning off the last working way in (invariant 8).
+**One resolver, and every sender uses it.** `EmailProviderService.ResolveSenderAsync` turns the designation into `SmtpSettings?`. `NotificationService`, `AnnouncementService`, `TransactionalMailer` and the email test all call it, so the test proves the transport real mail goes through — anything else would be a false proof, and a false proof is what unlocks turning off the last working way in (invariant 8).
+
+`IEmailSender` — the deployment-level relay from `appsettings` — is injected **only inside Infrastructure**, as the fallback behind `WorkspaceEmailSender`. Nothing in `Modules` can reach it directly. That is a deliberate structural guard: sign-in, guest and invitation mail each bypassed the workspace's own relay for several phases precisely because they *could*, and the failure was invisible — on a self-hosted install with nothing in `Email:Smtp:*`, those messages were written to the log while the admin looked at a green test.
 
 What matters on the wire is the headers stamped on every notification email — they enable reply threading:
 
@@ -657,6 +659,85 @@ Message-ID:  <ticket-uuid>.<comment-uuid>@trackly
 ```
 
 The `reply+<ticket-uuid>@` address encodes which ticket a reply belongs to. DNS setup for deliverability: SPF + DKIM records on the sending domain (the SMTP provider gives these).
+
+### Templates — what the mail actually says
+
+Every message Trackly sends is a template an admin can edit, rendered into a
+shared branded layout. Admin surface: `/admin/settings/email/templates`
+(`admin-guide.md` § 9.1). Code: `Trackly.Core/Email` (renderer, catalogue,
+samples), `Trackly.Modules/Email` (brand resolver, render service, transactional
+mailer), `Trackly.Api/Controllers/EmailTemplatesController`.
+
+**A missing row *is* the built-in.** `email_templates` stores only what an admin
+customised; the catalogue lives in code (`EmailTemplateCatalog`). So `source` is
+a null check, **Reset** is `DELETE the row`, and a fresh database needs no seed.
+Seeding would look tidier and be worse: a default improved in a later release
+would never reach an existing install, because the row already exists and nothing
+can tell "seeded, untouched" from "deliberately written that way".
+
+**One layout, many content fragments.** A template body is the *content* of an
+email, not a whole document; it renders into `_layout`, which carries the logo
+header, the accent colour, the footer and the `Powered by Trackly` line. Branding
+is therefore set in one place. `_layout` is itself an editable, resettable
+template, and a per-template `standalone` flag skips it for the case that needs
+it — a finished HTML email from a designer.
+
+**A deliberately small engine, not Scriban.** `{{var}}` (HTML-escaped),
+`{{{var}}}` (raw), and `{{#if x}}…{{else}}…{{/if}}`, resolved against a fixed
+`Dictionary<string, string?>`. Roughly 100 lines in `TemplateRenderer`.
+Conditionals are not optional: the resolved email carries a CSAT link only
+sometimes, a mention an excerpt only sometimes, a reply "you can reply to this
+email" only when inbound mail is configured.
+
+A real template language is rejected on purpose. Those evaluate expressions
+against an object graph, and the template is admin-editable data in a database —
+that is server-side template injection with a friendly name. It also quietly
+breaks **invariant 5**: against a fixed dictionary there is *no expression* an
+admin can write that reaches an internal comment, because internal comments were
+never put in the dictionary. Against an object graph, one `{{ ticket.comments }}`
+would.
+
+**Escaping, and where the danger is.** `{{name}}` escapes; `{{{name}}}` does not
+and is used only for values the server produced as already-sanitised HTML.
+Ticket subjects and customer names are attacker-supplied — anyone can open a
+ticket titled `<img onerror=…>`. Mail clients mostly neuter that; the admin's own
+preview pane does not, which is why it renders in a sandboxed `<iframe srcdoc>`
+with neither `allow-scripts` nor `allow-same-origin`. Bodies are sanitised on
+save by `EmailHtml` — a wider allowlist than `RichText`, because tables and
+inline styles are what an HTML email is made of.
+
+**The text part is derived, not authored.** `EmailText.FromHtml` (AngleSharp)
+produces the `text/plain` alternative from the rendered HTML, keeping link URLs
+and dropping the logo. A second editable body would double the editing surface
+for something nobody maintains, and a stale text part is worse than a generated
+one.
+
+**Failure degrades rather than stops.** A stored template that cannot parse falls
+back to the built-in with a warning logged, and `is_active = false` selects the
+built-in rather than suppressing the send — a toggle that silently stopped
+sign-in codes would be an invariant 8 lockout wearing a friendly label. Save
+refuses a template that has lost a required variable, for the same reason: an
+admin who deletes `{{action_url}}` while rewording the sign-in email has locked
+everyone out of a product with no support desk and no recovery link.
+
+**Branding is read through one seam.** Nothing in the email path touches
+`WorkspaceBranding` directly; `EmailBrandResolver` maps it to an `EmailBrand`
+record, so a later restructuring of branding changes one file and no stored
+template. `logo_url` is withheld unless a logo has actually been uploaded *and*
+`App:ApiBaseUrl` is set — the public logo endpoint 404s otherwise, and the layout
+falls back to the brand name in text.
+
+**Open question — admin-defined variables.** The variable list is fixed in code:
+a developer declares a name, supplies it at the send site, and it appears in the
+editor. Admins use what is offered and nothing else. That boundary is what makes
+invariant 5 structural, so any "define your own variable" feature has to avoid
+becoming expression evaluation. The version that keeps the invariant is
+workspace-level custom key/value pairs folded into the dictionary under a
+reserved `custom_*` prefix — still a fixed dictionary at render time. Open
+sub-questions: whether ticket custom fields feed in (the one that actually
+touches invariant 5, since ticket data is customer-visible in some templates and
+not others), who may define them, and whether the editor distinguishes them from
+built-ins. Not scheduled.
 
 ### Interaction Modes (per workspace)
 
@@ -851,6 +932,32 @@ CREATE TABLE email_configs (
     poll_interval_seconds  INT DEFAULT 60,
     last_polled_at         TIMESTAMPTZ,
     updated_at             TIMESTAMPTZ DEFAULT now()
+);
+
+-- What each message SAYS. Only what an admin has customised: no row for a key
+-- means render the built-in from EmailTemplateCatalog, which is why `source` is
+-- a null check, Reset is a DELETE, and a fresh database needs no seed. See
+-- Email Architecture → Templates.
+CREATE TABLE email_templates (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    -- Catalogue key: '_layout', 'magic_link', 'ticket_resolved', … Not a foreign
+    -- key — the catalogue is code, and a row for a key a later release retires
+    -- is inert rather than an integrity error.
+    key           TEXT NOT NULL,
+    locale        TEXT NOT NULL DEFAULT 'en',
+    -- NULL for '_layout', which is a frame rather than a message.
+    subject       TEXT,
+    body_html     TEXT NOT NULL,
+    -- Skip the shared layout; this body is the whole email.
+    standalone    BOOLEAN NOT NULL DEFAULT false,
+    -- false selects the BUILT-IN, it does not suppress the send (invariant 8).
+    is_active     BOOLEAN NOT NULL DEFAULT true,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- SET NULL, not CASCADE: deleting the admin who last edited a template must
+    -- not delete the template.
+    updated_by_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    UNIQUE (workspace_id, key, locale)
 );
 
 -- Exactly-once inbound ingestion. A duplicate provider Message-ID collides on
@@ -1321,6 +1428,12 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | POST   | `/api/admin/email/oauth/complete` | Session | admin — redeems the `code`+`state` the provider handed to the SPA's `/oauth/callback` route; single-use `state`, workspace-scoped |
 | PUT    | `/api/admin/email/roles` | Session | admin — designate the sending and receiving providers |
 | GET/PUT| `/api/admin/email/config` | Session | admin — From identity, mode, inbound connector, poll interval. Replaced `/api/admin/settings/email`, which was deleted with the columns it wrote |
+| GET    | `/api/admin/email/templates` | Session | admin — the whole catalogue merged with stored rows; `source: built-in\|custom` |
+| GET    | `/api/admin/email/templates/{key}` | Session | admin — subject, body, variable contract, and the built-in alongside it for diff/reset |
+| PUT    | `/api/admin/email/templates/{key}` | Session | admin — upsert; sanitises the body and refuses one that has lost a required variable |
+| DELETE | `/api/admin/email/templates/{key}` | Session | admin — reset to built-in, i.e. delete the row |
+| POST   | `/api/admin/email/templates/{key}/preview` | Session | admin — render the posted draft with sample data; a bodyless request renders what is stored |
+| POST   | `/api/admin/email/templates/{key}/test` | Session | admin — send one template with sample data. **Does not** record the delivery proof (invariant 8) |
 | POST   | `/api/invitations` | Session | admin — invite agents by email |
 | POST   | `/api/invitations/accept` | None | Accept invite via token, create account |
 | GET    | `/api/public/workspaces/{slug}/branding` | None | Public, cacheable — branding for form/widget |
@@ -2543,3 +2656,12 @@ is what makes it competitive; it splits into three independently shippable slice
 - [x] Phase 7B: AI never sends a reply without an explicit agent action; workspace AI toggle off (or no `Ai:ApiKey`) disables all calls (409)
 - [x] Phase 7C: chat transcript becomes a ticket in the right workspace; CSAT score cannot be submitted twice (single-use token + submitted_at guard)
 - [x] Phase 7C: connector inbound is HMAC-verified, idempotent, and threads a conversation into one ticket; a bad signature is rejected
+- [x] Email templates: a key with no row renders the built-in; saving one, then Reset, returns byte-identically to it
+- [x] Email templates: a stored template with an unbalanced `{{#if}}` degrades to the built-in on send (logged), while the **editor preview** reports the error instead of degrading
+- [x] Email templates: `is_active = false` selects the built-in — it never suppresses the send (invariant 8)
+- [x] Email templates: saving a body that has lost a required variable is refused, and refused again after sanitising in case the placeholder went with a stripped tag
+- [x] Email templates: `<script>` is stripped on save while tables, inline styles and `{{placeholders}}` in `href` survive
+- [x] Email templates: the per-template test does **not** set `email_configs.last_verified_at`
+- [x] Email branding: with no logo uploaded the layout prints the brand name as text; a broken `<img>` never appears
+- [x] Sign-in, guest-OTP, invitation and guest-confirmation mail all go through the workspace's designated sender, not the shared relay — and all four carry an HTML part
+- [x] Email templates: an edit to `_layout` changes every message at once, and a `standalone` template ignores it
