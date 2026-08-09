@@ -188,6 +188,90 @@ export interface EmailConfigBody {
   pollIntervalSeconds?: number;
 }
 
+/**
+ * Where the subject and body came from.
+ *
+ * `built-in` means **no row exists** — the catalogue in the server's code is
+ * what renders. It is not a copy of a default sitting in the database waiting to
+ * go stale, which is why Reset is a delete and why an improved default in a later
+ * release reaches an install that never customised it.
+ */
+export type EmailTemplateSource = 'built-in' | 'custom';
+
+/** One row in the template list. */
+export interface EmailTemplateSummary {
+  readonly key: string;
+  /** English, from the server's catalogue — not a translation key. */
+  readonly name: string;
+  readonly description: string;
+  /**
+   * The shared frame every other template renders into, rather than a message
+   * anyone receives. It has no subject and cannot be sent on its own.
+   */
+  readonly isLayout: boolean;
+  readonly locale: string;
+  readonly source: EmailTemplateSource;
+  readonly subject: string;
+  /**
+   * A customisation that is switched on. `false` falls back to the built-in —
+   * it never stops the email being sent, because a toggle that silently killed
+   * sign-in codes would be an invariant 8 lockout wearing a friendly label.
+   */
+  readonly isActive: boolean;
+  /** Skip the shared layout — for a finished HTML email from a designer. */
+  readonly standalone: boolean;
+  readonly updatedAt: string | null;
+}
+
+export interface EmailTemplateDetail extends EmailTemplateSummary {
+  readonly bodyHtml: string;
+  /** What this template may use, on top of {@link globalVariables}. */
+  readonly variables: readonly string[];
+  /** Branding and workspace values every template can use. */
+  readonly globalVariables: readonly string[];
+  /** What it cannot be saved without — see {@link EmailApi.saveTemplate}. */
+  readonly required: readonly string[];
+  readonly builtInSubject: string;
+  readonly builtInBodyHtml: string;
+}
+
+/**
+ * A draft. `subject` and `bodyHtml` omitted together means "whatever is stored"
+ * — which is how the list previews and tests a template it has not opened.
+ */
+export interface EmailTemplateDraft {
+  subject?: string | null;
+  bodyHtml?: string | null;
+  standalone?: boolean;
+}
+
+export interface EmailTemplateBody extends EmailTemplateDraft {
+  isActive?: boolean;
+}
+
+/**
+ * A render of sample data. `error` instead of the other three when the template
+ * cannot render — a preview of a broken template is how the broken part is
+ * found, so it is reported rather than thrown.
+ */
+export interface EmailTemplatePreview {
+  readonly subject?: string;
+  readonly html?: string;
+  readonly text?: string;
+  readonly error?: string;
+}
+
+/**
+ * Proves this one template reaches a person. Deliberately does **not** count as
+ * the installation's delivery proof — that stays on {@link AdminApi.testEmail},
+ * the one endpoint whose whole purpose is to establish it.
+ */
+export interface EmailTemplateTestResult {
+  readonly ok: boolean;
+  readonly sentTo?: string;
+  readonly error?: string;
+}
+
 export interface NotificationSettings {
   notifyCustomerOnCreate: boolean;
   notifyCustomerOnReply: boolean;
@@ -276,6 +360,58 @@ export class EmailApi {
    */
   saveConfig(body: EmailConfigBody): Promise<EmailConfig> {
     return this.api.put<EmailConfig>('/api/admin/email/config', body);
+  }
+
+  // ---- Templates -----------------------------------------------------------
+
+  /** The whole catalogue, customised or not — a key with no row still appears. */
+  templates(): Promise<EmailTemplateSummary[]> {
+    return this.api.get<EmailTemplateSummary[]>('/api/admin/email/templates');
+  }
+
+  /**
+   * One template, with the built-in alongside whatever replaced it.
+   *
+   * Both are sent so the editor can offer Reset without a round trip, and so an
+   * admin can see what they are resetting *to* before they commit to it.
+   */
+  template(key: string): Promise<EmailTemplateDetail> {
+    return this.api.get<EmailTemplateDetail>(`/api/admin/email/templates/${encodeURIComponent(key)}`);
+  }
+
+  /**
+   * Upsert. The server sanitises the body and refuses a template that has lost a
+   * required variable — deleting `{{action_url}}` while rewording the sign-in
+   * email would lock every user out of a product with no support desk.
+   */
+  saveTemplate(key: string, body: EmailTemplateBody): Promise<{ key: string; source: EmailTemplateSource; updatedAt: string }> {
+    return this.api.put<{ key: string; source: EmailTemplateSource; updatedAt: string }>(
+      `/api/admin/email/templates/${encodeURIComponent(key)}`,
+      body,
+    );
+  }
+
+  /** Back to built-in — deleting the customisation, not blanking it. */
+  resetTemplate(key: string): Promise<{ key: string; source: EmailTemplateSource }> {
+    return this.api.delete<{ key: string; source: EmailTemplateSource }>(
+      `/api/admin/email/templates/${encodeURIComponent(key)}`,
+    );
+  }
+
+  /**
+   * Renders a draft with sample data. Nothing is written and nothing is sent.
+   *
+   * Server-side because the renderer is server-side: a JavaScript reimplementation
+   * would be a second engine, and it would start disagreeing with the first
+   * exactly when it mattered — as somebody was about to save.
+   */
+  previewTemplate(key: string, draft: EmailTemplateDraft = {}): Promise<EmailTemplatePreview> {
+    return this.api.post<EmailTemplatePreview>(`/api/admin/email/templates/${encodeURIComponent(key)}/preview`, draft);
+  }
+
+  /** Sends this one template, with sample data. Blank `to` means the signed-in admin. */
+  testTemplate(key: string, body: EmailTemplateDraft & { to?: string }): Promise<EmailTemplateTestResult> {
+    return this.api.post<EmailTemplateTestResult>(`/api/admin/email/templates/${encodeURIComponent(key)}/test`, body);
   }
 
   notificationSettings(): Promise<NotificationSettings> {

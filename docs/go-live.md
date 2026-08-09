@@ -391,7 +391,7 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] **If Microsoft is connected:** its redirect URI is registered under Entra's **Web** platform, not *Single-page application*, and the **directory (tenant) ID** is filled in unless the app registration is multi-tenant. The SPA platform silently caps the refresh token at 24 hours; `/common` with a single-tenant app fails outright with `AADSTS50194`
 - [ ] `Security:MasterKey` set to a real base64 32-byte key, stored + backed up
 - [ ] `App:FrontendBaseUrl` = the public SPA URL (test a magic-link email points there); the SPA host must also serve `index.html` for `/oauth/callback`
-- [ ] `App:ApiBaseUrl` = the public API URL, and **reachable from outside** — mail clients fetch the workspace logo from it over the open internet. An address that only resolves inside the cluster gives every recipient a broken image
+- [ ] `App:ApiBaseUrl` = the public API URL, and **reachable from outside** — mail clients fetch the workspace logo from it over the open internet. An address that only resolves inside the cluster gives every recipient a broken image. (Emails only reference the logo when one has actually been uploaded; with no logo the layout prints the workspace name as text, so this matters from the moment branding is set, not before)
 - [ ] **Send a test email** and open it: the layout, logo and brand colour are what customers will see. This is also the send that satisfies invariant 8
 - [ ] `Storage:LocalPath` on a persistent, backed-up volume (single instance) — still the default and the fallback even when workspaces use a cloud provider
 - [ ] Any workspace on Azure/GCS has passed **Admin → Storage → Test connection**

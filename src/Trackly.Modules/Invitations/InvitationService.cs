@@ -4,6 +4,7 @@ using Trackly.Core.Entities;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
 using Trackly.Modules.Auth;
+using Trackly.Modules.Email;
 
 namespace Trackly.Modules.Invitations;
 
@@ -17,7 +18,7 @@ public record AcceptResult(User User, string SessionToken);
 
 public class InvitationService(
     TracklyDbContext db,
-    IEmailSender emailSender,
+    TransactionalMailer mailer,
     IConfiguration configuration,
     AuthService authService)
 {
@@ -48,17 +49,14 @@ public class InvitationService(
         await db.SaveChangesAsync(ct);
 
         var frontendBaseUrl = configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173";
-        await emailSender.SendAsync(new EmailMessage(
-            email,
-            $"You're invited to join {workspace.Name} on Trackly",
-            $"""
-            {inviter.Name ?? inviter.Email} invited you to join {workspace.Name} as {(role == TracklyRoles.Admin ? "an admin" : "an agent")}.
 
-            Accept the invitation (valid for 7 days):
-            {frontendBaseUrl}/invite/{token}
-
-            No password needed — the link signs you in.
-            """), ct);
+        await mailer.SendAsync(actor.WorkspaceId, email, toName: null, "invitation", new()
+        {
+            ["action_url"] = $"{frontendBaseUrl}/invite/{token}",
+            ["inviter_name"] = inviter.Name ?? inviter.Email,
+            ["role_name"] = role == TracklyRoles.Admin ? "an admin" : "an agent",
+            ["expiry_days"] = ((int)InviteLifetime.TotalDays).ToString(),
+        }, ct);
 
         return new InvitationDto(invitation.Id, invitation.Email, invitation.Role,
             inviter.Name ?? inviter.Email, invitation.ExpiresAt, invitation.AcceptedAt);

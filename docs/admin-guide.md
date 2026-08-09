@@ -24,6 +24,7 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
 7. [Automation rules](#7-automation-rules)
 8. [Knowledge base](#8-knowledge-base)
 9. [Email](#9-email)
+   - 9.1 Email templates
 10. [Branding](#10-branding)
 11. [Embeddable widget](#11-embeddable-widget)
 12. [Announcements](#12-announcements)
@@ -744,6 +745,74 @@ password box means "keep the stored one", not "clear it"._
 _Deployment note: with nothing designated and no shared relay configured, mail is
 written to the server log — fine for testing, not for real users._
 
+### 9.1 Email templates
+
+**What it is.** The subject and body of every message Trackly sends, editable as
+HTML, with your branding applied.
+**Where:** **Admin ▾ → Workspace → Email → Edit templates**.
+
+**Nothing here starts as your text.** Every template is **Built-in** until you
+edit it, and built-in means there is no copy of it in your database at all — the
+one in Trackly's code is what renders. Two things follow, both in your favour: a
+default we improve in a later release reaches you automatically, and **Reset**
+genuinely restores it rather than restoring a snapshot of whatever shipped the
+day you installed.
+
+**The shared layout is the one to edit first.** It is the frame every other
+message is rendered into: the logo header, the accent colour, the footer and the
+*Powered by Trackly* line. Change it once and all thirteen messages change with
+it. The individual templates hold only the **content** — a heading, a paragraph,
+a button — which is why rewording one of them can never leave it looking unlike
+the rest.
+
+**Variables.** The panel beside the editor lists what this template may use;
+click one to drop it in at the cursor. Two kinds:
+
+- **This template** — what it is about: `ticket_ref`, `otp`, `action_url`,
+  `customer_name`, and so on.
+- **Available everywhere** — your branding and workspace: brand name, logo URL,
+  primary colour, footer text, portal URL, support address, the year.
+
+A name Trackly does not recognise renders as nothing — it is not an error, and it
+is not a way to reach data that was not offered. Notably **there is no variable
+for a private note**, on any template, which is what makes it impossible to leak
+one into a customer's inbox by editing copy.
+
+Double braces put the value in **escaped**, which is what you want: a customer
+can open a ticket titled anything at all. Triple braces insert it as HTML and are
+used only where Trackly has already sanitised the content.
+
+**Some variables cannot be removed.** Trackly refuses to save a sign-in template
+that no longer contains its link, and says which one is missing. This is not
+tidiness. Trackly is self-hosted: there is no support desk to call and no
+recovery link, so an email that cannot do its job is a permanent lockout for
+everybody, discovered by the person who can no longer sign in to undo it.
+
+**Preview shows what will actually be sent.** It is rendered by the server, with
+sample data, through the same code that sends real mail — so it cannot quietly
+disagree with the article. The **Plain text** tab is the alternative part every
+HTML email carries for spam filters and text-only clients; it is derived from
+your HTML, so there is no second body to keep in step. If you break a
+conditional, the preview says so instead of showing you a preview of something
+else.
+
+**Test** sends that one template to an address, with sample data — blank means
+your own. From the list it sends what is **saved**; from inside the editor it
+sends **what is on screen**, so you can read a rewrite in a real mail client
+before committing to it. It is deliberately *not* the delivery proof described
+above: that stays on **Send a test email** on the Email page, so nobody turns off
+password sign-in on the strength of having mailed themselves a draft.
+
+**Use this version** (in the editor) switches your customisation off without
+deleting it — Trackly sends the built-in instead. It never stops the email being
+sent. **Standalone** goes the other way: it skips the shared layout and sends
+your body as the whole email, which is what you want when a designer hands you a
+finished HTML email and nothing else.
+
+_Your HTML is cleaned on save: tables, inline styles, images and links are kept
+because that is what an HTML email is made of; scripts, iframes and event
+handlers are removed._
+
 ---
 
 ## 10. Branding
@@ -890,7 +959,7 @@ Canned.
 | **People** | Members · Teams |
 | **Workflow** | Statuses & workflow · SLA policies · Automation · AI copilot |
 | **Ticket view** | Registers (§4.3) · Ticket layout (§23) |
-| **Channels** | Messaging (connectors) · Widget · Email |
+| **Channels** | Messaging (connectors) · Widget · Email (→ Email templates, §9.1) |
 | **Workspace** | Branding · Login methods · SSO |
 
 **Customer-facing URLs:** `/submit` · `/portal` · `/kb` · `/chat` · guest tracking

@@ -3,12 +3,13 @@ using Microsoft.Extensions.Configuration;
 using Trackly.Core.Entities;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
+using Trackly.Modules.Email;
 
 namespace Trackly.Modules.Auth;
 
 public class AuthService(
     TracklyDbContext db,
-    IEmailSender emailSender,
+    TransactionalMailer mailer,
     IConfiguration configuration,
     IPasswordHasher passwords)
 {
@@ -57,22 +58,16 @@ public class AuthService(
         // verify page reads it to render the workspace's branding (invariant 6).
         var verifyUrl = $"{frontendBaseUrl}/auth/verify?token={linkToken}&workspace={workspace.Slug}";
 
-        var productName = workspace.Name;
+        // Grouped for readability in the mail, and to make a transcribed code
+        // easier to keep place in. The verify endpoint strips whitespace.
         var codeDisplay = $"{code[..3]} {code[3..]}";
-        await emailSender.SendAsync(new EmailMessage(
-            email,
-            $"Sign in to {productName}",
-            $"""
-            Sign in to {productName}
 
-            Click the link below to sign in. It expires in 10 minutes and can be used once.
-
-            {verifyUrl}
-
-            Or enter this code where you started signing in: {codeDisplay}
-
-            If you didn't request this, you can safely ignore this email.
-            """), ct);
+        await mailer.SendAsync(workspace.Id, email, toName: null, "magic_link", new()
+        {
+            ["action_url"] = verifyUrl,
+            ["otp"] = codeDisplay,
+            ["expiry_minutes"] = ((int)TokenLifetime.TotalMinutes).ToString(),
+        }, ct);
 
         return SendMagicLinkStatus.Sent;
     }

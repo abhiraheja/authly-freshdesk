@@ -44,6 +44,7 @@ builder.Services.AddScoped<InboundEmailService>();
 builder.Services.AddScoped<EmailProviderService>();
 builder.Services.AddScoped<EmailBrandResolver>();
 builder.Services.AddScoped<EmailTemplateService>();
+builder.Services.AddScoped<TransactionalMailer>();
 builder.Services.AddScoped<TicketService>();
 builder.Services.AddScoped<TicketBulkService>();
 builder.Services.AddScoped<AttachmentService>();

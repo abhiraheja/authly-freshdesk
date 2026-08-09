@@ -298,14 +298,18 @@ same enforcement point — the API, not the editor.
 
 ## 6. API
 
+Routed under `api/admin/email/templates` — beside `api/admin/email/providers`,
+rather than the top-level `api/admin/email-templates` first sketched here, so the
+two halves of email administration sit together.
+
 | Method | Route | Purpose |
 |---|---|---|
-| `GET` | `/api/admin/email-templates` | list: key, name, locale, `source: built-in\|custom`, `isActive` |
-| `GET` | `/api/admin/email-templates/{key}` | subject, body, `standalone`, variable contract, built-in body for diff/reset |
-| `PUT` | `/api/admin/email-templates/{key}` | upsert; validates required variables + sanitises |
-| `DELETE` | `/api/admin/email-templates/{key}` | reset to built-in |
-| `POST` | `/api/admin/email-templates/{key}/preview` | render **the posted draft** (unsaved) with sample data → `{subject, html, text}` |
-| `POST` | `/api/admin/email-templates/{key}/test` | render with sample data and actually send, via the workspace sender |
+| `GET` | `/api/admin/email/templates` | list: key, name, locale, `source: built-in\|custom`, `isActive` |
+| `GET` | `/api/admin/email/templates/{key}` | subject, body, `standalone`, variable contract, built-in subject+body for diff/reset |
+| `PUT` | `/api/admin/email/templates/{key}` | upsert; validates required variables + sanitises |
+| `DELETE` | `/api/admin/email/templates/{key}` | reset to built-in (deletes the row) |
+| `POST` | `/api/admin/email/templates/{key}/preview` | render **the posted draft** (unsaved) with sample data → `{subject, html, text}` |
+| `POST` | `/api/admin/email/templates/{key}/test` | render with sample data and actually send, via the workspace sender |
 
 Preview renders **server-side** through the production renderer. A JavaScript
 reimplementation in the SPA would be a second engine that drifts from the first,
@@ -345,10 +349,10 @@ Each is independently shippable and independently reviewable.
 | # | Scope | Ships |
 |---|---|---|
 | 1 ✅ | `TemplateRenderer`, `EmailTemplateCatalog`, `EmailHtml` sanitiser, `EmailText`, schema + migration, `EmailBrandResolver`, `EmailTemplateService` | **done** — ticket, announcement and test mail are branded HTML on built-in defaults |
-| 2 | The six endpoints in § 6 | API-complete, no UI |
-| 3 | The two Angular screens | the feature |
-| 4 | Route auth/guest/invite through `IWorkspaceEmailSender` + templates (§ 3.6) | sign-in mail actually uses the configured relay |
-| 5 | `trackly-plan.md` § Email Architecture, `admin-guide.md`, `go-live.md` (`App:PublicBaseUrl`) | docs |
+| 2 ✅ | The six endpoints in § 6, `EmailTemplateSamples`, `RenderDraftAsync` | **done** — API-complete, no UI |
+| 3 ✅ | The two Angular screens, `admin-guide.md` § 9.1 | **done** — the feature |
+| 4 ✅ | Route auth/guest/invite through `IWorkspaceEmailSender` + templates (§ 3.6) | **done** — sign-in mail actually uses the configured relay |
+| 5 | `trackly-plan.md` § Email Architecture, `go-live.md` (`App:PublicBaseUrl`) | docs |
 
 Phase 1 is the one with real risk (`ToPlainText`, and getting a table layout to
 survive Outlook). Phases 2–3 are mechanical once it lands.
@@ -394,11 +398,159 @@ Recorded here rather than silently, so § 3 stays trustworthy.
 - **Verified with a throwaway console harness** (no test project exists in this
   solution) covering escaping, conditionals, nesting, every built-in parsing and
   meeting its own `Required` contract, placeholder survival through the
-  sanitiser, and link/code survival into plain text.
+  sanitiser, and link/code survival into plain text. Phase 2 added a second pass
+  that runs the real service against the dev database: every key renders with no
+  unresolved `{{`, no empty `href`, and a text alternative; a stored row wins; an
+  inactive row falls back rather than suppressing; an unparseable stored body
+  degrades to the built-in.
+
+### Phase 2
+
+- **Route is `api/admin/email/templates`** — see § 6.
+- **`RenderDraftAsync` is the production renderer with one substitution**, not a
+  preview renderer. Preview and test both go through it, so what the editor shows
+  cannot drift from what sends.
+- **The layout previews by framing sample content.** Rendering `_layout` as if it
+  were a fragment and then wrapping it would nest the frame inside itself; it now
+  puts the `email_test` body through the layout being edited, which is the only
+  way to see what a layout edit does.
+- **The body is validated twice — before and after sanitising.** Sanitising can
+  take a placeholder out along with the tag it sat in, so checking only the
+  submitted body would let a required variable vanish between the check and the
+  write.
+- **The per-template test deliberately does not set
+  `email_configs.last_verified_at`.** That proof stays on the one endpoint whose
+  purpose is to establish it (invariant 8); mailing yourself a draft is a weaker
+  claim.
+- **`admin-guide.md` is not updated yet** — there is no user-visible surface until
+  Phase 3. It lands with the screens.
+
+### Phase 3
+
+Two screens, plus two server fixes the screens exposed.
+
+- **An omitted draft now means "what is stored", not "the built-in".** Preview and
+  test accepted a draft that *substituted* for the stored row, so the list — which
+  has no body to post — was posting nothing and silently getting the built-in. An
+  admin testing their own customisation would have been shown someone else's copy
+  and told it passed. `Render` in the controller now routes a bodyless request
+  through `RenderAsync`.
+- **Preview reports an unparseable draft instead of degrading.**
+  `EmailTemplateService` catches a render failure and falls back to the built-in,
+  which is right for a sign-in email at 3am and wrong in an editor: an admin who
+  had just broken a `{{#if}}` got a perfectly good preview of copy they did not
+  write. `Preview` now runs `TemplateRenderer.Validate` first. **Parse errors
+  only** — whether a required variable is still present is a save-time contract,
+  and refusing to preview until it is satisfied would withhold the preview exactly
+  while it was being fixed.
+- **The active toggle moved from the list to the editor.** § 7 put it on each row.
+  Toggling it there would have meant a `GET` to fetch the body before the `PUT`
+  that saves it, because the endpoint validates the whole template — and the
+  label was misleading anyway. `is_active` does not stop an email being sent
+  (§ 3.1, invariant 8); it chooses between your version and the built-in. It is
+  now **"Use this version"**, in the editor, where the subject and body it applies
+  to are already in hand. The list shows a `Switched off` badge instead.
+- **One test-recipient field, not one per row.** The screenshot has an input on
+  every row; with fourteen templates that is fourteen boxes for a value that is
+  the same address every time. One field at the top, a `Test` button per row.
+- **The layout gets its own card above the messages.** It is not one of them —
+  editing it changes all thirteen at once — and filing it in the same list invites
+  someone to reword it the way they'd reword a message.
+- **Names and descriptions are English from the server's catalogue**, not
+  translation keys, exactly as provider `displayName` already is. Everything the
+  *screens* say is translated in both `en.json` and `hi.json`.
+- **`{{…}}` never appears literally in a translation value** — Transloco
+  interpolates with the same delimiters, so a literal placeholder in a hint string
+  would be substituted away to nothing. Variable names reach the UI as parameters
+  or as data, never baked into copy.
+- **The preview iframe is `sandbox=""` with `bypassSecurityTrustHtml`.** Angular's
+  sanitiser would strip the inline styles an HTML email is made of and show a
+  preview that does not match what is sent, which is worse than none. The body was
+  already sanitised server-side on save; no scripts and no same-origin is what
+  contains anything that survived.
+- **Hydration must not read the signals it writes.** The effect that fills the
+  form from the resource would otherwise take a dependency on every keystroke and
+  put the stored text back as fast as it could be typed over.
+- **`logo_url` is withheld unless a logo actually exists.** `EmailBrandResolver`
+  built the URL from `App:ApiBaseUrl` alone, without checking
+  `WorkspaceBranding.LogoStorageKey`. The public logo endpoint 404s for a
+  workspace with no logo, so `{{#if logo_url}}` took the image branch and every
+  email led with a broken image instead of the text fallback the layout was
+  written to provide — on a fresh install, which has no branding row at all, that
+  is every email Trackly sends. `GetPublic` already made the same check before
+  handing a `logoUrl` to the sign-in page; the two now agree.
+
+### Phase 4
+
+- **One collaborator, not three copies.** `TransactionalMailer` (`Modules/Email`)
+  renders a key, resolves the workspace's sender and From identity, and sends.
+  Inlining that three times would have re-created the § 1 complaint — eight files
+  each writing their own version of the same email — in the change that was
+  supposed to end it. It is deliberately *not* `NotificationService`: that one is
+  about a ticket, reads notification toggles, computes a threading `Reply-To` and
+  stamps a `Message-ID`, and none of that belongs on an invitation. A sign-in
+  email must not invite a reply.
+- **`IEmailSender` is now injected only inside Infrastructure**, as the
+  shared-relay fallback behind `WorkspaceEmailSender`. No module can bypass the
+  workspace sender any more, which is what makes § 3.6 stay fixed.
+- **Sends throw here, unlike ticket notifications.** The difference is what the
+  caller has already promised: a ticket write happened either way, but "check
+  your email" is a promise *about the email*, and reporting success for a code no
+  relay accepted leaves someone waiting on a message that is not coming.
+- **The one exception is the guest confirmation**, which is caught and logged.
+  The ticket is already committed and the response carries the tracking token, so
+  a relay refusing the confirmation must not turn a submitted ticket into an
+  error page — the customer would submit again and raise it twice. This is a new
+  failure mode created *by* this phase: before it, that send went to the dev
+  logger and could not fail; now it can hit an expired OAuth token.
+- **Four catalogue entries were dead until now.** `magic_link`, `guest_otp`,
+  `invitation` and `ticket_received` shipped in Phase 1 and nothing rendered
+  them — Phase 4 is what connects them.
+- **Expiry values come from the constants, not the copy.** `expiry_minutes` and
+  `expiry_days` are computed from `TokenLifetime` / `OtpLifetime` /
+  `InviteLifetime`, so changing a lifetime can no longer leave an email confidently
+  stating the old one.
+- **`WorkspaceEmailSender`'s catch comment said "log and swallow" above a
+  `throw`.** Corrected — whether a send throws is exactly the fact this phase's
+  correctness rests on.
+- **The dev logger now reports whether an HTML part exists.** It predates HTML
+  mail and printed only the text body, so "why does my email look plain" had no
+  signal at all in the log. Counted, not dumped: a branded email is ~2–4 kB of
+  table markup that would bury every other line.
 
 ---
 
-## 10. Explicitly out of scope
+## 10. Open question — admin-defined variables
+
+**Raised 2026-08-09, to discuss when the phases land.** Not scheduled.
+
+Today the variable list is fixed in code: a developer declares a name in
+`EmailTemplateCatalog`, supplies it at the send site, and it appears as a chip in
+the editor. An admin can *use* the offered names and nothing else — an
+unrecognised one renders empty.
+
+That boundary is load-bearing, not incidental. The fixed dictionary is what makes
+invariant 5 structural (§ 3.3): no expression an admin writes can reach an
+internal comment, because internal comments are not in the dictionary. Any
+"define your own variable" feature has to be backed by *something* — a field
+path, a query, an expression — and the moment it is an expression over an object
+graph it is the server-side template injection this design rejected.
+
+**The version that keeps the invariant** is workspace-level custom values: an
+admin defines key/value pairs in settings, and `EmailBrandResolver` folds them
+into the dictionary under a reserved prefix (`custom_*`, so they can never shadow
+a built-in name). Still a fixed dictionary at render time, still no expressions —
+the list is just data instead of code.
+
+Open sub-questions if it is taken up: does a **ticket** custom field feed in too
+(the tempting one, and the one that touches invariant 5, because ticket data is
+customer-visible in some templates and not others); who may define them; and
+whether the editor distinguishes them from built-ins. Scope is a settings screen,
+a table and a migration — a real feature, not a tweak.
+
+---
+
+## 11. Explicitly out of scope
 
 - **WhatsApp / SMS channels.** The screenshots show them; Trackly has no such
   connector. No `channel` column until omnichannel (plan Phase 7) needs one.

@@ -1,5 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, resource, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
   AdminApi,
@@ -57,6 +58,7 @@ type Capability = 'all' | 'send' | 'receive';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
     FormsModule,
+    RouterLink,
     TranslocoPipe,
     Alert,
     Badge,
@@ -235,6 +237,13 @@ type Capability = 'all' | 'send' | 'receive';
                 {{ result.ok ? ('admin.email.testPassedBody' | transloco: { to: result.sentTo }) : result.error }}
               </tk-alert>
             }
+          </tk-card>
+
+          <tk-card [heading]="'admin.templates.title' | transloco" [subheading]="'admin.email.templatesHint' | transloco">
+            <a tkButton variant="outline" routerLink="/admin/settings/email/templates">
+              <tk-icon name="file-text" [size]="16" />
+              {{ 'admin.email.editTemplates' | transloco }}
+            </a>
           </tk-card>
 
           @if (config.value(); as cfg) {

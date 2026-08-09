@@ -40,8 +40,12 @@ public class WorkspaceEmailSender(
         }
         catch (Exception ex)
         {
-            // A workspace's own relay may be misconfigured; log and swallow so a
-            // notification failure never fails the ticket operation that triggered it.
+            // Logged here and rethrown: the relay's own message ("authentication
+            // failed" vs "connection refused") is the only thing that says what
+            // is wrong, and it is worth having in the log even when the caller
+            // handles the failure. Deciding whether a failed send should fail the
+            // operation belongs to the caller — NotificationService swallows,
+            // TransactionalMailer does not.
             logger.LogWarning(ex, "Workspace SMTP send to {Host} failed for {To}", overrideSmtp.Host, message.ToEmail);
             throw;
         }

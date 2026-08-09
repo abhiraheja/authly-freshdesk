@@ -52,7 +52,7 @@ public class EmailBrandResolver(TracklyDbContext db, IConfiguration configuratio
             // current install — the emails still have to look deliberate.
             BrandName: branding?.PageTitle is { Length: > 0 } title ? title : workspace.Name,
             WorkspaceName: workspace.Name,
-            LogoUrl: LogoUrl(workspace.Slug),
+            LogoUrl: LogoUrl(workspace.Slug, branding?.LogoStorageKey),
             PrimaryColor: branding?.PrimaryColor is { Length: > 0 } color ? color : DefaultPrimaryColor,
             FooterText: branding?.FooterText,
             HidePoweredBy: branding?.HidePoweredBy ?? false,
@@ -67,12 +67,22 @@ public class EmailBrandResolver(TracklyDbContext db, IConfiguration configuratio
     /// against. Not a `cid:` attachment: embedding would put a paperclip on
     /// every notification, and a blocked image degrades to alt text either way.
     ///
-    /// Null when `App:ApiBaseUrl` is unset — which is the case in a default dev
-    /// setup. A broken image icon in every email is worse than no logo, and the
-    /// layout already falls back to the workspace name in text.
+    /// Null unless **both** are true: a logo has actually been uploaded, and
+    /// `App:ApiBaseUrl` is set so there is an absolute URL to point at. Either
+    /// missing and `{{logo_url}}` is empty, which is what the layout's
+    /// `{{#if logo_url}}` reads to fall back to the workspace name in text.
+    ///
+    /// The storage key has to be checked here, not left to the endpoint: it
+    /// answers 404 for a workspace with no logo, so publishing the URL anyway
+    /// would put a broken image at the top of every notification — worse than no
+    /// logo, and on a fresh install, which has no branding row at all, it would
+    /// be every email Trackly sends. `GetPublic` makes the same check before
+    /// handing a `logoUrl` to the sign-in page.
     /// </summary>
-    private string? LogoUrl(string slug)
+    private string? LogoUrl(string slug, string? logoStorageKey)
     {
+        if (logoStorageKey is null) return null;
+
         var apiBase = configuration.GetNonEmpty("App:ApiBaseUrl")?.TrimEnd('/');
         return apiBase is null ? null : $"{apiBase}/api/public/workspaces/{Uri.EscapeDataString(slug)}/logo";
     }

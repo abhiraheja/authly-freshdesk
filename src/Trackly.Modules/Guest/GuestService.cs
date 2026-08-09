@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Trackly.Core.Entities;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
@@ -11,7 +12,8 @@ namespace Trackly.Modules.Guest;
 
 public class GuestService(
     TracklyDbContext db,
-    IEmailSender emailSender,
+    TransactionalMailer mailer,
+    ILogger<GuestService> logger,
     IWorkspaceFileStorage storage,
     IConfiguration configuration,
     TicketService ticketService,
@@ -56,18 +58,12 @@ public class GuestService(
         });
         await db.SaveChangesAsync(ct);
 
-        var branding = await db.WorkspaceBrandings.SingleOrDefaultAsync(b => b.WorkspaceId == workspace.Id, ct);
-        var productName = branding?.PageTitle ?? workspace.Name;
-        await emailSender.SendAsync(new EmailMessage(
-            email,
-            $"Your {productName} verification code",
-            $"""
-            Confirm your email
+        await mailer.SendAsync(workspace.Id, email, toName: null, "guest_otp", new()
+        {
+            ["otp"] = $"{code[..3]} {code[3..]}",
+            ["expiry_minutes"] = ((int)OtpLifetime.TotalMinutes).ToString(),
+        }, ct);
 
-            Enter this code to submit your support ticket: {code[..3]} {code[3..]}
-
-            The code expires in 10 minutes. If you didn't request this, ignore this email.
-            """), ct);
         return GuestOtpStatus.Sent;
     }
 
@@ -169,22 +165,27 @@ public class GuestService(
         var reference = Reference(ticket.Id);
         var frontendBaseUrl = configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173";
         var trackUrl = $"{frontendBaseUrl}/tickets/{ticket.Id}?token={guestToken}&workspace={workspaceSlug}";
-        var branding = await db.WorkspaceBrandings.SingleOrDefaultAsync(b => b.WorkspaceId == ticket.WorkspaceId, ct);
-        var productName = branding?.PageTitle ?? token.Workspace!.Name;
-        await emailSender.SendAsync(new EmailMessage(
-            token.Email,
-            $"[{reference}] We received your ticket — {productName}",
-            $"""
-            Your ticket has been received
 
-            Reference: {reference}
-            Subject: {ticket.Subject}
-
-            Track this ticket or reply using your private link (no account needed):
-            {trackUrl}
-
-            Tip: sign in later with this email address and the ticket will appear in your account automatically.
-            """, null, request.Name), ct);
+        // The only send in this file that is logged rather than thrown. The
+        // ticket is already committed and the caller is handed the tracking
+        // token, so a relay refusing the confirmation must not turn a submitted
+        // ticket into an error page — the customer would try again and raise it
+        // twice. The same stance NotificationService takes for the same reason.
+        try
+        {
+            await mailer.SendAsync(ticket.WorkspaceId, token.Email, request.Name, "ticket_received", new()
+            {
+                ["ticket_ref"] = reference,
+                ["ticket_subject"] = ticket.Subject,
+                ["ticket_url"] = trackUrl,
+                ["customer_name"] = request.Name,
+            }, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "Guest confirmation for {TicketId} could not be sent; the ticket was created", ticket.Id);
+        }
 
         return new GuestTicketCreated(ticket.Id, reference, guestToken);
     }

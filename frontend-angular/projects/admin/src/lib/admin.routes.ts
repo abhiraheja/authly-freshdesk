@@ -31,6 +31,16 @@ export const adminRoutes: Routes = [
     loadComponent: () => import('./email-settings').then((m) => m.AdminEmailSettings),
   },
   {
+    // The subject and body of every message Trackly sends. Sits under email
+    // rather than beside it — a template is useless without a way to send it.
+    path: 'settings/email/templates',
+    loadComponent: () => import('./email-templates').then((m) => m.AdminEmailTemplates),
+  },
+  {
+    path: 'settings/email/templates/:key',
+    loadComponent: () => import('./email-template-form').then((m) => m.AdminEmailTemplateForm),
+  },
+  {
     path: 'settings/configuration',
     loadComponent: () => import('./configuration').then((m) => m.AdminConfiguration),
   },
