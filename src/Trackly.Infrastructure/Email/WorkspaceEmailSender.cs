@@ -34,17 +34,7 @@ public class WorkspaceEmailSender(
 
         try
         {
-            using var client = new SmtpClient();
-            await client.ConnectAsync(overrideSmtp.Host, overrideSmtp.Port,
-                overrideSmtp.UseStartTls ? SecureSocketOptions.StartTlsWhenAvailable : SecureSocketOptions.Auto,
-                cancellationToken);
-            // XOAUTH2 when a token was resolved, password otherwise — the same
-            // single branch as ImapMailboxReader, and for the same reason.
-            if (overrideSmtp.AccessToken is { Length: > 0 } accessToken)
-                await client.AuthenticateAsync(
-                    new SaslMechanismOAuth2(overrideSmtp.Username ?? "", accessToken), cancellationToken);
-            else if (!string.IsNullOrEmpty(overrideSmtp.Username))
-                await client.AuthenticateAsync(overrideSmtp.Username, overrideSmtp.Password ?? "", cancellationToken);
+            using var client = await OpenAsync(overrideSmtp, cancellationToken);
             await client.SendAsync(mime, cancellationToken);
             await client.DisconnectAsync(true, cancellationToken);
         }
@@ -53,6 +43,47 @@ public class WorkspaceEmailSender(
             // A workspace's own relay may be misconfigured; log and swallow so a
             // notification failure never fails the ticket operation that triggered it.
             logger.LogWarning(ex, "Workspace SMTP send to {Host} failed for {To}", overrideSmtp.Host, message.ToEmail);
+            throw;
+        }
+    }
+
+    public async Task VerifyAsync(SmtpSettings smtp, CancellationToken cancellationToken = default)
+    {
+        // Not wrapped in the swallow-and-log above: a failure here *is* the
+        // answer the caller asked for, so it has to reach them.
+        using var client = await OpenAsync(smtp, cancellationToken);
+        await client.DisconnectAsync(true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Connect and authenticate — everything both paths do before they diverge.
+    ///
+    /// Shared so that a verify cannot pass through a handshake a send would not:
+    /// two copies of the TLS mode and the auth branch would eventually disagree,
+    /// and the failure would be a green test button on a relay that never
+    /// delivers.
+    /// </summary>
+    private static async Task<SmtpClient> OpenAsync(SmtpSettings smtp, CancellationToken cancellationToken)
+    {
+        var client = new SmtpClient();
+        try
+        {
+            await client.ConnectAsync(smtp.Host, smtp.Port,
+                smtp.UseStartTls ? SecureSocketOptions.StartTlsWhenAvailable : SecureSocketOptions.Auto,
+                cancellationToken);
+            // XOAUTH2 when a token was resolved, password otherwise — the same
+            // single branch as ImapMailboxReader, and for the same reason.
+            if (smtp.AccessToken is { Length: > 0 } accessToken)
+                await client.AuthenticateAsync(
+                    new SaslMechanismOAuth2(smtp.Username ?? "", accessToken), cancellationToken);
+            else if (!string.IsNullOrEmpty(smtp.Username))
+                await client.AuthenticateAsync(smtp.Username, smtp.Password ?? "", cancellationToken);
+            return client;
+        }
+        catch
+        {
+            // The caller never receives the client, so nothing else can dispose it.
+            client.Dispose();
             throw;
         }
     }

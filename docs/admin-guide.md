@@ -707,7 +707,17 @@ turn password sign-in off. **Any change on this page clears that proof** —
 changing the sender, or even the From address, changes what the last test
 actually demonstrated, so send another one. The per-provider **Test** button is a
 weaker claim on purpose: it proves those credentials sign in, not that mail
-arrives.
+arrives. It checks whichever halves that card is set up for — the relay, the
+mailbox, or both — and nothing is sent and no mail is consumed.
+
+**The gap between the two tests is real, and it is where most setups fail.** A
+relay can accept your username and password and still refuse to carry your
+**From address**. Hosted relays (ZeptoMail, SendGrid, Mailgun, Amazon SES) will
+only send for a domain you have verified in *their* console, so a From address on
+an unverified domain comes back as *"Sender is not allowed to relay emails"* or
+similar — a green per-provider Test and a failed **Send a test email**. Fix it
+where the rule lives: verify the domain with your relay, or set the From address
+to one it will carry.
 
 **Set up — replies and inbound.**
 - **What email can do** — notifications only, one-way (customers reply), or

@@ -264,17 +264,27 @@ public class EmailProvidersController(
     }
 
     /// <summary>
-    /// Connects and authenticates, without sending anything.
+    /// Connects and authenticates, without sending anything or consuming any mail.
+    ///
+    /// **Tests whichever halves this card is actually configured for.** It used to
+    /// test receiving only, which meant a send-only relay — the commonest thing an
+    /// SMTP card is — had a Test button that could never do anything but refuse.
+    /// A card configured for both is tested for both, and both results are
+    /// reported: stopping at the first failure hides the second one behind a fix.
     ///
     /// Deliberately **not** the same thing as the email test on
-    /// `EmailSettingsController`: this proves one provider's credentials, that one
-    /// proves the installation can deliver. Only the latter satisfies invariant 8,
-    /// which is why this never writes `email_configs.last_verified_at` — proving
-    /// Yahoo authenticates says nothing about an installation sending via Google.
+    /// `EmailSettingsController`: this proves credentials, that one proves
+    /// delivery. Only the latter satisfies invariant 8, which is why this never
+    /// writes `email_configs.last_verified_at` — and the gap between the two is
+    /// real, because a relay can authenticate perfectly and still refuse to carry
+    /// your From address.
     /// </summary>
     [HttpPost("{provider}/test")]
     public async Task<IActionResult> Test(
-        string provider, [FromServices] IMailboxReader reader, CancellationToken ct)
+        string provider,
+        [FromServices] IMailboxReader reader,
+        [FromServices] IWorkspaceEmailSender sender,
+        CancellationToken ct)
     {
         var descriptor = EmailProviderCatalog.Find(provider);
         if (descriptor is null) return NotFound();
@@ -283,32 +293,75 @@ public class EmailProvidersController(
         var row = await providers.FindAsync(workspaceId, descriptor.Provider, ct);
         if (row is null) return BadRequest(new { ok = false, error = "That provider is not configured yet." });
 
+        SmtpSettings? smtp;
+        MailboxConnection? mailbox;
         try
         {
             // Inside the try: resolving now renews an OAuth token, so "the
             // connection expired" is one of the answers this button exists to give.
-            var mailbox = await providers.ToMailboxAsync(row, ct);
-            if (mailbox is null)
-                return Ok(new { ok = false, error = "Add a mailbox host, username and password to test receiving." });
-
-            // Zero messages handled — connecting and authenticating is the whole
-            // question, and consuming mail as a side effect of a test button would
-            // be a genuinely surprising thing to do.
-            await reader.PollAsync(mailbox, (_, _) => Task.CompletedTask, ct);
-            row.LastVerifiedAt = DateTime.UtcNow;
-            row.LastError = null;
+            smtp = descriptor.CanSend ? await providers.ToSmtpAsync(row, ct) : null;
+            mailbox = descriptor.CanReceive ? await providers.ToMailboxAsync(row, ct) : null;
         }
         catch (Exception ex)
         {
-            // Reported, not thrown: a failed test is the answer to the question the
-            // admin asked, and the message is the useful part of it.
-            row.LastError = ex.Message;
-            await db.SaveChangesAsync(ct);
-            return Ok(new { ok = false, error = ex.Message });
+            return await FailAsync(row, ex.Message, ct);
         }
 
+        if (smtp is null && mailbox is null)
+            return Ok(new
+            {
+                ok = false,
+                error = descriptor.AuthKind == EmailAuthKind.OAuth2
+                    ? "Connect the account, or fill in the sending or receiving details, before testing."
+                    : "Fill in the sending or receiving details before testing.",
+            });
+
+        // Both halves are attempted even when the first fails, and each failure is
+        // labelled — "Authentication failed" on a card that does both says nothing
+        // about which set of credentials is wrong.
+        var failures = new List<string>();
+        if (smtp is not null)
+            failures.AddRange(await CheckAsync("Sending", () => sender.VerifyAsync(smtp, ct)));
+        if (mailbox is not null)
+            // Zero messages handled — connecting and authenticating is the whole
+            // question, and consuming mail as a side effect of a test button would
+            // be a genuinely surprising thing to do.
+            failures.AddRange(await CheckAsync(
+                "Receiving", () => reader.PollAsync(mailbox, (_, _) => Task.CompletedTask, ct)));
+
+        if (failures.Count > 0) return await FailAsync(row, string.Join(" ", failures), ct);
+
+        row.LastVerifiedAt = DateTime.UtcNow;
+        row.LastError = null;
         await db.SaveChangesAsync(ct);
         return Ok(new { ok = true, verifiedAt = row.LastVerifiedAt });
+    }
+
+    /// One failure or none, so the caller can concatenate without a null check.
+    private static async Task<string[]> CheckAsync(string half, Func<Task> probe)
+    {
+        try
+        {
+            await probe();
+            return [];
+        }
+        catch (Exception ex)
+        {
+            return [$"{half}: {ex.Message}"];
+        }
+    }
+
+    /// <summary>
+    /// A failed test is the answer to the question the admin asked, so it comes
+    /// back as `200 { ok: false }` rather than an error status — and it is written
+    /// to the row as well, because the card has to be able to say so on its own
+    /// once the toast is gone.
+    /// </summary>
+    private async Task<IActionResult> FailAsync(EmailProvider row, string error, CancellationToken ct)
+    {
+        row.LastError = error;
+        await db.SaveChangesAsync(ct);
+        return Ok(new { ok = false, error });
     }
 
     // ---- Helpers -------------------------------------------------------------

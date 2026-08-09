@@ -8,6 +8,22 @@ public interface IWorkspaceEmailSender
 {
     // overrideSmtp == null → use the shared/global relay (or the dev logger).
     Task SendAsync(SmtpSettings? overrideSmtp, EmailMessage message, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Connects and authenticates, then hangs up. **Sends nothing.**
+    ///
+    /// The outbound twin of <see cref="IMailboxReader.PollAsync"/> with a no-op
+    /// handler: it answers "do these credentials work" without the side effect of
+    /// a message arriving somewhere. Deliberately not the same question as the
+    /// email test on `EmailSettingsController`, which delivers a real message and
+    /// is the only thing invariant 8 counts — a relay can authenticate perfectly
+    /// and still refuse to carry your From address.
+    ///
+    /// Throws on failure, with the server's own message: "authentication failed"
+    /// and "connection refused" are different problems and only the provider can
+    /// tell them apart.
+    /// </summary>
+    Task VerifyAsync(SmtpSettings smtp, CancellationToken cancellationToken = default);
 }
 
 /// <param name="AccessToken">

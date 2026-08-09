@@ -354,7 +354,7 @@ are a separate screen and out of scope here.
 | `PUT` | `/api/admin/email/providers/{provider}` | manual fields + `enabled`; `ApplySecret` semantics (null keeps, `""` clears) |
 | `POST` | `/api/admin/email/providers/{provider}/connect` | returns `{ authorizeUrl }` |
 | `DELETE` | `/api/admin/email/providers/{provider}` | disconnect + revoke |
-| `POST` | `/api/admin/email/providers/{provider}/test` | `{ ok, error? }` |
+| `POST` | `/api/admin/email/providers/{provider}/test` | `{ ok, error? }` — tests **whichever halves the card is configured for**: SMTP connect+auth, IMAP connect+auth, or both. Both are attempted even if the first fails, and each failure is labelled `Sending:` / `Receiving:` |
 | `PUT` | `/api/admin/email/roles` | `{ sendingProvider, receivingProvider }` |
 
 Plus **`POST /api/admin/email/oauth/complete`** on a separate controller
@@ -860,6 +860,8 @@ current documentation beats recollection every time.
 - [ ] A connected Microsoft card names the mailbox, including for a work account with no `email` claim
 - [ ] No secret is ever returned by any endpoint (`has*` booleans only)
 - [ ] Test button reports a real failure with a usable message
+- [ ] A **send-only** card (SMTP relay, no IMAP details) can be tested — this was broken until the per-provider test learned to check sending
+- [ ] A card configured for both reports both failures at once, each labelled
 - [ ] After Phase 1, the test sends through the **designated sending provider**, not the shared relay
 - [ ] Connect, disconnect, enable, credential edit and sender reassignment each clear `email_configs.last_verified_at`
 - [ ] Testing a non-sending provider does **not** set `email_configs.last_verified_at`
