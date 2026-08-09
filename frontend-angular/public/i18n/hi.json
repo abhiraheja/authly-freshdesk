@@ -945,6 +945,8 @@
       "disconnected": "प्रोवाइडर हटा दिया गया",
       "connected": "{{name}} जुड़ गया",
       "connectFailed": "वह अकाउंट नहीं जुड़ सका",
+      "connectIncomplete": "प्रोवाइडर से अधूरा जवाब मिला।",
+      "finishing": "कनेक्शन पूरा किया जा रहा है…",
       "free": "मुफ़्त",
       "paid": "सशुल्क",
       "enableAria": "{{name}} इस्तेमाल करें",

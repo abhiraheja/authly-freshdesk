@@ -65,7 +65,7 @@ public class EmailProvidersController(
             // console. A redirect URI that differs by one character from the
             // registered one fails at the provider with a message that never
             // reaches Trackly, and it is the most common way this setup goes wrong.
-            oauthRedirectUri = EmailOAuthController.CallbackUri(configuration, Request),
+            oauthRedirectUri = EmailOAuthController.CallbackUri(configuration),
             // Which one does which job, by provider key rather than id — the id is
             // an implementation detail the screen has no other use for.
             sendingProvider = KeyOf(rows, config?.SendingProviderId),
@@ -128,7 +128,7 @@ public class EmailProvidersController(
     {
         var (authorizeUrl, error) = await providers.StartConnectAsync(
             User.GetWorkspaceId(), provider,
-            EmailOAuthController.CallbackUri(configuration, Request), ct);
+            EmailOAuthController.CallbackUri(configuration), ct);
 
         if (error is not null) return BadRequest(new { error });
         return Ok(new { authorizeUrl });
@@ -153,6 +153,14 @@ public class EmailProvidersController(
         // hand back, and an admin who disconnected would be leaving a live grant
         // on their Google account with no way to find it from here.
         await providers.RevokeAsync(row, ct);
+
+        // For a migrated installation the `smtp` row *is* the deprecated columns
+        // on email_configs — the Phase 1 migration built it from them and left
+        // the originals in place. Removing only the row means the legacy
+        // fallback resurrects the same host and password the moment nothing is
+        // designated, and the card says "Not connected" while it sends.
+        if (descriptor.Provider == EmailProviderKind.Smtp)
+            await providers.ClearLegacyFallbackAsync(workspaceId, ct);
 
         // The FK is SetNull, so the pointers clear themselves — but only after
         // SaveChanges, and the proof has to go in the same transaction.

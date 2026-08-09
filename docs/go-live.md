@@ -233,10 +233,16 @@ only the **shared/deployment-level** pieces are environment config.
     id — and pastes the id and secret into the Google card. Still DB config, not
     environment config.
     - **The redirect URI must be registered in that OAuth client, byte-identical.**
-      It is `{App:ApiBaseUrl}/api/email/oauth/callback`, and the Google card
-      shows the exact string to copy. Getting it wrong fails at Google with an
-      error that never reaches Trackly. **`App:ApiBaseUrl` must be set in prod** —
-      it falls back to the request's own host, which is wrong behind a proxy.
+      It is `{App:FrontendBaseUrl}/oauth/callback` — a front-end route, not an API
+      path — and the Google card shows the exact string to copy. Getting it wrong
+      fails at Google with an error that never reaches Trackly.
+      **`App:FrontendBaseUrl` must be set in prod**, and to the address an admin
+      actually types in a browser; it is also what magic-link and notification
+      emails are built from.
+    - **Whatever hosts the SPA must serve `index.html` for `/oauth/callback`.** It
+      is a deep link the provider navigates to cold, not a route the app ever
+      routes to itself — a host that 404s unknown paths breaks consent at the last
+      step, after the admin has already approved.
     - Scope is `https://mail.google.com/`, which Google classes as **restricted**.
       An app published **Internal** to the operator's own Workspace organisation
       needs no verification. A **public** app using this scope needs Google's

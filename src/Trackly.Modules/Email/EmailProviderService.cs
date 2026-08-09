@@ -181,6 +181,47 @@ public class EmailProviderService(
     }
 
     /// <summary>
+    /// Clears the pre-providers SMTP and mailbox columns.
+    ///
+    /// **Called when the `smtp` provider is disconnected, because for a migrated
+    /// installation that row *is* those columns** — the Phase 1 migration built it
+    /// from both halves and pointed the config at it. Leaving them behind makes
+    /// Remove a lie: the moment nothing is designated, <see cref="LegacySmtp"/>
+    /// and <see cref="LegacyMailbox"/> pick the same credentials straight back up,
+    /// so an admin watches the relay they just removed keep sending — and the
+    /// encrypted password they believe they deleted is still sitting in the row.
+    ///
+    /// Rollback safety is untouched for anyone who has not asked for this. The
+    /// columns survive the migration and every ordinary save; only an explicit
+    /// Remove clears them, and by then there is nothing left to roll back to.
+    ///
+    /// Does not save — the caller removes the provider row in the same
+    /// transaction, and a half-applied disconnect is the one outcome worse than
+    /// either whole one.
+    /// </summary>
+    public async Task ClearLegacyFallbackAsync(Guid workspaceId, CancellationToken ct)
+    {
+        var config = await db.EmailConfigs.SingleOrDefaultAsync(c => c.WorkspaceId == workspaceId, ct);
+        if (config is null) return;
+
+        config.UseSharedSmtp = true;
+        config.SmtpHost = null;
+        config.SmtpPort = null;
+        config.SmtpUser = null;
+        config.SmtpPasswordEncrypted = null;
+
+        config.MailboxProtocol = null;
+        config.MailboxAddress = null;
+        config.MailboxHost = null;
+        config.MailboxPort = null;
+        config.MailboxUsername = null;
+        config.MailboxPasswordEncrypted = null;
+        config.MailboxOauthTokensEncrypted = null;
+
+        config.UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
     /// Provider row → SMTP connection.
     ///
     /// **A connected provider authenticates with XOAUTH2; everything else uses a
@@ -296,12 +337,17 @@ public class EmailProviderService(
     ///
     /// **The state row is consumed before the exchange is attempted**, so a
     /// replayed callback URL fails whether or not the first attempt worked.
+    ///
+    /// Matched on the workspace as well as the token (invariant 1). The state is
+    /// unguessable on its own, but a lookup that spans workspaces is exactly the
+    /// query this codebase does not write.
     /// </summary>
     public async Task<(string? Provider, string? Error)> CompleteConnectAsync(
-        string state, string code, string redirectUri, CancellationToken ct)
+        Guid workspaceId, string state, string code, string redirectUri, CancellationToken ct)
     {
         var pending = await db.EmailOAuthStates.SingleOrDefaultAsync(
-            s => s.State == state && s.ConsumedAt == null && s.ExpiresAt >= DateTime.UtcNow, ct);
+            s => s.WorkspaceId == workspaceId
+                 && s.State == state && s.ConsumedAt == null && s.ExpiresAt >= DateTime.UtcNow, ct);
         if (pending is null) return (null, "This connection attempt has expired. Please try again.");
 
         pending.ConsumedAt = DateTime.UtcNow;

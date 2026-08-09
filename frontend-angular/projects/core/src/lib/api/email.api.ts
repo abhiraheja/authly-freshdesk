@@ -218,6 +218,18 @@ export class EmailApi {
     return this.api.post<{ authorizeUrl: string }>(`/api/admin/email/providers/${provider}/connect`, {});
   }
 
+  /**
+   * Redeems what the provider handed back to `/oauth/callback`.
+   *
+   * The provider redirects to a **front-end** route, so this leg is an ordinary
+   * same-origin request carrying the admin's session — which is why the server
+   * can require one. The `state` is still what proves the handshake is genuine;
+   * it is single-use, so calling this twice with the same code fails by design.
+   */
+  completeConnect(state: string, code: string): Promise<{ provider: EmailProviderKind }> {
+    return this.api.post<{ provider: EmailProviderKind }>('/api/admin/email/oauth/complete', { state, code });
+  }
+
   /** Forgets the credentials and the row — a disconnected provider stores nothing. */
   disconnect(provider: EmailProviderKind): Promise<void> {
     return this.api.delete<void>(`/api/admin/email/providers/${provider}`);

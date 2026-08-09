@@ -1327,7 +1327,7 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | PUT/DELETE | `/api/admin/email/providers/{provider}` | Session | admin — save or forget one provider's credentials |
 | POST   | `/api/admin/email/providers/{provider}/test` | Session | admin — authenticate one provider; **does not** record the delivery proof |
 | POST   | `/api/admin/email/providers/{provider}/connect` | Session | admin — start the mail OAuth handshake, returns `{ authorizeUrl }` |
-| GET    | `/api/email/oauth/callback` | None | Where the provider redirects back; protected by the single-use `state` row, not a cookie |
+| POST   | `/api/admin/email/oauth/complete` | Session | admin — redeems the `code`+`state` the provider handed to the SPA's `/oauth/callback` route; single-use `state`, workspace-scoped |
 | PUT    | `/api/admin/email/roles` | Session | admin — designate the sending and receiving providers |
 | GET/PUT| `/api/admin/email/config` | Session | admin — From identity, mode, inbound connector (never the deprecated SMTP columns) |
 | POST   | `/api/invitations` | Session | admin — invite agents by email |

@@ -354,11 +354,21 @@ are a separate screen and out of scope here.
 | `POST` | `/api/admin/email/providers/{provider}/test` | `{ ok, error? }` |
 | `PUT` | `/api/admin/email/roles` | `{ sendingProvider, receivingProvider }` |
 
-Plus **`GET /api/email/oauth/callback`** on a separate controller — no session
-policy, because the provider redirects the browser there and a cookie-authed
-endpoint would 401 on some providers' redirect. It is protected by the single-use
-`state` row instead, exactly as `SsoController.Callback` is. It redirects to
-`{FrontendBaseUrl}/admin/settings/email?connected=<provider>` or `?email_error=…`.
+Plus **`POST /api/admin/email/oauth/complete`** on a separate controller
+(`EmailOAuthController`), `[Authorize(Policy = "Admin")]`.
+
+**The registered redirect URI is a front-end route, `{FrontendBaseUrl}/oauth/callback`
+— not an API path.** The provider redirects the browser to the SPA; that page
+reads `code` and `state` out of its own query string and posts them here as an
+ordinary same-origin request, then replaces its URL with
+`/admin/settings/email?connected=<provider>` or `?email_error=…`.
+
+That shape is what lets this leg require a session. An API route the provider
+redirects to directly cannot: it is a top-level navigation from the provider's
+domain, so Trackly's SameSite cookie does not ride along and a signed-in admin
+would be 401'd — which is why `SsoController.Callback` has no session policy. The
+single-use `state` row is still the primary protection (invariant 4); it is now
+matched on `workspace_id` too (invariant 1).
 
 `EmailSettingsController` keeps `/api/admin/settings/email` (now mode, inbound
 connector, reply domain, poll interval, from name/address) and
@@ -446,9 +456,22 @@ provider shapes.
 
 Connect posts to `/connect`, then `window.location.assign(authorizeUrl)` — a
 full-page redirect, not a popup. Popups get blocked, need `postMessage` plumbing,
-and break entirely in an embedded browser view. On return, the page reads
-`?connected=` / `?email_error=` from the query string, shows a toast or a
-`tk-alert`, and calls `providers.reload()`.
+and break entirely in an embedded browser view.
+
+The provider returns to **`/oauth/callback`**, a route of the SPA's own — mounted
+at the app root, above the shell, outside every guard. `EmailOAuthCallback`
+renders a spinner, posts `{state, code}` to
+`POST /api/admin/email/oauth/complete`, and redirects to
+`/admin/settings/email?connected=<provider>` or `?email_error=…` with
+`replaceUrl: true`, so a spent code is not left in history for a Back button to
+replay. The settings page then reads those params, shows a toast or a `tk-alert`,
+and calls `providers.reload()`.
+
+The route path is registered in the operator's provider console, so **it is
+public API: it cannot be renamed without every existing installation re-editing
+its OAuth client.** Its position above the shell is load-bearing too — Angular
+matches the shell's `path: ''` by prefix and never backtracks out of a loaded
+lazy config.
 
 `?connected=` is a display-only breadcrumb — the provider list from the server is
 the truth about connection state. Never render "Connected" from the query param.
@@ -565,6 +588,19 @@ data in the meantime.
    letting one revoked grant take down the whole tick, and the failure is written
    to `email_providers.last_error` so the card turns red — a connection that dies
    overnight must not be visible only in a log.
+
+6. **The callback is a front-end route, and the exchange leg is authenticated.**
+   Shipped first as `GET /api/email/oauth/callback` with no session policy, then
+   changed to `{FrontendBaseUrl}/oauth/callback` → `POST
+   /api/admin/email/oauth/complete`. Three things fall out of it. The redirect URI
+   an operator registers is now the app's own address and owes nothing to how the
+   API is hosted or to `App:ApiBaseUrl`. The exchange carries the admin's session,
+   because a same-origin `fetch` sends the SameSite cookie a top-level navigation
+   from Google's domain does not — so `CompleteConnectAsync` takes a
+   `workspaceId` and matches the state row on it (invariant 1). And the dev proxy
+   no longer has to preserve the `Host` header for the registered URI to be
+   reachable. SSO still uses the server-side shape at `/api/auth/sso/callback`;
+   the two are deliberately different and should converge if SSO is revisited.
 
 **Known behaviour, accepted:** `GetAccessTokenAsync` calls `SaveChangesAsync` to
 persist a rotated token, and it runs inside whatever scope asked for the

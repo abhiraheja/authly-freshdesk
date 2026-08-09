@@ -945,6 +945,8 @@
       "disconnected": "Provider disconnected",
       "connected": "{{name}} connected",
       "connectFailed": "Could not connect that account",
+      "connectIncomplete": "The provider returned an incomplete response.",
+      "finishing": "Finishing the connection…",
       "free": "Free",
       "paid": "Paid",
       "enableAria": "Use {{name}}",

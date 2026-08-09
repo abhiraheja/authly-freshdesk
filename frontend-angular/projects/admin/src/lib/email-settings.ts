@@ -502,7 +502,7 @@ export class AdminEmailSettings {
   }
 
   /**
-   * What the provider redirect left in the query string.
+   * What {@link EmailOAuthCallback} left in the query string on its way here.
    *
    * `?connected=` is a breadcrumb only — the provider list from the server is
    * the truth about connection state, and rendering "Connected" from a query
@@ -527,9 +527,9 @@ export class AdminEmailSettings {
   /**
    * Saves what is in the drawer, then hands the browser to the provider.
    *
-   * Save first, always: the client id and secret have to be readable server-side
-   * by the time the provider redirects back, and that callback carries no
-   * session — it cannot ask the browser for anything the admin typed.
+   * Save first, always: the server builds the authorize URL from the stored
+   * client id and secret, and exchanges the code against them again on a later
+   * request. Neither leg can see what is sitting unsaved in this drawer.
    */
   protected async startConnect(): Promise<void> {
     const form = this.form();

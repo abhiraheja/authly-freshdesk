@@ -1,67 +1,64 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Trackly.Api.Auth;
 using Trackly.Modules.Email;
 
 namespace Trackly.Api.Controllers;
 
 /// <summary>
-/// Where Google, Microsoft and Yahoo send the browser back after an admin
-/// consents to a mail connection.
+/// The back half of a mail OAuth handshake.
 ///
-/// **No session policy, deliberately.** The request arrives as a top-level
-/// navigation from the provider's own domain, and Trackly's session cookie is
-/// SameSite — an `[Authorize]` here would 401 an admin who is perfectly well
-/// signed in. What makes it safe is the single-use `state` row (invariant 4):
-/// it is created by an authenticated admin, carries the workspace, and is
-/// consumed before the code is exchanged, so a replayed callback URL does
-/// nothing. Exactly the shape <see cref="SsoController.Callback"/> uses.
+/// **The provider redirects the browser to the SPA, not to here.** The registered
+/// redirect URI is a front-end route (`/oauth/callback`); that page reads the
+/// `code` and `state` out of its own query string and posts them to this endpoint
+/// as an ordinary same-origin request.
+///
+/// Doing it that way is what lets this be `[Authorize]`. The older shape — the
+/// provider redirecting straight at an API route — could not be: that request is
+/// a top-level navigation from the provider's own domain, so Trackly's SameSite
+/// session cookie does not ride along and an authenticated admin would have been
+/// 401'd. The single-use `state` row still carries the security (invariant 4);
+/// the admin session and the workspace check are now belt as well as braces.
 /// </summary>
 [ApiController]
+[Route("api/admin/email/oauth")]
+[Authorize(Policy = "Admin")]
 public class EmailOAuthController(EmailProviderService providers, IConfiguration configuration) : ControllerBase
 {
     /// <summary>
     /// The redirect URI, which **must be byte-identical between the authorize
-    /// request, this callback, and what the operator registered in their
+    /// request, the token exchange, and what the operator registered in their
     /// provider console.** Static and shared with
     /// <see cref="EmailProvidersController"/> so there is one definition rather
     /// than two that can drift by a trailing slash.
+    ///
+    /// Built from `App:FrontendBaseUrl` rather than the API's own origin, because
+    /// the address the provider sends the browser to is the SPA's. The dev default
+    /// matches the Angular dev server.
     /// </summary>
-    public static string CallbackUri(IConfiguration configuration, HttpRequest request)
+    public static string CallbackUri(IConfiguration configuration)
     {
-        var apiBase = configuration.GetNonEmpty("App:ApiBaseUrl")
-                      ?? $"{request.Scheme}://{request.Host}";
-        return $"{apiBase.TrimEnd('/')}/api/email/oauth/callback";
+        var frontend = configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:4200";
+        return $"{frontend.TrimEnd('/')}/oauth/callback";
     }
 
-    private string FrontendBaseUrl => configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173";
+    public record CompleteRequest(string? State, string? Code);
 
     /// <summary>
-    /// Always a redirect back to the email settings screen, never a JSON body:
-    /// there is a person looking at a browser tab at the end of this, not a
-    /// client waiting on a response.
+    /// Consumes the state, exchanges the code, stores the tokens. Returns the
+    /// provider key so the callback page can name it in the success toast.
     /// </summary>
-    [HttpGet("api/email/oauth/callback")]
-    public async Task<IActionResult> Callback(
-        [FromQuery] string? state, [FromQuery] string? code,
-        [FromQuery] string? error, [FromQuery(Name = "error_description")] string? errorDescription,
-        CancellationToken ct)
+    [HttpPost("complete")]
+    public async Task<IActionResult> Complete([FromBody] CompleteRequest request, CancellationToken ct)
     {
-        // The provider can bounce back with a refusal instead of a code — an
-        // admin who clicked Cancel, or a consent screen that rejected the scope.
-        if (!string.IsNullOrEmpty(error))
-            return Failed(errorDescription ?? error);
-        if (string.IsNullOrWhiteSpace(state) || string.IsNullOrWhiteSpace(code))
-            return Failed("The provider returned an incomplete response.");
+        if (string.IsNullOrWhiteSpace(request.State) || string.IsNullOrWhiteSpace(request.Code))
+            return BadRequest(new { error = "The provider returned an incomplete response." });
 
-        var (provider, failure) = await providers.CompleteConnectAsync(
-            state, code, CallbackUri(configuration, Request), ct);
+        var (provider, error) = await providers.CompleteConnectAsync(
+            User.GetWorkspaceId(), request.State, request.Code, CallbackUri(configuration), ct);
 
-        return failure is not null
-            ? Failed(failure)
-            : Redirect($"{Settings}?connected={Uri.EscapeDataString(provider ?? "")}");
+        return error is not null
+            ? BadRequest(new { error })
+            : Ok(new { provider });
     }
-
-    private string Settings => $"{FrontendBaseUrl.TrimEnd('/')}/admin/settings/email";
-
-    private IActionResult Failed(string message) =>
-        Redirect($"{Settings}?email_error={Uri.EscapeDataString(message)}");
 }

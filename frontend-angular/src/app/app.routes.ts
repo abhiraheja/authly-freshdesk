@@ -35,6 +35,15 @@ export const routes: Routes = [
   ...authRoutes,
   ...guestRoutes,
 
+  // Where a mail provider returns after consent. Registered in the operator's
+  // own Google or Entra console, so the path is part of Trackly's public
+  // contract and must not move. Above the shell because the shell's `path: ''`
+  // is matched by prefix and never backtracked out of — see the note above.
+  {
+    path: 'oauth/callback',
+    loadComponent: () => import('@trackly/admin').then((m) => m.EmailOAuthCallback),
+  },
+
   // 2. The shell
   {
     path: '',
