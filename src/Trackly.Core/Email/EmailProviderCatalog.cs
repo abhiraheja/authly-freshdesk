@@ -55,6 +55,13 @@ public record EmailProviderDescriptor(
     /// ask for the same thing through the `offline_access` scope instead.
     /// </summary>
     bool OfflineConsent = false,
+    /// <summary>
+    /// Whether the authorize and token URLs carry
+    /// <see cref="EmailProviderCatalog.TenantPlaceholder"/> and therefore need a
+    /// directory to substitute into it. Microsoft alone, and the card shows an
+    /// extra field because of it.
+    /// </summary>
+    bool RequiresTenant = false,
     // ---- Fixed transport hosts, so the admin never types them ----
     string? SmtpHost = null,
     int? SmtpPort = null,
@@ -65,6 +72,31 @@ public record EmailProviderDescriptor(
 
 public static class EmailProviderCatalog
 {
+    /// <summary>
+    /// Stands in for the directory in a tenant-scoped authorize or token URL.
+    /// Substituted by <see cref="ResolveTenant"/> at the moment of the request,
+    /// never stored resolved — the operator can change which directory they point
+    /// at without the catalogue's URLs being rewritten in the database.
+    /// </summary>
+    public const string TenantPlaceholder = "{tenant}";
+
+    /// <summary>
+    /// What a blank tenant means. `common` accepts work, school *and* personal
+    /// Microsoft accounts, so it is the right default for a multi-tenant
+    /// registration — and it is exactly the value a single-tenant registration
+    /// rejects, which is why the field is asked for rather than assumed.
+    /// </summary>
+    public const string DefaultTenant = "common";
+
+    /// <summary>
+    /// A provider's endpoint with the operator's directory substituted in. Left
+    /// untouched for every provider whose URLs carry no placeholder.
+    /// </summary>
+    public static string? ResolveTenant(string? endpoint, string? tenantId) =>
+        endpoint?.Replace(
+            TenantPlaceholder,
+            Uri.EscapeDataString(string.IsNullOrWhiteSpace(tenantId) ? DefaultTenant : tenantId.Trim()));
+
     /// <summary>
     /// Gmail / Google Workspace over XOAUTH2.
     ///
@@ -95,24 +127,46 @@ public static class EmailProviderCatalog
         SetupDocsUrl: "https://console.cloud.google.com/apis/credentials");
 
     /// <summary>
-    /// Microsoft 365 / Outlook over XOAUTH2.
+    /// Microsoft 365 / Outlook.com over XOAUTH2.
     ///
     /// Needs an Entra app with delegated `IMAP.AccessAsUser.All` and `SMTP.Send`,
     /// plus `offline_access` — without that last one the token exchange returns
     /// no refresh token and the connection dies at the first expiry, silently.
     ///
-    /// `common` rather than a fixed tenant: an operator's mailbox may be in any
-    /// directory, and unlike the SSO catalogue there is no reason to exclude
-    /// personal accounts — a small company running Trackly on an outlook.com
-    /// mailbox is an ordinary case.
+    /// **Checked 2026-08-09.** Delegated XOAUTH2 over IMAP and SMTP AUTH is
+    /// current for both Microsoft 365 and Outlook.com, and it is the path
+    /// Microsoft is pushing traffic onto rather than away from: basic auth for
+    /// SMTP AUTH client submission is disabled by default for existing tenants at
+    /// the end of December 2026, unavailable for new ones after it, and removed
+    /// entirely on a date to be named in 2027. The Graph fallback § 8.1 held in
+    /// reserve is not needed.
+    ///
+    /// Two Microsoft-specific traps, both of which cost a day to diagnose:
+    ///
+    /// - **The endpoints are tenant-scoped.** `/common` is refused with
+    ///   `AADSTS50194` for any single-tenant registration created after
+    ///   15 Oct 2018 — which is what an operator registering an app for their own
+    ///   company gets by default. Hence <see cref="EmailProvider.OauthTenantId"/>
+    ///   and the <see cref="TenantPlaceholder"/> below.
+    /// - **The redirect URI must be registered under the *Web* platform, not
+    ///   *Single-page application*.** Entra caps refresh tokens issued against a
+    ///   `spa` redirect URI at 24 hours with no inactivity reset; against a Web
+    ///   one they last 90 days. Trackly's callback happens to be a front-end
+    ///   route, so the wrong choice looks natural and ends with inbound mail
+    ///   stopping every morning. Said out loud on the card, not just here.
+    ///
+    /// No revocation endpoint: the Microsoft identity platform publishes none for
+    /// v2.0, so Disconnect clears the tokens locally and the admin removes the
+    /// grant at myaccount.microsoft.com.
     /// </summary>
     public static readonly EmailProviderDescriptor Microsoft = new(
         EmailProviderKind.Microsoft,
         "Microsoft",
         EmailAuthKind.OAuth2,
-        AuthorizeEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
-        TokenEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        AuthorizeEndpoint: $"https://login.microsoftonline.com/{TenantPlaceholder}/oauth2/v2.0/authorize",
+        TokenEndpoint: $"https://login.microsoftonline.com/{TenantPlaceholder}/oauth2/v2.0/token",
         Scopes: "openid email offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send",
+        RequiresTenant: true,
         SmtpHost: "smtp.office365.com",
         SmtpPort: 587,
         ImapHost: "outlook.office365.com",

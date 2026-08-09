@@ -41,6 +41,13 @@ export interface EmailProvider {
   readonly paid: boolean;
   /** Where the admin registers the app or issues the credential. */
   readonly setupDocsUrl: string | null;
+  /**
+   * The handshake is directory-scoped, so the form asks for one. Microsoft only:
+   * Entra rejects the shared `/common` endpoint for a single-tenant app
+   * registration, which is what an operator registering for their own company
+   * gets by default.
+   */
+  readonly requiresTenant: boolean;
 
   /** Shown as placeholders so an admin can see what Trackly will use unasked. */
   readonly defaultSmtpHost: string | null;
@@ -54,6 +61,8 @@ export interface EmailProvider {
   readonly accountEmail: string | null;
 
   readonly oauthClientId: string | null;
+  /** Blank means `common`. Not a secret — it is in every sign-in URL. */
+  readonly oauthTenantId: string | null;
   readonly hasOauthClientSecret: boolean;
   /** OAuth tokens are stored — the account is actually linked, not merely registered. */
   readonly connected: boolean;
@@ -113,6 +122,7 @@ export interface EmailProviderBody {
   accountEmail?: string;
   oauthClientId?: string;
   oauthClientSecret?: string;
+  oauthTenantId?: string;
   smtpHost?: string;
   smtpPort?: number | null;
   smtpUsername?: string;
@@ -146,9 +156,10 @@ export type InboundProvider = 'sendgrid' | 'mailgun' | 'postmark' | 'ses';
  * The settings that are about the *installation* rather than one provider:
  * identity on outgoing mail, whether replies come back, and the webhook route.
  *
- * The SMTP and mailbox columns this also carries are **deprecated** — they are
- * what an installation from before providers is still running on, and the server
- * drops them a release later. The screen edits providers, never these.
+ * Credentials are never here — those are provider rows. The SMTP and mailbox
+ * columns that used to ride along were dropped server-side by the
+ * `EmailProviderCleanup` migration, along with the `/api/admin/settings/email`
+ * endpoint that wrote them.
  */
 export interface EmailConfig {
   readonly fromName: string | null;

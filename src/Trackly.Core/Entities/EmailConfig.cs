@@ -3,19 +3,24 @@ namespace Trackly.Core.Entities;
 // Per-workspace email settings (one row per workspace). Secret columns are
 // suffixed *_encrypted and hold AES-256-GCM ciphertext via ISecretProtector —
 // never plaintext, never returned to a client.
+//
+// **This row is policy, not credentials.** Every SMTP host, mailbox host and
+// password that used to live here moved to `email_providers` and the columns
+// were dropped by the EmailProviderCleanup migration. What remains answers "what
+// is this installation's email allowed to do, and who does it come from" — the
+// questions that survive changing provider.
 public class EmailConfig
 {
     public Guid Id { get; set; }
     public Guid WorkspaceId { get; set; }
     public Workspace Workspace { get; set; } = null!;
 
-    // ---- Outbound ----
-    public bool UseSharedSmtp { get; set; } = true;
-    public string? SmtpHost { get; set; }
-    public int? SmtpPort { get; set; }
-    public string? SmtpUser { get; set; }
-    public string? SmtpPasswordEncrypted { get; set; }
-    public bool SmtpUseStartTls { get; set; } = true;
+    // ---- Outbound identity ----
+    //
+    // Who mail appears to come from. The *transport* it goes through is a
+    // provider row — see SendingProviderId below. These two were one block of
+    // columns until providers landed, and separating them is the point: an
+    // address survives changing which relay carries it.
     public string? FromName { get; set; }
     public string? FromEmail { get; set; }
 
@@ -31,14 +36,9 @@ public class EmailConfig
     public string? InboundReplyDomain { get; set; }  // e.g. tickets.acme.com
     public string? InboundWebhookSecretEncrypted { get; set; }
 
-    // Option B — mailbox polling
-    public string? MailboxProtocol { get; set; }     // imap | ms_graph | gmail_api
-    public string? MailboxAddress { get; set; }      // e.g. support@acme.com
-    public string? MailboxHost { get; set; }         // IMAP host
-    public int? MailboxPort { get; set; }
-    public string? MailboxUsername { get; set; }
-    public string? MailboxPasswordEncrypted { get; set; }
-    public string? MailboxOauthTokensEncrypted { get; set; }
+    // Option B — mailbox polling. Which mailbox, and the credentials for it, live
+    // on the provider row ReceivingProviderId points at; all that is left here is
+    // how often to look.
     public int PollIntervalSeconds { get; set; } = 60;
     public DateTime? LastPolledAt { get; set; }
 
@@ -97,12 +97,4 @@ public static class InboundProvider
     public const string Postmark = "postmark";
     public const string Ses = "ses";
     public static readonly string[] All = [SendGrid, Mailgun, Postmark, Ses];
-}
-
-public static class MailboxProtocol
-{
-    public const string Imap = "imap";
-    public const string MsGraph = "ms_graph";
-    public const string GmailApi = "gmail_api";
-    public static readonly string[] All = [Imap, MsGraph, GmailApi];
 }

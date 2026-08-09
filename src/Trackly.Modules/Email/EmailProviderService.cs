@@ -111,28 +111,10 @@ public class EmailProviderService(
         var config = await db.EmailConfigs
             .Include(c => c.SendingProvider)
             .SingleOrDefaultAsync(c => c.WorkspaceId == workspaceId, ct);
-        if (config is null) return null;
 
-        if (config.SendingProvider is { Enabled: true } provider)
-            return await ToSmtpAsync(provider, ct);
-
-        return LegacySmtp(config);
-    }
-
-    /// <summary>
-    /// The pre-providers SMTP columns on `email_configs`.
-    ///
-    /// **Deprecated, and load-bearing until it isn't.** The migration copies these
-    /// into an `smtp` provider row and points `sending_provider_id` at it, so a
-    /// migrated installation never reaches here — but one that rolls back, or that
-    /// clears its designation, still has mail to send. The columns are dropped a
-    /// release later; this method goes with them.
-    /// </summary>
-    private SmtpSettings? LegacySmtp(EmailConfig config)
-    {
-        if (config is not { UseSharedSmtp: false, SmtpHost: { Length: > 0 } host }) return null;
-        var password = config.SmtpPasswordEncrypted is { Length: > 0 } enc ? secrets.Unprotect(enc) : null;
-        return new SmtpSettings(host, config.SmtpPort ?? 587, config.SmtpUser, password, config.SmtpUseStartTls);
+        return config?.SendingProvider is { Enabled: true } provider
+            ? await ToSmtpAsync(provider, ct)
+            : null;
     }
 
     /// <summary>
@@ -157,69 +139,9 @@ public class EmailProviderService(
     /// and a token fetched now is the only kind worth having.
     /// </summary>
     public async Task<MailboxConnection?> ResolveReceiverAsync(EmailConfig config, CancellationToken ct)
-    {
-        if (config.ReceivingProvider is { Enabled: true } provider)
-            return await ToMailboxAsync(provider, ct);
-
-        return LegacyMailbox(config);
-    }
-
-    /// <summary>
-    /// The pre-providers mailbox columns. Deprecated alongside
-    /// <see cref="LegacySmtp"/>, and kept for the same reason: an installation
-    /// that was polling before this release keeps polling after it.
-    /// </summary>
-    private MailboxConnection? LegacyMailbox(EmailConfig config)
-    {
-        if (config.InboundConnector != InboundConnector.MailboxPoll) return null;
-        if (config.MailboxProtocol != MailboxProtocol.Imap) return null;
-        if (config.MailboxHost is not { Length: > 0 } host) return null;
-        if (config.MailboxUsername is not { Length: > 0 } username) return null;
-        if (config.MailboxPasswordEncrypted is not { Length: > 0 } encrypted) return null;
-
-        return new MailboxConnection(host, config.MailboxPort ?? 993, username, secrets.Unprotect(encrypted));
-    }
-
-    /// <summary>
-    /// Clears the pre-providers SMTP and mailbox columns.
-    ///
-    /// **Called when the `smtp` provider is disconnected, because for a migrated
-    /// installation that row *is* those columns** — the Phase 1 migration built it
-    /// from both halves and pointed the config at it. Leaving them behind makes
-    /// Remove a lie: the moment nothing is designated, <see cref="LegacySmtp"/>
-    /// and <see cref="LegacyMailbox"/> pick the same credentials straight back up,
-    /// so an admin watches the relay they just removed keep sending — and the
-    /// encrypted password they believe they deleted is still sitting in the row.
-    ///
-    /// Rollback safety is untouched for anyone who has not asked for this. The
-    /// columns survive the migration and every ordinary save; only an explicit
-    /// Remove clears them, and by then there is nothing left to roll back to.
-    ///
-    /// Does not save — the caller removes the provider row in the same
-    /// transaction, and a half-applied disconnect is the one outcome worse than
-    /// either whole one.
-    /// </summary>
-    public async Task ClearLegacyFallbackAsync(Guid workspaceId, CancellationToken ct)
-    {
-        var config = await db.EmailConfigs.SingleOrDefaultAsync(c => c.WorkspaceId == workspaceId, ct);
-        if (config is null) return;
-
-        config.UseSharedSmtp = true;
-        config.SmtpHost = null;
-        config.SmtpPort = null;
-        config.SmtpUser = null;
-        config.SmtpPasswordEncrypted = null;
-
-        config.MailboxProtocol = null;
-        config.MailboxAddress = null;
-        config.MailboxHost = null;
-        config.MailboxPort = null;
-        config.MailboxUsername = null;
-        config.MailboxPasswordEncrypted = null;
-        config.MailboxOauthTokensEncrypted = null;
-
-        config.UpdatedAt = DateTime.UtcNow;
-    }
+        => config.ReceivingProvider is { Enabled: true } provider
+            ? await ToMailboxAsync(provider, ct)
+            : null;
 
     /// <summary>
     /// Provider row → SMTP connection.
@@ -325,7 +247,7 @@ public class EmailProviderService(
         });
         await db.SaveChangesAsync(ct);
 
-        return (app.Provider.AuthorizeEndpoint is null
+        return (app.AuthorizeEndpoint is null
             ? null
             : oauth.BuildAuthorizeUrl(app, redirectUri, state, TokenUtils.Base64UrlSha256(codeVerifier)), null);
     }
@@ -475,13 +397,18 @@ public class EmailProviderService(
     /// A client secret is required: every provider Trackly cards issues one for a
     /// confidential web app, and PKCE alone would need a public-client
     /// registration the admin has not been asked to make.
+    ///
+    /// The tenant rides along because it is part of *which* endpoints this app
+    /// talks to, not a preference — a refresh aimed at `/common` for a
+    /// single-tenant Entra registration fails with `AADSTS50194`, and it would
+    /// fail in the polling worker rather than at connect time.
     /// </summary>
     private EmailOAuthApp? AppFor(EmailProviderDescriptor descriptor, EmailProvider? row)
     {
         if (descriptor.AuthKind != EmailAuthKind.OAuth2) return null;
         if (row?.OauthClientId is not { Length: > 0 } clientId) return null;
         if (row.OauthClientSecretEncrypted is not { Length: > 0 } encrypted) return null;
-        return new EmailOAuthApp(descriptor, clientId, secrets.Unprotect(encrypted));
+        return new EmailOAuthApp(descriptor, clientId, secrets.Unprotect(encrypted), row.OauthTenantId);
     }
 
     private StoredOAuthTokens? ReadTokens(EmailProvider provider)

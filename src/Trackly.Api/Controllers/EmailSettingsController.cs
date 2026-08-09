@@ -9,82 +9,24 @@ using Trackly.Modules.Email;
 
 namespace Trackly.Api.Controllers;
 
-// Admin-only email configuration. Secrets are never returned — the response
-// exposes has*Secret booleans instead (invariant 3). On update, a secret field
-// left null keeps the stored value, "" clears it, and any other value is
-// AES-256-GCM encrypted before storage.
+// Admin-only email settings that are not a provider's credentials: the delivery
+// test, and the notification switches.
+//
+// **`GET`/`PUT /api/admin/settings/email` used to live here and is gone.** It was
+// the last writer of the SMTP and mailbox columns on `email_configs`, which the
+// EmailProviderCleanup migration dropped — an endpoint whose whole request body
+// no longer has anywhere to go. What replaced it is two narrower things:
+// `/api/admin/email/config` for installation-level settings and
+// `/api/admin/email/providers` for credentials. The retiring React screen is the
+// only caller left and it goes in the SPA cleanup pass.
 [ApiController]
 [Authorize(Policy = "Admin")]
-public class EmailSettingsController(TracklyDbContext db, ISecretProtector secrets) : ControllerBase
+public class EmailSettingsController(TracklyDbContext db) : ControllerBase
 {
-    public record UpdateEmailConfigRequest(
-        bool UseSharedSmtp,
-        string? SmtpHost, int? SmtpPort, string? SmtpUser, bool SmtpUseStartTls,
-        string? FromName, string? FromEmail, string? SmtpPassword,
-        string EmailMode, bool NewTicketViaEmail,
-        string? InboundConnector, string? InboundProvider, string? InboundReplyDomain, string? InboundWebhookSecret,
-        string? MailboxProtocol, string? MailboxAddress, string? MailboxHost, int? MailboxPort, string? MailboxUsername,
-        string? MailboxPassword, int? PollIntervalSeconds);
-
     public record UpdateNotificationSettingsRequest(
         bool NotifyCustomerOnCreate, bool NotifyCustomerOnReply, bool NotifyCustomerOnStatus,
         bool NotifyAgentOnAssign, bool NotifyAgentOnReply, bool NotifyAgentOnReassign,
         bool CsatEnabled);
-
-    // ---- Email config --------------------------------------------------------
-
-    [HttpGet("api/admin/settings/email")]
-    public async Task<IActionResult> GetEmail(CancellationToken ct)
-        => Ok(ToResponse(await GetOrCreateConfigAsync(ct)));
-
-    [HttpPut("api/admin/settings/email")]
-    public async Task<IActionResult> UpdateEmail([FromBody] UpdateEmailConfigRequest req, CancellationToken ct)
-    {
-        if (!EmailMode.All.Contains(req.EmailMode))
-            return BadRequest(new { error = "Invalid email mode." });
-        if (req.InboundConnector is not null && !InboundConnector.All.Contains(req.InboundConnector))
-            return BadRequest(new { error = "Invalid inbound connector." });
-        if (req.InboundProvider is not null && !InboundProvider.All.Contains(req.InboundProvider))
-            return BadRequest(new { error = "Invalid inbound provider." });
-        if (req.MailboxProtocol is not null && !MailboxProtocol.All.Contains(req.MailboxProtocol))
-            return BadRequest(new { error = "Invalid mailbox protocol." });
-
-        var config = await GetOrCreateConfigAsync(ct);
-
-        config.UseSharedSmtp = req.UseSharedSmtp;
-        config.SmtpHost = NullIfEmpty(req.SmtpHost);
-        config.SmtpPort = req.SmtpPort;
-        config.SmtpUser = NullIfEmpty(req.SmtpUser);
-        config.SmtpUseStartTls = req.SmtpUseStartTls;
-        config.FromName = NullIfEmpty(req.FromName);
-        config.FromEmail = NullIfEmpty(req.FromEmail);
-        config.SmtpPasswordEncrypted = ApplySecret(config.SmtpPasswordEncrypted, req.SmtpPassword);
-
-        config.EmailMode = req.EmailMode;
-        config.NewTicketViaEmail = req.NewTicketViaEmail;
-
-        config.InboundConnector = NullIfEmpty(req.InboundConnector);
-        config.InboundProvider = NullIfEmpty(req.InboundProvider);
-        config.InboundReplyDomain = NullIfEmpty(req.InboundReplyDomain);
-        config.InboundWebhookSecretEncrypted = ApplySecret(config.InboundWebhookSecretEncrypted, req.InboundWebhookSecret);
-
-        config.MailboxProtocol = NullIfEmpty(req.MailboxProtocol);
-        config.MailboxAddress = NullIfEmpty(req.MailboxAddress);
-        config.MailboxHost = NullIfEmpty(req.MailboxHost);
-        config.MailboxPort = req.MailboxPort;
-        config.MailboxUsername = NullIfEmpty(req.MailboxUsername);
-        config.MailboxPasswordEncrypted = ApplySecret(config.MailboxPasswordEncrypted, req.MailboxPassword);
-        config.PollIntervalSeconds = Math.Clamp(req.PollIntervalSeconds ?? config.PollIntervalSeconds, 30, 3600);
-
-        // Any change invalidates the proof: the last successful test was about
-        // the previous settings, and turning off password sign-in leans on this
-        // flag. Re-test after editing.
-        config.LastVerifiedAt = null;
-
-        config.UpdatedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync(ct);
-        return Ok(ToResponse(config));
-    }
 
     /// <summary>
     /// Sends a real message to the caller and records that it worked.
@@ -107,9 +49,9 @@ public class EmailSettingsController(TracklyDbContext db, ISecretProtector secre
         var config = await GetOrCreateConfigAsync(ct);
 
         // The one resolver every outbound path uses: the designated sending
-        // provider, else the deprecated email_configs columns, else the shared
-        // relay. Resolving it here a second way is how the test comes back green
-        // for a transport nothing actually sends through.
+        // provider, else null meaning the shared deployment relay. Resolving it
+        // here a second way is how the test comes back green for a transport
+        // nothing actually sends through.
         var smtp = await providers.ResolveSenderAsync(User.GetWorkspaceId(), ct);
 
         try
@@ -187,41 +129,6 @@ public class EmailSettingsController(TracklyDbContext db, ISecretProtector secre
         return settings;
     }
 
-    // null → keep existing, "" → clear, otherwise encrypt.
-    private string? ApplySecret(string? existing, string? incoming) => incoming switch
-    {
-        null => existing,
-        "" => null,
-        _ => secrets.Protect(incoming),
-    };
-
-    private static object ToResponse(EmailConfig c) => new
-    {
-        useSharedSmtp = c.UseSharedSmtp,
-        lastVerifiedAt = c.LastVerifiedAt,
-        smtpHost = c.SmtpHost,
-        smtpPort = c.SmtpPort,
-        smtpUser = c.SmtpUser,
-        smtpUseStartTls = c.SmtpUseStartTls,
-        fromName = c.FromName,
-        fromEmail = c.FromEmail,
-        hasSmtpPassword = !string.IsNullOrEmpty(c.SmtpPasswordEncrypted),
-        emailMode = c.EmailMode,
-        newTicketViaEmail = c.NewTicketViaEmail,
-        inboundConnector = c.InboundConnector,
-        inboundProvider = c.InboundProvider,
-        inboundReplyDomain = c.InboundReplyDomain,
-        hasInboundWebhookSecret = !string.IsNullOrEmpty(c.InboundWebhookSecretEncrypted),
-        mailboxProtocol = c.MailboxProtocol,
-        mailboxAddress = c.MailboxAddress,
-        mailboxHost = c.MailboxHost,
-        mailboxPort = c.MailboxPort,
-        mailboxUsername = c.MailboxUsername,
-        hasMailboxPassword = !string.IsNullOrEmpty(c.MailboxPasswordEncrypted),
-        pollIntervalSeconds = c.PollIntervalSeconds,
-        lastPolledAt = c.LastPolledAt,
-    };
-
     private static object ToResponse(NotificationSettings s) => new
     {
         notifyCustomerOnCreate = s.NotifyCustomerOnCreate,
@@ -232,6 +139,4 @@ public class EmailSettingsController(TracklyDbContext db, ISecretProtector secre
         notifyAgentOnReassign = s.NotifyAgentOnReassign,
         csatEnabled = s.CsatEnabled,
     };
-
-    private static string? NullIfEmpty(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

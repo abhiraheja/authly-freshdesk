@@ -43,7 +43,7 @@ public class EmailOAuthClient(IHttpClientFactory httpClientFactory, ILogger<Emai
             query["prompt"] = "consent";
         }
 
-        return AppendQuery(app.Provider.AuthorizeEndpoint!, query);
+        return AppendQuery(app.AuthorizeEndpoint!, query);
     }
 
     public Task<OAuthTokens> ExchangeCodeAsync(
@@ -109,7 +109,7 @@ public class EmailOAuthClient(IHttpClientFactory httpClientFactory, ILogger<Emai
 
         var http = httpClientFactory.CreateClient("oidc");
         using var response = await http.PostAsync(
-            app.Provider.TokenEndpoint!, new FormUrlEncodedContent(form), cancellationToken);
+            app.TokenEndpoint!, new FormUrlEncodedContent(form), cancellationToken);
 
         if (!response.IsSuccessStatusCode)
         {
@@ -138,7 +138,7 @@ public class EmailOAuthClient(IHttpClientFactory httpClientFactory, ILogger<Emai
     }
 
     /// <summary>
-    /// The `email` claim out of the id_token, used only to label the card.
+    /// The address out of the id_token, used only to label the card.
     ///
     /// **Unverified, and that is safe here for one specific reason:** this JWT
     /// came back on the response to a TLS request Trackly made directly to the
@@ -147,6 +147,12 @@ public class EmailOAuthClient(IHttpClientFactory httpClientFactory, ILogger<Emai
     /// identify a *person* — that is <see cref="IOidcClient"/>'s job, and that
     /// one validates the signature, because there the token does arrive by way of
     /// a redirect.
+    ///
+    /// Three claims tried in order, because `email` is not the reliable one
+    /// everywhere: Entra omits it for a work account whose directory has no mail
+    /// attribute set, and hands back `preferred_username` (the UPN, and the same
+    /// string XOAUTH2 authenticates as) instead. Trying only `email` is why a
+    /// connected M365 card would read "Connected" with no name against it.
     /// </summary>
     private static string? EmailFromIdToken(string? idToken)
     {
@@ -159,9 +165,14 @@ public class EmailOAuthClient(IHttpClientFactory httpClientFactory, ILogger<Emai
             var payload = parts[1].Replace('-', '+').Replace('_', '/');
             payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
             using var json = JsonDocument.Parse(Convert.FromBase64String(payload));
-            return json.RootElement.TryGetProperty("email", out var email) && email.ValueKind == JsonValueKind.String
-                ? email.GetString()
-                : null;
+
+            foreach (var claim in (string[])["email", "preferred_username", "upn"])
+                if (json.RootElement.TryGetProperty(claim, out var value)
+                    && value.ValueKind == JsonValueKind.String
+                    && value.GetString() is { Length: > 0 } address)
+                    return address;
+
+            return null;
         }
         catch
         {

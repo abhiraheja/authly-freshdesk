@@ -114,6 +114,9 @@ CREATE TABLE email_providers (
     -- email setup across two places is how half of it ends up unconfigured.
     oauth_client_id           TEXT,
     oauth_client_secret_encrypted TEXT,
+    -- Microsoft only, and plaintext: a directory ID appears in every sign-in URL.
+    -- NULL means `common`, which Entra refuses for a single-tenant registration.
+    oauth_tenant_id           TEXT,
     oauth_tokens_encrypted    TEXT,            -- JSON: access, refresh, expires_at, scope
     oauth_scopes              TEXT,            -- what was actually granted
 
@@ -499,9 +502,16 @@ Each phase builds, passes `npx ng build` + `dotnet build`, and is shippable alon
 | **0** | Verification spikes (§ 8). No production code. | knowledge |
 | **1** ✅ | `email_providers` migration with the data carry-forward; **every outbound path rewired onto `ResolveSenderAsync` (§ 4.5)**; the screen ported to Angular as cards with the SMTP/app-password and manual-IMAP paths wired, including both test buttons. | the new UI, feature parity |
 | **2** ✅ | `IEmailOAuthClient`, connect/callback/disconnect/refresh, XOAUTH2 in both transports, **Google** card live. | one-click Google |
-| **3** | **Microsoft** card — same flow, or Graph if Phase 0 says so. | one-click M365 |
-| **4** | **Yahoo** card, then **AWS SES** outbound via the SES SMTP endpoint. | all five cards live |
-| **5** | Second migration dropping the deprecated `email_configs` columns. | cleanup |
+| **3** ✅ | **Microsoft** card — same flow; Phase 0 said no Graph. Tenant-scoped endpoints. | one-click M365 |
+| **4** ⏸ | **Yahoo** card, then **AWS SES** outbound via the SES SMTP endpoint. | all five cards live |
+| **5** ✅ | Second migration dropping the deprecated `email_configs` columns. | cleanup |
+
+**Phase 4 is deferred at the user's instruction** (2026-08-09): Yahoo and AWS SES
+are not wanted for now. Both cards stay on the screen and keep working through
+the app-password and access-key paths they have had since Phase 1 — removing them
+would take away configuration that is live, to buy nothing. What is deferred is
+only their *OAuth* leg. Phase 5 was therefore built next, and this plan is now
+complete except for those two cards.
 
 Phase 1 is the one that must not be skipped or merged into 2. It de-risks
 everything after it by proving the card UI and the provider table against
@@ -602,12 +612,126 @@ data in the meantime.
    reachable. SSO still uses the server-side shape at `/api/auth/sso/callback`;
    the two are deliberately different and should converge if SSO is revisited.
 
+### What Phase 3 actually shipped, where it differs from this plan
+
+The plan budgeted this phase as "same flow, or Graph if Phase 0 says so", and
+expected the answer to be a transport question. It was not: the transport was
+already right, and the whole phase turned out to be two Microsoft-specific facts
+about the *handshake* that the generic Phase 2 machinery could not express.
+
+1. **The endpoints are tenant-scoped, so a provider row carries a tenant.** The
+   catalogue had `login.microsoftonline.com/common/...` hard-coded, on the
+   reasoning that an operator's mailbox may be in any directory. Entra refuses
+   `/common` with `AADSTS50194` for any app registered as *"Accounts in this
+   organizational directory only"* after 15 Oct 2018 — which is the default an
+   operator registering an app for their own company picks. So the Microsoft card
+   would have worked for exactly the registration nobody makes.
+
+   Fixed with a `{tenant}` placeholder in the descriptor's URLs, a
+   `RequiresTenant` flag that puts one extra field on the card, and
+   `email_providers.oauth_tenant_id` (nullable, **plaintext** — a tenant ID is in
+   every sign-in URL, so invariant 3 does not reach it). Null means `common`,
+   which is correct for a multi-tenant registration and is the only value that
+   also admits personal Outlook.com accounts. The tenant lives on `EmailOAuthApp`
+   rather than being substituted at save time, so an operator can repoint a
+   connected provider without anything stored being rewritten — and it is sent on
+   every save even while the field is hidden behind a live connection, for the
+   same reason the client id is (deviation 4 above): dropping it aims the next
+   *refresh* at `/common`, and that failure surfaces in the polling worker an hour
+   later.
+
+2. **The redirect URI must be registered under Entra's *Web* platform, not
+   *Single-page application*.** Trackly's callback genuinely is a front-end route
+   (Phase 2, deviation 6), so "Single-page application" is the natural reading and
+   it is wrong: Entra caps a refresh token issued against a `spa` redirect URI at
+   **24 hours with no inactivity reset**, against 90 days for a Web one. An
+   installation set up that way receives mail all afternoon and has stopped by
+   morning — a silent failure with a plausible-looking configuration behind it,
+   which is the worst combination this feature can produce. Called out on the card
+   itself, not only in `admin-guide.md`, because the person making the mistake is
+   looking at the card.
+
+3. **`account_email` now reads three claims, not one.** `EmailFromIdToken` took
+   `email` only. Entra omits that claim for a work account whose directory has no
+   mail attribute and returns `preferred_username` (the UPN — and the same string
+   XOAUTH2 authenticates as) instead, so a connected M365 card would have read
+   "Connected" with no name against it. Order is `email`, `preferred_username`,
+   `upn`; Google is unaffected.
+
+4. **No revocation endpoint, and that is now written down.** Microsoft publishes
+   none for v2.0, so `RevokeEndpoint` stays null and Disconnect clears Trackly's
+   copy only. § 5.3 says revoke "where the API allows it" and this is the first
+   provider where it does not — the admin guide points at
+   myaccount.microsoft.com so the gap is visible rather than assumed.
+
+**Not changed, deliberately:** the transport. `ImapMailboxReader` and
+`WorkspaceEmailSender` needed nothing — the XOAUTH2 branch Phase 2 added is the
+whole of Microsoft's requirement, which is the § 3 assumption paying off exactly
+as intended.
+
 **Known behaviour, accepted:** `GetAccessTokenAsync` calls `SaveChangesAsync` to
 persist a rotated token, and it runs inside whatever scope asked for the
 transport. Every current caller resolves before it mutates (the polling worker
 claims `last_polled_at` afterwards; `NotificationService.ResolveAsync` only
 reads), so nothing is flushed early today. Worth remembering before calling a
 sender mid-transaction.
+
+---
+
+### What Phase 5 actually shipped, where it differs from this plan
+
+The plan described this phase as one migration. It was one migration and four
+consequences, three of which only became visible once the columns were gone.
+
+1. **`PUT /api/admin/settings/email` is deleted, not trimmed.** § 5.4 said it
+   "keeps its path and its meaning"; Phase 1 deviation 3 then split the parts
+   worth keeping into `/api/admin/email/config` and left the old endpoint alive
+   for the React screen. With the columns gone, most of its request body has
+   nowhere to land — a `PUT` that accepts `smtpHost` and silently discards it is
+   worse than a 404, because the admin who sent it believes it took. Both the
+   `GET` and the `PUT` are gone; `POST /api/admin/settings/email/test` and the
+   notification endpoints stay exactly where they were, because Angular calls
+   them. **The React email page now 404s on load.** That is deliberate and
+   visible; `frontend/` is untouched, per the standing instruction that it is
+   deleted in one pass at the end of the SPA migration.
+
+2. **The reply-to address moved, and it was not a legacy column.**
+   `NotificationService.ReplyDomainFor` read `email_configs.mailbox_address` to
+   decide where a customer's reply should go on a polled-mailbox workspace —
+   ordinary live behaviour hiding among the deprecated columns, not a fallback.
+   It now reads `ReceivingProvider.AccountEmail`, which is strictly better: that
+   value is written from the OAuth grant itself, so it names the mailbox that
+   actually consented rather than whatever was typed into a form and never
+   revisited. `NotificationService.ResolveAsync` gained the matching `Include`.
+
+3. **The migration carries configuration forward a second time.** Phase 1's
+   carry-forward could not see anyone who edited email through the *old* endpoint
+   *after* Phase 1 — and that endpoint stayed live for the React screen for two
+   phases. Those installations have legacy columns, no provider row, and have
+   been running on `LegacySmtp` without knowing it; dropping the columns under
+   them would stop their mail with no error anywhere. So `Up` re-runs the insert
+   for any workspace with no `smtp` row, and points the role columns at it **only
+   where they are still null** — a workspace that has already designated a sender
+   is using it, and overwriting that would move its mail onto credentials it
+   deliberately stopped using.
+
+4. **`ClearLegacyFallbackAsync` is deleted one commit after it was written.** It
+   was added to stop a disconnected `smtp` provider resurrecting itself out of the
+   legacy columns. Phase 5 removes the columns, so the resurrection is impossible
+   and the method has nothing to clear. Recorded rather than quietly dropped
+   because it is the same session's work: it was the correct fix for the interim
+   state, and the interim state is what ended.
+
+Also gone with the columns: `MailboxProtocol` (the class, including the reserved
+`ms_graph` / `gmail_api` values — a connected provider is what selects a
+transport now), `EmailConfig.UseSharedSmtp` (a null `sending_provider_id` already
+means the shared relay), and the `MailboxPoll && Imap` half of
+`EmailPollingWorker`'s query, which is now `receiving_provider_id IS NOT NULL`
+and nothing else.
+
+**The § 9 risk this closes:** "shared relay" now means the shared relay. While
+`LegacySmtp` existed, selecting it in *Send via* on an installation with populated
+legacy columns silently kept using those credentials instead.
 
 ---
 
@@ -618,12 +742,23 @@ a real account, and each has a concrete fallback. **Do not build against any of
 them until they are checked** — provider auth policy has churned repeatedly and
 current documentation beats recollection every time.
 
-1. **Microsoft: is delegated XOAUTH2 over IMAP + SMTP AUTH still viable for M365?**
-   Microsoft has been progressively retiring basic auth and tightening client
-   submission, and the situation has moved more than once. Verify against current
-   Microsoft docs and a live tenant.
-   *Fallback:* Graph `sendMail` + `messages`, behind the existing
-   `IWorkspaceEmailSender` / `IMailboxReader` interfaces.
+1. ✅ **Microsoft: is delegated XOAUTH2 over IMAP + SMTP AUTH still viable for M365?**
+   **Checked 2026-08-09 against current Microsoft documentation. The assumption
+   holds, and the trend runs towards it rather than away.** The Graph fallback is
+   not needed and Phase 3 shipped on the shared transport.
+   - Microsoft's own IMAP/POP/SMTP OAuth guide is current for **both Microsoft
+     365 and Outlook.com**, and names the delegated scopes Trackly asks for:
+     `https://outlook.office.com/IMAP.AccessAsUser.All` and
+     `https://outlook.office.com/SMTP.Send`, plus `offline_access` for a refresh
+     token.
+   - What is being retired is **basic** auth for SMTP AUTH client submission, not
+     the protocol: disabled by default for existing tenants at the end of
+     December 2026, unavailable to new tenants after that, final removal
+     announced during 2027. OAuth is the documented replacement — so this makes
+     Connect the durable path and the **app password** the one with a deadline.
+   - Two Microsoft-specific traps found, both of which cost real time and neither
+     of which the plan anticipated. They are what Phase 3 actually consisted of;
+     see *What Phase 3 actually shipped* below.
 2. ✅ **Google: which scope, and does the operator's app need verification?**
    **Checked 2026-08-09 against Google's current developer documentation. The
    assumption holds; the fallback is the documented answer for personal Gmail.**
@@ -719,7 +854,10 @@ current documentation beats recollection every time.
 - [ ] A provider designated for receiving is polled; a second connected-but-not-designated provider is not
 - [ ] `state` is single-use — replaying a callback URL fails
 - [ ] A revoked grant turns the card red with a usable message; it does not stop the polling tick for other workspaces
-- [ ] The redirect URI shown on the card is what the server actually sends (change `App:ApiBaseUrl` and check both)
+- [ ] The redirect URI shown on the card is what the server actually sends (change `App:FrontendBaseUrl` and check both)
+- [ ] A **single-tenant** Entra registration connects — with the tenant ID filled in, and with a clear failure without it
+- [ ] A Microsoft connection still refreshes after 24 hours (i.e. the redirect URI was registered under **Web**, not SPA)
+- [ ] A connected Microsoft card names the mailbox, including for a work account with no `email` claim
 - [ ] No secret is ever returned by any endpoint (`has*` booleans only)
 - [ ] Test button reports a real failure with a usable message
 - [ ] After Phase 1, the test sends through the **designated sending provider**, not the shared relay
@@ -729,5 +867,8 @@ current documentation beats recollection every time.
 - [ ] Four states on every card and panel; both colour modes
 - [ ] No horizontal page scroll at 380px
 - [ ] `en.json` and `hi.json` structurally identical
+- [ ] After `EmailProviderCleanup`, an installation that was on the legacy columns still sends and still polls
+- [ ] After `EmailProviderCleanup`, selecting the shared relay in *Send via* actually uses the shared relay
+- [ ] Reply-To on a polled workspace is the receiving provider's account address
 - [ ] React email page and `frontend/src/api/email.ts` deleted
 - [ ] `npx ng build` and `dotnet build` both exit 0

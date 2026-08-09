@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Trackly.Infrastructure.Data;
@@ -11,9 +12,11 @@ using Trackly.Infrastructure.Data;
 namespace Trackly.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(TracklyDbContext))]
-    partial class TracklyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260809065651_EmailProviderTenant")]
+    partial class EmailProviderTenant
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -930,6 +933,34 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_verified_at");
 
+                    b.Property<string>("MailboxAddress")
+                        .HasColumnType("text")
+                        .HasColumnName("mailbox_address");
+
+                    b.Property<string>("MailboxHost")
+                        .HasColumnType("text")
+                        .HasColumnName("mailbox_host");
+
+                    b.Property<string>("MailboxOauthTokensEncrypted")
+                        .HasColumnType("text")
+                        .HasColumnName("mailbox_oauth_tokens_encrypted");
+
+                    b.Property<string>("MailboxPasswordEncrypted")
+                        .HasColumnType("text")
+                        .HasColumnName("mailbox_password_encrypted");
+
+                    b.Property<int?>("MailboxPort")
+                        .HasColumnType("integer")
+                        .HasColumnName("mailbox_port");
+
+                    b.Property<string>("MailboxProtocol")
+                        .HasColumnType("text")
+                        .HasColumnName("mailbox_protocol");
+
+                    b.Property<string>("MailboxUsername")
+                        .HasColumnType("text")
+                        .HasColumnName("mailbox_username");
+
                     b.Property<bool>("NewTicketViaEmail")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -950,9 +981,37 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("sending_provider_id");
 
+                    b.Property<string>("SmtpHost")
+                        .HasColumnType("text")
+                        .HasColumnName("smtp_host");
+
+                    b.Property<string>("SmtpPasswordEncrypted")
+                        .HasColumnType("text")
+                        .HasColumnName("smtp_password_encrypted");
+
+                    b.Property<int?>("SmtpPort")
+                        .HasColumnType("integer")
+                        .HasColumnName("smtp_port");
+
+                    b.Property<bool>("SmtpUseStartTls")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("smtp_use_start_tls");
+
+                    b.Property<string>("SmtpUser")
+                        .HasColumnType("text")
+                        .HasColumnName("smtp_user");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
+
+                    b.Property<bool>("UseSharedSmtp")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("use_shared_smtp");
 
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("uuid")

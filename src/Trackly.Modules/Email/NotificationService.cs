@@ -223,7 +223,9 @@ public class NotificationService(
     private async Task<Ctx> ResolveAsync(Guid workspaceId, CancellationToken ct)
     {
         var workspace = await db.Workspaces.SingleAsync(w => w.Id == workspaceId, ct);
-        var config = await db.EmailConfigs.SingleOrDefaultAsync(c => c.WorkspaceId == workspaceId, ct);
+        var config = await db.EmailConfigs
+            .Include(c => c.ReceivingProvider)
+            .SingleOrDefaultAsync(c => c.WorkspaceId == workspaceId, ct);
         var settings = await db.NotificationSettings.SingleOrDefaultAsync(s => s.WorkspaceId == workspaceId, ct)
                        ?? new NotificationSettings();
         var branding = await db.WorkspaceBrandings.SingleOrDefaultAsync(b => b.WorkspaceId == workspaceId, ct);
@@ -237,6 +239,10 @@ public class NotificationService(
 
     // The address a customer's reply should go to, if the workspace can receive
     // replies at all. Placeholder {tid} is filled per-ticket in SendAsync.
+    //
+    // Requires Include(c => c.ReceivingProvider): the polled mailbox is the
+    // connected account, and pointing replies anywhere else sends them to a
+    // mailbox nothing reads.
     private static string? ReplyDomainFor(EmailConfig? config)
     {
         if (config is null || config.EmailMode == EmailMode.NotificationsOnly) return null;
@@ -245,9 +251,12 @@ public class NotificationService(
             // reply+<ticket-uuid>@<subdomain> — the parse webhook decodes the ticket.
             InboundConnector.ParseWebhook when !string.IsNullOrEmpty(config.InboundReplyDomain)
                 => $"reply+{{tid}}@{config.InboundReplyDomain}",
-            // Fixed mailbox; threading is by Message-ID/In-Reply-To, not the address.
-            InboundConnector.MailboxPoll when !string.IsNullOrEmpty(config.MailboxAddress)
-                => config.MailboxAddress,
+            // Fixed mailbox; threading is by Message-ID/In-Reply-To, not the
+            // address. `account_email` is written from the OAuth grant itself, so
+            // it names the mailbox that actually consented rather than whatever
+            // was typed into a form.
+            InboundConnector.MailboxPoll when config.ReceivingProvider?.AccountEmail is { Length: > 0 } mailbox
+                => mailbox,
             _ => null,
         };
     }

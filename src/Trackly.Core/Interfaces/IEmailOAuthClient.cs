@@ -40,7 +40,25 @@ public interface IEmailOAuthClient
 /// The catalogue entry, which carries the endpoints and the scopes.
 /// </param>
 /// <param name="ClientId">The operator's own app registration — not Trackly's.</param>
-public record EmailOAuthApp(EmailProviderDescriptor Provider, string ClientId, string? ClientSecret);
+/// <param name="TenantId">
+/// The directory to route a tenant-scoped handshake through; null means `common`.
+/// Microsoft only — see <see cref="EmailProviderCatalog.TenantPlaceholder"/>.
+/// </param>
+public record EmailOAuthApp(
+    EmailProviderDescriptor Provider, string ClientId, string? ClientSecret, string? TenantId = null)
+{
+    /// <summary>
+    /// The endpoints to actually call, tenant substituted.
+    ///
+    /// **Read these rather than <c>Provider.AuthorizeEndpoint</c>.** The
+    /// catalogue's copy still holds the placeholder, and a request to a URL with
+    /// a literal `{tenant}` in it fails at DNS-adjacent depth with nothing useful
+    /// to show an admin.
+    /// </summary>
+    public string? AuthorizeEndpoint => EmailProviderCatalog.ResolveTenant(Provider.AuthorizeEndpoint, TenantId);
+
+    public string? TokenEndpoint => EmailProviderCatalog.ResolveTenant(Provider.TokenEndpoint, TenantId);
+}
 
 /// <param name="RefreshToken">
 /// Null on a refresh from a provider that does not rotate them — the caller keeps

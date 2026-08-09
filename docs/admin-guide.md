@@ -615,9 +615,13 @@ a spare account costs nothing and is there when the main one has a bad day.
 - **Google** — click **Connect** and sign in at Google. See *Connecting Google*
   below; there is a short one-off setup in your own Google Cloud console first.
   Trackly then holds a token it renews itself, and no password at all.
-- **Microsoft 365 / Yahoo** — create an **app password** in that account and
-  paste it in. (One-click sign-in for these two is not built yet; the page says
-  so.) The server and port fill themselves in.
+- **Microsoft 365 / Outlook.com** — click **Connect** and sign in at Microsoft.
+  See *Connecting Microsoft* below; there is a one-off app registration in your
+  own Entra admin centre first. Same result as Google: a renewable token and no
+  password.
+- **Yahoo** — create an **app password** in that account and paste it in.
+  (One-click sign-in for Yahoo is not built yet; the page says so.) The server
+  and port fill themselves in.
 - **SMTP** — the escape hatch. Host, port, username, password: works against
   anything with an SMTP port, including your own mail server.
 - **Amazon SES** — a region plus the SMTP credentials SES issues. Sending only —
@@ -646,9 +650,48 @@ Trackly stores a refresh token (encrypted) and renews its own access. **Remove
 provider** hands that token back to Google, so the grant disappears from the
 account's connected apps rather than lingering.
 
-If a connection ever goes stale — someone revoked it in the Google account, or
-the app registration changed — the card turns red and says why, and inbound mail
-stops rather than failing silently. Click **Connect** again to re-consent.
+**Connecting Microsoft.** Same shape as Google — the app registration is yours,
+not Trackly's. One-off, in your own
+[Entra admin centre](https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade):
+
+1. **App registrations → New registration.** Pick whichever account types match
+   your organisation; *Accounts in this organizational directory only* is the
+   usual answer.
+2. Add the **Redirect URI** shown on Trackly's Microsoft card — and add it under
+   the **Web** platform, **not** *Single-page application*. This one matters more
+   than it looks: Microsoft caps a refresh token issued against a single-page
+   redirect URI at **24 hours**, so the wrong platform gives you a connection
+   that works all afternoon and has stopped receiving mail by morning. Under
+   **Web** the token lasts 90 days and renews itself indefinitely.
+3. **API permissions → Add a permission → APIs my organization uses →
+   Office 365 Exchange Online → Delegated permissions**, and add
+   `IMAP.AccessAsUser.All` and `SMTP.Send`. Grant admin consent if your tenant
+   requires it.
+4. **Certificates & secrets → New client secret.** Copy the *Value* — it is shown
+   once.
+5. From the registration's **Overview** page, copy the **Application (client) ID**
+   and the **Directory (tenant) ID**.
+6. Paste all three into Trackly's Microsoft card and click **Connect**. Leave the
+   tenant ID blank *only* if you registered the app for accounts in any
+   organisational directory — Microsoft refuses the shared sign-in endpoint for a
+   single-tenant app, and that is the error you would get.
+
+Two tenant-side settings can still block it, and both are outside Trackly:
+**SMTP AUTH** must be enabled for the mailbox (`Set-CASMailbox -SmtpClientAuthenticationDisabled $false`),
+and **IMAP** must be on for it. Microsoft is retiring *basic* authentication for
+SMTP AUTH — disabled by default for existing tenants from the end of December
+2026 — which does not affect this path: connecting through Microsoft is exactly
+the OAuth method that replaces it. An app password is the thing with a deadline.
+
+Microsoft publishes no revocation endpoint, so **Remove provider** clears
+Trackly's copy of the token but cannot retire the grant remotely. Remove it from
+[myaccount.microsoft.com](https://myaccount.microsoft.com/) → *Apps and services*
+if you want it gone at both ends.
+
+If a connection ever goes stale — someone revoked it in the Google or Microsoft
+account, or the app registration changed — the card turns red and says why, and
+inbound mail stops rather than failing silently. Click **Connect** again to
+re-consent.
 
 **Set up — say which provider does what.** Connecting a provider does not put it
 to work. Two dropdowns decide that:
@@ -674,6 +717,9 @@ arrives.
   (SendGrid/Mailgun/…), which posts inbound mail to Trackly. Trackly verifies an
   HMAC signature against your stored webhook secret. _(Polling requires the
   server to run continuously — a deployment concern; see go-live.md §4.)_
+  When you poll, the **Reply-To** on outgoing mail is the receiving provider's
+  own account address — so set the **Account address** on that card to the
+  mailbox customers should actually write to.
 - **Open a ticket from a cold email** — turn inbound mail that matches no ticket
   into a new one (off by default).
 

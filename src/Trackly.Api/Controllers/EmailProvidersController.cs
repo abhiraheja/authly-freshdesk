@@ -33,8 +33,10 @@ public class EmailProvidersController(
     public record SaveProviderRequest(
         bool? Enabled,
         string? AccountEmail,
-        // OAuth — the operator's own app registration. Phase 2 uses these.
-        string? OauthClientId, string? OauthClientSecret,
+        // OAuth — the operator's own app registration. `OauthTenantId` is
+        // Microsoft-only and not a secret: it is a directory identifier that
+        // appears in every sign-in URL.
+        string? OauthClientId, string? OauthClientSecret, string? OauthTenantId,
         // SMTP
         string? SmtpHost, int? SmtpPort, string? SmtpUsername, string? SmtpPassword, bool? SmtpUseStartTls,
         // IMAP
@@ -90,6 +92,7 @@ public class EmailProvidersController(
         row.OauthClientId = NullIfEmpty(request.OauthClientId);
         row.OauthClientSecretEncrypted =
             providers.ApplySecret(row.OauthClientSecretEncrypted, request.OauthClientSecret);
+        row.OauthTenantId = NullIfEmpty(request.OauthTenantId);
 
         row.SmtpHost = NullIfEmpty(request.SmtpHost);
         row.SmtpPort = request.SmtpPort;
@@ -153,14 +156,6 @@ public class EmailProvidersController(
         // hand back, and an admin who disconnected would be leaving a live grant
         // on their Google account with no way to find it from here.
         await providers.RevokeAsync(row, ct);
-
-        // For a migrated installation the `smtp` row *is* the deprecated columns
-        // on email_configs — the Phase 1 migration built it from them and left
-        // the originals in place. Removing only the row means the legacy
-        // fallback resurrects the same host and password the moment nothing is
-        // designated, and the card says "Not connected" while it sends.
-        if (descriptor.Provider == EmailProviderKind.Smtp)
-            await providers.ClearLegacyFallbackAsync(workspaceId, ct);
 
         // The FK is SetNull, so the pointers clear themselves — but only after
         // SaveChanges, and the proof has to go in the same transaction.
@@ -348,6 +343,9 @@ public class EmailProvidersController(
         canReceive = descriptor.CanReceive,
         paid = descriptor.Paid,
         setupDocsUrl = descriptor.SetupDocsUrl,
+        // Drives one extra field on the card rather than a per-provider branch in
+        // the SPA — the catalogue stays the single description of a provider.
+        requiresTenant = descriptor.RequiresTenant,
         // Defaults the screen shows as placeholders, so an admin can see what it
         // will use without having to type it.
         defaultSmtpHost = descriptor.SmtpHost,
@@ -359,6 +357,7 @@ public class EmailProvidersController(
         enabled = row?.Enabled ?? false,
         accountEmail = row?.AccountEmail,
         oauthClientId = row?.OauthClientId,
+        oauthTenantId = row?.OauthTenantId,
         hasOauthClientSecret = row?.OauthClientSecretEncrypted is { Length: > 0 },
         connected = row?.OauthTokensEncrypted is { Length: > 0 },
         smtpHost = row?.SmtpHost,

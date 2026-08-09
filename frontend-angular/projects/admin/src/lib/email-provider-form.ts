@@ -61,11 +61,31 @@ import { Alert, Button, Field, Icon, InputDirective, Switch, ToastService } from
               <p class="mt-2 text-meta text-muted-foreground">
                 {{ 'admin.email.form.redirectUriHint' | transloco }}
               </p>
+              @if (p.requiresTenant) {
+                <!-- Entra caps a refresh token issued against a SPA redirect URI
+                     at 24 hours with no inactivity reset; a Web one lasts 90
+                     days. Trackly's callback is a front-end route, so "Single-page
+                     application" is the natural wrong answer and it ends with
+                     inbound mail stopping every morning. -->
+                <p class="mt-2 text-meta font-semibold text-muted-foreground">
+                  {{ 'admin.email.form.redirectUriPlatform' | transloco }}
+                </p>
+              }
             </div>
 
             <tk-field [label]="'admin.email.form.clientId' | transloco" for="oauth-client-id">
               <input tkInput inset id="oauth-client-id" autocomplete="off" [(ngModel)]="oauthClientId" />
             </tk-field>
+
+            @if (p.requiresTenant) {
+              <tk-field
+                [label]="'admin.email.form.tenantId' | transloco"
+                for="oauth-tenant-id"
+                [hint]="'admin.email.form.tenantIdHint' | transloco"
+              >
+                <input tkInput inset id="oauth-tenant-id" autocomplete="off" placeholder="common" [(ngModel)]="oauthTenantId" />
+              </tk-field>
+            }
 
             <tk-field
               [label]="'admin.email.form.clientSecret' | transloco"
@@ -276,6 +296,7 @@ export class EmailProviderForm {
   protected readonly accountEmail = signal('');
   protected readonly oauthClientId = signal('');
   protected readonly oauthClientSecret = signal('');
+  protected readonly oauthTenantId = signal('');
   protected readonly smtpHost = signal('');
   protected readonly smtpPort = signal<number | null>(null);
   protected readonly smtpUsername = signal('');
@@ -297,6 +318,7 @@ export class EmailProviderForm {
       this.accountEmail.set(p.accountEmail ?? '');
       this.oauthClientId.set(p.oauthClientId ?? '');
       this.oauthClientSecret.set('');
+      this.oauthTenantId.set(p.oauthTenantId ?? '');
       this.smtpHost.set(p.smtpHost ?? '');
       this.smtpPort.set(p.smtpPort);
       this.smtpUsername.set(p.smtpUsername ?? '');
@@ -379,9 +401,12 @@ export class EmailProviderForm {
       // omitting the client id would null it — and a connected provider with no
       // client id cannot refresh its token, which surfaces an hour later as mail
       // silently stopping. The signals mirror what the server sent, so this
-      // round-trips rather than re-types.
+      // round-trips rather than re-types. The tenant is here for exactly the
+      // same reason: dropping it aims the next refresh at `/common`, which a
+      // single-tenant Entra registration rejects outright.
       oauthClientId: this.oauthClientId().trim(),
       oauthClientSecret: this.oauthClientSecret() || undefined,
+      oauthTenantId: this.oauthTenantId().trim(),
       smtpHost: this.smtpHost().trim(),
       smtpPort: this.smtpPort(),
       smtpUsername: this.smtpUsername().trim(),

@@ -42,16 +42,14 @@ public class EmailPollingWorker(
         var inbound = scope.ServiceProvider.GetRequiredService<InboundEmailService>();
         var providers = scope.ServiceProvider.GetRequiredService<EmailProviderService>();
 
-        // Anything that could be receiving: a designated provider, or the
-        // deprecated mailbox columns an installation from before providers is
-        // still running on. Which of the two wins is EmailProviderService's call,
-        // not the worker's — one resolver, so the screen and the poller cannot
-        // disagree about which mailbox is live.
+        // A designated receiving provider is now the whole of "this workspace
+        // takes mail in by polling". Turning the *connection* into something the
+        // reader can use is still EmailProviderService's call, not the worker's —
+        // one resolver, so the screen and the poller cannot disagree about which
+        // mailbox is live.
         var configs = await db.EmailConfigs
             .Include(c => c.ReceivingProvider)
-            .Where(c => c.ReceivingProviderId != null
-                        || (c.InboundConnector == InboundConnector.MailboxPoll
-                            && c.MailboxProtocol == MailboxProtocol.Imap))
+            .Where(c => c.ReceivingProviderId != null)
             .ToListAsync(ct);
 
         var now = DateTime.UtcNow;

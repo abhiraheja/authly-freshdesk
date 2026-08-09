@@ -46,6 +46,22 @@ public class EmailProvider
     public string? OauthClientId { get; set; }
     public string? OauthClientSecretEncrypted { get; set; }
 
+    /// <summary>
+    /// Which directory the handshake goes through — Microsoft only, and not
+    /// optional there for most operators.
+    ///
+    /// Entra refuses `/common` outright for an app registered as
+    /// *"Accounts in this organizational directory only"* after 15 Oct 2018
+    /// (`AADSTS50194`), and single-tenant is the option an operator registering an
+    /// app for their own company naturally picks. So this holds their directory
+    /// (tenant) ID or domain, substituted into the authorize and token URLs.
+    ///
+    /// Null means `common`, which is right for a multi-tenant registration and is
+    /// the only value that also admits personal Outlook.com accounts. Not a
+    /// secret: it is a directory identifier, visible in every sign-in URL.
+    /// </summary>
+    public string? OauthTenantId { get; set; }
+
     /// <summary>JSON: access token, refresh token, expiry, granted scope.</summary>
     public string? OauthTokensEncrypted { get; set; }
 

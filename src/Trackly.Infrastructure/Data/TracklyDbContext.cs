@@ -586,8 +586,6 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
         {
             e.ToTable("email_configs");
             e.HasIndex(c => c.WorkspaceId).IsUnique();
-            e.Property(c => c.UseSharedSmtp).HasDefaultValue(true);
-            e.Property(c => c.SmtpUseStartTls).HasDefaultValue(true);
             e.Property(c => c.EmailMode).HasDefaultValue(EmailMode.NotificationsOnly);
             e.Property(c => c.NewTicketViaEmail).HasDefaultValue(false);
             e.Property(c => c.PollIntervalSeconds).HasDefaultValue(60);

@@ -644,7 +644,7 @@ Any SMTP relay works: SendGrid, Mailgun, Postmark, AWS SES, or the enterprise's 
 
 **Which relay is a row, not a column.** `email_providers` holds one row per configured provider — Google, Microsoft 365, Yahoo, generic SMTP, Amazon SES — and `email_configs.sending_provider_id` names the one that actually sends (null ⇒ the shared deployment relay). Several can be connected at once; exactly one sends and at most one receives. See `docs/email-providers-plan.md` for the full design.
 
-**OAuth is an authentication mechanism, not a second transport.** Google (and Microsoft and Yahoo when their cards land) authenticate IMAP and SMTP with **SASL XOAUTH2** — MailKit's `SaslMechanismOAuth2` — so `ImapMailboxReader` and `WorkspaceEmailSender` each gained one branch and the inbound pipeline, threading, dedup and attachment handling are untouched. `SmtpSettings.AccessToken` / `MailboxConnection.AccessToken` carry it; exactly one of token or password is ever set. `EmailProviderService.GetAccessTokenAsync` renews inside a five-minute margin, serialised per provider row because Google rotates refresh tokens and two concurrent refreshes invalidate each other.
+**OAuth is an authentication mechanism, not a second transport.** Google and Microsoft (and Yahoo when its card lands) authenticate IMAP and SMTP with **SASL XOAUTH2** — MailKit's `SaslMechanismOAuth2` — so `ImapMailboxReader` and `WorkspaceEmailSender` each gained one branch and the inbound pipeline, threading, dedup and attachment handling are untouched. `SmtpSettings.AccessToken` / `MailboxConnection.AccessToken` carry it; exactly one of token or password is ever set. `EmailProviderService.GetAccessTokenAsync` renews inside a five-minute margin, serialised per provider row because Google rotates refresh tokens and two concurrent refreshes invalidate each other.
 
 **One resolver, and every sender uses it.** `EmailProviderService.ResolveSenderAsync` turns the designation into `SmtpSettings?`. `NotificationService`, `AnnouncementService` and the email test all call it, so the test proves the transport real mail goes through — anything else would be a false proof, and a false proof is what unlocks turning off the last working way in (invariant 8).
 
@@ -772,11 +772,15 @@ CREATE TABLE email_providers (
     -- OAuth (the operator's own app registration — Trackly ships no client id)
     oauth_client_id                TEXT,
     oauth_client_secret_encrypted  TEXT,          -- AES-256-GCM
+    -- Microsoft only, and plaintext: a directory ID is in every sign-in URL, so
+    -- invariant 3 does not reach it. NULL means `common` — which Entra refuses
+    -- for a single-tenant app registration, hence the column.
+    oauth_tenant_id                TEXT,
     oauth_tokens_encrypted         TEXT,          -- AES-256-GCM JSON (refresh token)
     oauth_scopes                   TEXT,
     -- SMTP / IMAP. A connected provider authenticates with XOAUTH2 and ignores
-    -- these; Microsoft and Yahoo use an app password here until their OAuth
-    -- cards ship, and the columns are the same either way.
+    -- these; Yahoo uses an app password here until its OAuth card ships, and the
+    -- columns are the same either way.
     smtp_host TEXT, smtp_port INT, smtp_username TEXT,
     smtp_password_encrypted TEXT,                 -- AES-256-GCM
     smtp_use_start_tls BOOLEAN NOT NULL DEFAULT true,
@@ -823,18 +827,11 @@ CREATE TABLE email_configs (
     -- off. Distinct from email_providers.last_verified_at, which only says one
     -- provider's credentials authenticate. Every provider mutation clears this.
     last_verified_at       TIMESTAMPTZ,
-    -- DEPRECATED outbound columns — superseded by email_providers. The
-    -- EmailProviders migration copied them into an 'smtp' provider row and
-    -- pointed sending_provider_id at it; they are left in place so a rollback
-    -- still has credentials nobody could retype, and dropped one release later.
-    -- Read in exactly one place: EmailProviderService.LegacySmtp.
-    use_shared_smtp        BOOLEAN DEFAULT true,
-    smtp_host              TEXT,
-    smtp_port              INT,
-    smtp_user              TEXT,
-    smtp_password_encrypted TEXT,                -- AES-256-GCM (ISecretProtector)
-    smtp_use_start_tls     BOOLEAN DEFAULT true,
-    -- Still current: who mail appears to come from.
+    -- The outbound SMTP columns that used to sit here were superseded by
+    -- email_providers and DROPPED by the EmailProviderCleanup migration. This
+    -- row is policy now, not credentials — nothing here is a secret except the
+    -- inbound webhook signing key.
+    -- Who mail appears to come from. Survives changing which relay carries it.
     from_name              TEXT,
     from_email             TEXT,
     -- Interaction mode
@@ -847,16 +844,10 @@ CREATE TABLE email_configs (
     inbound_provider       TEXT,                 -- sendgrid | mailgun | postmark | ses
     inbound_reply_domain   TEXT,                 -- e.g. tickets.acme.com
     inbound_webhook_secret_encrypted TEXT,       -- AES-256-GCM; verifies the HMAC
-    -- Option B: mailbox polling. DEPRECATED alongside the SMTP columns above —
-    -- the mailbox is now receiving_provider_id. Same rollback reasoning, same
-    -- one reader: EmailProviderService.LegacyMailbox.
-    mailbox_protocol       TEXT,                 -- imap | ms_graph | gmail_api
-    mailbox_address        TEXT,                 -- e.g. support@acme.com
-    mailbox_host           TEXT,                 -- IMAP host (imap only)
-    mailbox_port           INT,                  -- IMAP port (default 993)
-    mailbox_username       TEXT,
-    mailbox_password_encrypted TEXT,             -- AES-256-GCM (imap app password)
-    mailbox_oauth_tokens_encrypted TEXT,         -- AES-256-GCM JSON (graph/gmail refresh token)
+    -- Option B: mailbox polling. Which mailbox and its credentials are the
+    -- provider row receiving_provider_id points at — the mailbox_* columns that
+    -- used to be here went with the SMTP ones. The reply-to address on a polled
+    -- workspace is that provider's account_email.
     poll_interval_seconds  INT DEFAULT 60,
     last_polled_at         TIMESTAMPTZ,
     updated_at             TIMESTAMPTZ DEFAULT now()
@@ -878,9 +869,9 @@ CREATE TABLE inbound_email_events (
 ```
 
 > **Implementation notes (Phase 4):** encrypted columns are suffixed `*_encrypted`
-> and are never returned by the admin API — `GET /api/admin/settings/email`
-> exposes `hasSmtpPassword` / `hasInboundWebhookSecret` / `hasMailboxPassword`
-> booleans instead. The parse-webhook endpoint is `POST /api/email/inbound/{slug}`;
+> and are never returned by the admin API — `GET /api/admin/email/providers`
+> exposes `hasSmtpPassword` / `hasImapPassword` / `hasOauthClientSecret` booleans
+> and `GET /api/admin/email/config` exposes `hasInboundWebhookSecret`. The parse-webhook endpoint is `POST /api/email/inbound/{slug}`;
 > the caller signs the **raw request body** with the workspace's webhook secret and
 > sends it as `X-Trackly-Signature: <hex HMAC-SHA256>` (constant-time compared).
 > A provider-specific adapter (SendGrid multipart, Mailgun signature) can normalise
@@ -1329,7 +1320,7 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | POST   | `/api/admin/email/providers/{provider}/connect` | Session | admin — start the mail OAuth handshake, returns `{ authorizeUrl }` |
 | POST   | `/api/admin/email/oauth/complete` | Session | admin — redeems the `code`+`state` the provider handed to the SPA's `/oauth/callback` route; single-use `state`, workspace-scoped |
 | PUT    | `/api/admin/email/roles` | Session | admin — designate the sending and receiving providers |
-| GET/PUT| `/api/admin/email/config` | Session | admin — From identity, mode, inbound connector (never the deprecated SMTP columns) |
+| GET/PUT| `/api/admin/email/config` | Session | admin — From identity, mode, inbound connector, poll interval. Replaced `/api/admin/settings/email`, which was deleted with the columns it wrote |
 | POST   | `/api/invitations` | Session | admin — invite agents by email |
 | POST   | `/api/invitations/accept` | None | Accept invite via token, create account |
 | GET    | `/api/public/workspaces/{slug}/branding` | None | Public, cacheable — branding for form/widget |

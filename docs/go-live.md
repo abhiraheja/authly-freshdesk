@@ -228,14 +228,14 @@ only the **shared/deployment-level** pieces are environment config.
   `Security:MasterKey`. **No new environment config** — every provider is set up
   from inside the admin UI, deliberately, because SMTP is what an empty install
   lacks.
-  - **Google connects with OAuth (XOAUTH2).** The operator registers **their own**
-    OAuth client in **their own** Google Cloud project — Trackly ships no client
-    id — and pastes the id and secret into the Google card. Still DB config, not
-    environment config.
+  - **Google and Microsoft connect with OAuth (XOAUTH2).** The operator registers
+    **their own** OAuth client in **their own** Google Cloud project or Entra
+    directory — Trackly ships no client id — and pastes the id and secret into the
+    card. Still DB config, not environment config.
     - **The redirect URI must be registered in that OAuth client, byte-identical.**
       It is `{App:FrontendBaseUrl}/oauth/callback` — a front-end route, not an API
-      path — and the Google card shows the exact string to copy. Getting it wrong
-      fails at Google with an error that never reaches Trackly.
+      path — and the card shows the exact string to copy. Getting it wrong fails at
+      the provider with an error that never reaches Trackly.
       **`App:FrontendBaseUrl` must be set in prod**, and to the address an admin
       actually types in a browser; it is also what magic-link and notification
       emails are built from.
@@ -251,20 +251,59 @@ only the **shared/deployment-level** pieces are environment config.
     - Google Workspace stopped accepting plain passwords for IMAP/SMTP/POP in
       March 2025. **App passwords still work** and remain the fallback here, but
       they require 2-Step Verification on the account.
-  - Microsoft 365 and Yahoo authenticate with an **app password** over ordinary
-    SMTP/IMAP. Their OAuth cards land in Phases 3 and 4.
+  - **Microsoft has two prod-only traps of its own**, both invisible until after
+    go-live:
+    - **Register the redirect URI under Entra's *Web* platform, never
+      *Single-page application*.** A `spa` redirect URI caps the refresh token at
+      **24 hours** with no inactivity reset; a Web one lasts 90 days. Wrong
+      choice = inbound mail stops every morning, with a configuration that looks
+      correct. Trackly's callback being a front-end route makes SPA the tempting
+      answer — it is still wrong.
+    - **The directory (tenant) ID is required for a single-tenant registration.**
+      Entra rejects the shared `/common` endpoint with `AADSTS50194` for any app
+      registered as "Accounts in this organizational directory only" after
+      15 Oct 2018. Stored in `email_providers.oauth_tenant_id`; leave it blank
+      only for a multi-tenant app (which is also the only way personal
+      Outlook.com accounts can connect).
+    - Delegated permissions `IMAP.AccessAsUser.All` + `SMTP.Send` on Office 365
+      Exchange Online, with tenant admin consent if required. **SMTP AUTH and
+      IMAP must be enabled for the mailbox** (`Set-CASMailbox`) — tenant policy
+      can have them off and Trackly cannot see that from here.
+    - Microsoft publishes no v2.0 revocation endpoint, so **Remove provider**
+      clears Trackly's tokens but cannot retire the grant remotely; it is removed
+      at myaccount.microsoft.com.
+    - Basic auth for SMTP AUTH client submission is disabled by default for
+      existing tenants at the end of **December 2026** and removed during 2027.
+      That is the **app password** path, not this one — an installation on a
+      Microsoft app password has a deadline; one on Connect does not.
+  - Yahoo authenticates with an **app password** over ordinary SMTP/IMAP. Its
+    OAuth card is deferred (plan Phase 4).
   - SES needs the region's `email-smtp.{region}.amazonaws.com` reachable and a
     **verified identity** for the From address, or mail is rejected.
 - `email_configs.sending_provider_id` / `receiving_provider_id` say which
   provider does which job. **A null sender means the shared relay** — that is what
-  a fresh install runs on.
-- **Upgrade note:** the `EmailProviders` migration copies existing
-  `email_configs` SMTP/mailbox columns into an `smtp` provider row and points the
-  config at it, so a working installation keeps working. The old columns are
-  **left in place** and dropped one release later, so a rollback still has the
-  credentials — nobody can retype a password they were never shown. Delete them
-  only after that release has been on prod long enough to rule out a rollback.
-- Own SMTP relay (deprecated legacy path) — falls back to the shared relay.
+  a fresh install runs on, and since `EmailProviderCleanup` it means exactly that
+  and nothing else. Before it, an installation with leftover legacy columns kept
+  sending through them while the screen showed the shared relay.
+- **Upgrade note — the two-step column move, and the one-way door.** The
+  `EmailProviders` migration copied the old `email_configs` SMTP/mailbox columns
+  into an `smtp` provider row and pointed the config at it, leaving the originals
+  in place so a rollback still had credentials nobody could retype.
+  **`EmailProviderCleanup` drops them.** It re-runs the carry-forward first (for
+  anyone who edited email through the now-deleted `/api/admin/settings/email`
+  after the first migration), and only assigns the sending/receiving roles where
+  they are still unset — an installation that has already chosen a sender keeps
+  it.
+
+  **Take a database backup before applying it.** Its `Down` restores the columns
+  empty: the passwords were encrypted and never displayed, so there is no copy to
+  put back and a rollback needs a restore, not a migration. Do not ship it in the
+  same deployment as the release that introduced providers — the gap is the whole
+  point.
+
+  After it applies, `GET`/`PUT /api/admin/settings/email` no longer exist
+  (`POST .../email/test` and the notification endpoints are unaffected). The only
+  caller was the retiring React email screen.
 - Inbound connector, **one of**:
   - **Option A — parse webhook:** tenant adds an **MX record** on a subdomain
     (e.g. `tickets.acme.com`) pointing at their provider (SendGrid/Mailgun/…),
@@ -349,8 +388,9 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] **A second administrator exists.** There is no CLI password recovery. If the only admin loses their password while email is not working, the installation cannot be recovered through the app — only from a database backup
 - [ ] **Email proven, if you intend to turn password sign-in off** — **Admin ▾ → Workspace → Email → Send a test email** must succeed first. Trackly refuses to disable the last *proven* method, and an unproven email setting does not count. **Re-send it after any change on the Email screen** — connecting a provider, changing which one sends, or editing the From address all clear the proof, because none of them are what the last test demonstrated
 - [ ] **A mail provider connected and designated, or a conscious decision to use the shared relay** — **Admin ▾ → Workspace → Email**. Connecting a provider is not enough; the *Send mail through* dropdown is what puts it to work. A per-provider **Test** proves credentials only, never delivery
+- [ ] **If Microsoft is connected:** its redirect URI is registered under Entra's **Web** platform, not *Single-page application*, and the **directory (tenant) ID** is filled in unless the app registration is multi-tenant. The SPA platform silently caps the refresh token at 24 hours; `/common` with a single-tenant app fails outright with `AADSTS50194`
 - [ ] `Security:MasterKey` set to a real base64 32-byte key, stored + backed up
-- [ ] `App:FrontendBaseUrl` = the public SPA URL (test a magic-link email points there)
+- [ ] `App:FrontendBaseUrl` = the public SPA URL (test a magic-link email points there); the SPA host must also serve `index.html` for `/oauth/callback`
 - [ ] `Storage:LocalPath` on a persistent, backed-up volume (single instance) — still the default and the fallback even when workspaces use a cloud provider
 - [ ] Any workspace on Azure/GCS has passed **Admin → Storage → Test connection**
 - [ ] Cloud buckets are **private** — unless a CDN is in use, in which case the exposure noted in §3 was a conscious decision
