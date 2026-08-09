@@ -51,6 +51,27 @@ public class EmailConfig
     /// </summary>
     public DateTime? LastVerifiedAt { get; set; }
 
+    // ---- Which connected provider does which job ----
+    //
+    // Kept here rather than as a flag on EmailProvider because it is workspace
+    // policy, not a property of a credential: several providers can be connected
+    // at once, and exactly one sends while at most one receives.
+
+    /// <summary>
+    /// The provider outbound mail goes through. **Null means the shared,
+    /// deployment-level relay** (`Email:Smtp:*`) — or the dev logger when that is
+    /// unset — which is what every installation starts on.
+    /// </summary>
+    public Guid? SendingProviderId { get; set; }
+    public EmailProvider? SendingProvider { get; set; }
+
+    /// <summary>
+    /// The mailbox <c>EmailPollingWorker</c> polls. Null means inbound mail either
+    /// arrives by parse webhook or not at all.
+    /// </summary>
+    public Guid? ReceivingProviderId { get; set; }
+    public EmailProvider? ReceivingProvider { get; set; }
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 

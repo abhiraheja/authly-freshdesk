@@ -17,7 +17,7 @@ namespace Trackly.Modules.Email;
 public class NotificationService(
     TracklyDbContext db,
     IWorkspaceEmailSender sender,
-    ISecretProtector secrets,
+    EmailProviderService providers,
     IConfiguration configuration,
     ILogger<NotificationService> logger)
 {
@@ -230,12 +230,7 @@ public class NotificationService(
 
         var fromName = config?.FromName ?? branding?.PageTitle ?? workspace.Name;
 
-        SmtpSettings? smtp = null;
-        if (config is { UseSharedSmtp: false, SmtpHost: { Length: > 0 } host })
-        {
-            var password = config.SmtpPasswordEncrypted is { Length: > 0 } enc ? secrets.Unprotect(enc) : null;
-            smtp = new SmtpSettings(host, config.SmtpPort ?? 587, config.SmtpUser, password, config.SmtpUseStartTls);
-        }
+        var smtp = await providers.ResolveSenderAsync(workspaceId, ct);
 
         return new Ctx(workspace, settings, config?.FromEmail, fromName, smtp, ReplyDomainFor(config));
     }

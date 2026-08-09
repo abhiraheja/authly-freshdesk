@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Trackly.Infrastructure.Data;
@@ -11,9 +12,11 @@ using Trackly.Infrastructure.Data;
 namespace Trackly.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(TracklyDbContext))]
-    partial class TracklyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260808170000_EmailProviders")]
+    partial class EmailProviders
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

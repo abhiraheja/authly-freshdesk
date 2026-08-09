@@ -222,7 +222,28 @@ only the **shared/deployment-level** pieces are environment config.
   smoke test, never for real users.
 
 **Per-workspace (configured by each tenant admin, encrypted at rest):**
-- Own SMTP relay (optional) — falls back to the shared relay.
+- **Mail providers** (`email_providers`, one row per provider) — Google,
+  Microsoft 365, Yahoo, generic SMTP, Amazon SES. Configured at
+  `/admin/settings/email`; credentials are AES-256-GCM encrypted with
+  `Security:MasterKey`. **No new environment config** — every provider is set up
+  from inside the admin UI, deliberately, because SMTP is what an empty install
+  lacks.
+  - Google/Microsoft/Yahoo authenticate with an **app password** over ordinary
+    SMTP/IMAP today. OAuth (XOAUTH2) is Phase 2 and will need each operator to
+    register their own Google Cloud project / Entra app — still stored in the DB,
+    not in config.
+  - SES needs the region's `email-smtp.{region}.amazonaws.com` reachable and a
+    **verified identity** for the From address, or mail is rejected.
+- `email_configs.sending_provider_id` / `receiving_provider_id` say which
+  provider does which job. **A null sender means the shared relay** — that is what
+  a fresh install runs on.
+- **Upgrade note:** the `EmailProviders` migration copies existing
+  `email_configs` SMTP/mailbox columns into an `smtp` provider row and points the
+  config at it, so a working installation keeps working. The old columns are
+  **left in place** and dropped one release later, so a rollback still has the
+  credentials — nobody can retype a password they were never shown. Delete them
+  only after that release has been on prod long enough to rule out a rollback.
+- Own SMTP relay (deprecated legacy path) — falls back to the shared relay.
 - Inbound connector, **one of**:
   - **Option A — parse webhook:** tenant adds an **MX record** on a subdomain
     (e.g. `tickets.acme.com`) pointing at their provider (SendGrid/Mailgun/…),
@@ -305,7 +326,8 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] Migrations applied — automatic on boot unless `Trackly:AutoMigrate` is false, in which case run `dotnet ef database update` yourself
 - [ ] **First-run setup done** — open the app, land on `/setup`, create the workspace + first admin **with a password**. This signs you in inline (no email), so it works before SMTP exists. It answers `409` afterwards; if it does not, the installation was never claimed and **anyone who reaches it becomes your administrator**
 - [ ] **A second administrator exists.** There is no CLI password recovery. If the only admin loses their password while email is not working, the installation cannot be recovered through the app — only from a database backup
-- [ ] **Email proven, if you intend to turn password sign-in off** — **Admin ▾ → Workspace → Login methods → Send a test email** must succeed first. Trackly refuses to disable the last *proven* method, and an unproven email setting does not count
+- [ ] **Email proven, if you intend to turn password sign-in off** — **Admin ▾ → Workspace → Email → Send a test email** must succeed first. Trackly refuses to disable the last *proven* method, and an unproven email setting does not count. **Re-send it after any change on the Email screen** — connecting a provider, changing which one sends, or editing the From address all clear the proof, because none of them are what the last test demonstrated
+- [ ] **A mail provider connected and designated, or a conscious decision to use the shared relay** — **Admin ▾ → Workspace → Email**. Connecting a provider is not enough; the *Send mail through* dropdown is what puts it to work. A per-provider **Test** proves credentials only, never delivery
 - [ ] `Security:MasterKey` set to a real base64 32-byte key, stored + backed up
 - [ ] `App:FrontendBaseUrl` = the public SPA URL (test a magic-link email points there)
 - [ ] `Storage:LocalPath` on a persistent, backed-up volume (single instance) — still the default and the fallback even when workspaces use a cloud provider

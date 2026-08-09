@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Trackly.Core.Entities;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
+using Trackly.Modules.Email;
 using Trackly.Modules.Tickets;
 
 namespace Trackly.Modules.Announcements;
@@ -13,7 +14,7 @@ namespace Trackly.Modules.Announcements;
 public class AnnouncementService(
     TracklyDbContext db,
     IWorkspaceEmailSender sender,
-    ISecretProtector secrets,
+    EmailProviderService providers,
     ILogger<AnnouncementService> logger)
 {
     public async Task<IReadOnlyList<AnnouncementSummaryDto>> ListAsync(Actor actor, CancellationToken ct)
@@ -146,12 +147,7 @@ public class AnnouncementService(
         var branding = await db.WorkspaceBrandings.SingleOrDefaultAsync(b => b.WorkspaceId == workspaceId, ct);
         var fromName = config?.FromName ?? branding?.PageTitle ?? workspace.Name;
 
-        SmtpSettings? smtp = null;
-        if (config is { UseSharedSmtp: false, SmtpHost: { Length: > 0 } host })
-        {
-            var password = config.SmtpPasswordEncrypted is { Length: > 0 } enc ? secrets.Unprotect(enc) : null;
-            smtp = new SmtpSettings(host, config.SmtpPort ?? 587, config.SmtpUser, password, config.SmtpUseStartTls);
-        }
+        var smtp = await providers.ResolveSenderAsync(workspaceId, ct);
         return (smtp, config?.FromEmail, fromName);
     }
 

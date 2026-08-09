@@ -5,6 +5,7 @@ using Trackly.Api.Auth;
 using Trackly.Core.Entities;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
+using Trackly.Modules.Email;
 
 namespace Trackly.Api.Controllers;
 
@@ -95,7 +96,9 @@ public class EmailSettingsController(TracklyDbContext db, ISecretProtector secre
     /// </summary>
     [HttpPost("api/admin/settings/email/test")]
     public async Task<IActionResult> TestEmail(
-        [FromServices] IWorkspaceEmailSender sender, CancellationToken ct)
+        [FromServices] IWorkspaceEmailSender sender,
+        [FromServices] EmailProviderService providers,
+        CancellationToken ct)
     {
         var to = User.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
         if (string.IsNullOrWhiteSpace(to))
@@ -103,15 +106,11 @@ public class EmailSettingsController(TracklyDbContext db, ISecretProtector secre
 
         var config = await GetOrCreateConfigAsync(ct);
 
-        // Same resolution the real notification path uses: the workspace's own
-        // relay when it has one, otherwise the shared/deployment relay. Testing
-        // anything else would prove the wrong thing.
-        SmtpSettings? smtp = null;
-        if (config is { UseSharedSmtp: false, SmtpHost: { Length: > 0 } host })
-        {
-            var password = config.SmtpPasswordEncrypted is { Length: > 0 } enc ? secrets.Unprotect(enc) : null;
-            smtp = new SmtpSettings(host, config.SmtpPort ?? 587, config.SmtpUser, password, config.SmtpUseStartTls);
-        }
+        // The one resolver every outbound path uses: the designated sending
+        // provider, else the deprecated email_configs columns, else the shared
+        // relay. Resolving it here a second way is how the test comes back green
+        // for a transport nothing actually sends through.
+        var smtp = await providers.ResolveSenderAsync(User.GetWorkspaceId(), ct);
 
         try
         {

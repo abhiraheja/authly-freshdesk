@@ -40,6 +40,8 @@ Grounding, so the plan is measured against the real code rather than the doc.
 | Inbound (webhook) | `src/Trackly.Api/Controllers/EmailInboundController.cs` | `POST /api/email/inbound/{slug}`, HMAC-SHA256 over the raw body |
 | Worker | `src/Trackly.Api/Workers/EmailPollingWorker.cs` | 15s base tick; selects `InboundConnector.MailboxPoll && MailboxProtocol.Imap` |
 | Pipeline | `src/Trackly.Modules/Email/InboundEmailService.cs` | shared by both connectors — **unchanged by this work** |
+| Test + proof | `EmailSettingsController.TestEmail`, `EmailConfig.LastVerifiedAt` | added by `8d7f3ac`; **no UI yet** — see § 4.5 |
+| Lockout guard | `src/Trackly.Api/Controllers/LoginSettingsController.cs` | added by `8d7f3ac`; **no UI yet**; reads `LastVerifiedAt` |
 | Angular screen | `/admin/settings/email` | `ComingSoon`; React source is `frontend/src/pages/admin/EmailSettingsPage.tsx` (265 lines) |
 
 Three things already anticipate this work and were never built:
@@ -190,7 +192,7 @@ EF migration, as a data step:
 Drop the old columns in a **second** migration, one release later, so a rollback
 in between doesn't lose credentials that were never re-entered.
 
-### 4.4 New table — `email_oauth_states`
+### 4.4 New table — `email_oauth_states` — Phase 2, not Phase 1
 
 Exactly `SsoLoginState`'s job and shape. The `state` is echoed by the provider;
 the PKCE `code_verifier` must survive the redirect and must never reach the
@@ -209,6 +211,52 @@ CREATE TABLE email_oauth_states (
     created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ```
+
+### 4.5 `LastVerifiedAt` is a lockout guard, not a health field
+
+Commit `8d7f3ac` (password sign-in) added a coupling this feature must respect,
+and getting it wrong locks an installation out of itself.
+
+`email_configs.last_verified_at` is set only when `POST /api/admin/settings/email/test`
+actually delivers a message. `LoginSettingsController` then treats
+`last_verified_at IS NOT NULL` as **proof that email login can let somebody in**,
+and refuses to disable the last working sign-in method without it:
+
+```csharp
+// LoginSettingsController — the guard
+var usable = (password ? 1 : 0) + (email && emailWorks ? 1 : 0) + (ssoActive ? 1 : 0);
+if (usable == 0) return BadRequest(…);
+
+private Task<bool> EmailWorksAsync(Guid workspaceId, CancellationToken ct)
+    => db.EmailConfigs.AnyAsync(c => c.WorkspaceId == workspaceId && c.LastVerifiedAt != null, ct);
+```
+
+Trackly is self-hosted: there is no support desk and no account recovery. A false
+"email works" is a permanent lockout. Four rules follow, and none are optional:
+
+1. **`last_verified_at` stays on `email_configs`.** It means *this installation's
+   outbound email is proven*, which is a different question from
+   `email_providers.last_verified_at` (*this provider's credentials authenticate*).
+   Both exist; do not merge them.
+2. **Phase 1 must rewrite `TestEmail` to resolve the sender through
+   `EmailProviderService.ResolveSenderAsync()`.** It currently reads
+   `config.UseSharedSmtp` / `SmtpHost` / `SmtpPasswordEncrypted` directly — the
+   exact columns Phase 1 deprecates. Leave it as-is and the test proves the
+   *shared relay* while real mail goes out through a connected provider. That
+   false proof is what unlocks turning off password sign-in. **This is the single
+   highest-consequence line item in the plan.**
+3. **Every provider mutation clears `last_verified_at`** — connect, disconnect,
+   enable/disable, credential edit, and any change of `sending_provider_id`. Today
+   only `PUT /api/admin/settings/email` clears it, and after this work most
+   changes to how mail is sent will not go through that endpoint.
+4. **A per-provider test sets `email_providers.last_verified_at` only.** It may
+   set the installation-wide flag *only* when that provider is the designated
+   sender — otherwise "I tested Yahoo" would unlock disabling password login on
+   an installation that actually sends through Google.
+
+Neither the test endpoint nor `LoginSettingsController` has any UI yet. The email
+screen is the natural home for the test button (§ 6.1); the login-method toggles
+are a separate screen and out of scope here.
 
 ---
 
@@ -285,7 +333,13 @@ CREATE TABLE email_oauth_states (
   fetching a token as appropriate. This is the single place that knows how a
   provider becomes a transport.
 - `TestAsync(provider)` — connect, authenticate, disconnect; write
-  `last_verified_at` / `last_error`. Mirrors `AdminApi.testStorage()`.
+  `email_providers.last_verified_at` / `last_error`. Mirrors `AdminApi.testStorage()`.
+  It writes `email_configs.last_verified_at` **only** when this provider is the
+  designated sender (§ 4.5 rule 4).
+- `InvalidateProofAsync()` — clears `email_configs.last_verified_at`, called from
+  every mutation in this service (§ 4.5 rule 3). One method rather than a line in
+  each caller, because the one caller that forgets is the one that causes a
+  lockout.
 
 ### 5.4 API
 
@@ -309,6 +363,11 @@ endpoint would 401 on some providers' redirect. It is protected by the single-us
 `EmailSettingsController` keeps `/api/admin/settings/email` (now mode, inbound
 connector, reply domain, poll interval, from name/address) and
 `/api/admin/settings/notifications` unchanged.
+
+`POST /api/admin/settings/email/test` keeps its path and its meaning — *prove
+this installation can send* — but **Phase 1 rewrites its body** to resolve the
+sender via `EmailProviderService.ResolveSenderAsync()` instead of reading the
+`UseSharedSmtp` / `SmtpHost` columns it deprecates (§ 4.5 rule 2).
 
 **The redirect URI must be byte-identical between start and callback**, and must
 be registered in the operator's Google/Entra/Yahoo app. Reuse
@@ -347,6 +406,15 @@ card grid                 2 / 3 / 4 columns — one IntegrationCard per provider
 tk-card  "Receiving"      inbound connector, reply domain, poll interval, new-ticket toggle
 tk-card  "Notifications"  the 7 switches, own save button
 ```
+
+**The "Send test email" button lives on this page**, in the sending section, and
+it is the only UI for `POST /api/admin/settings/email/test`. Its copy must say
+what the test unlocks, not just that it passed: a green tick reading "Verified"
+undersells it, because this is the flag that permits turning off password
+sign-in (§ 4.5). Show the address it was sent to and when — `lastVerifiedAt`
+comes back on the config — and make the state visible again when a settings
+change clears it, since an admin who tested last week and edited today has no
+proof any more and no reason to suspect it.
 
 The category chip row from the reference image is **deliberately not built**.
 With one category it would be a single chip that filters nothing. It is a small
@@ -406,15 +474,55 @@ Each phase builds, passes `npx ng build` + `dotnet build`, and is shippable alon
 | Phase | Contents | Ships |
 |---|---|---|
 | **0** | Verification spikes (§ 8). No production code. | knowledge |
-| **1** | `email_providers` + `email_oauth_states` migrations with the data carry-forward; port the screen to Angular as cards with **only** the SMTP and manual-IMAP paths wired; delete the React page. | the new UI, feature parity, React page gone |
+| **1** ✅ | `email_providers` migration with the data carry-forward; **every outbound path rewired onto `ResolveSenderAsync` (§ 4.5)**; the screen ported to Angular as cards with the SMTP/app-password and manual-IMAP paths wired, including both test buttons. | the new UI, feature parity |
 | **2** | `IEmailOAuthClient`, connect/callback/disconnect/refresh, XOAUTH2 in both transports, **Google** card live. | one-click Google |
 | **3** | **Microsoft** card — same flow, or Graph if Phase 0 says so. | one-click M365 |
 | **4** | **Yahoo** card, then **AWS SES** outbound via the SES SMTP endpoint. | all five cards live |
 | **5** | Second migration dropping the deprecated `email_configs` columns. | cleanup |
 
-Phase 1 is the one that must not be skipped or merged into 2. It is what lets the
-React page be deleted, and it de-risks everything after it by proving the card UI
-and the provider table against credentials that already work.
+Phase 1 is the one that must not be skipped or merged into 2. It de-risks
+everything after it by proving the card UI and the provider table against
+credentials that already work.
+
+### What Phase 1 actually shipped, where it differs from this plan
+
+Three decisions were taken during the build. Each is recorded here rather than
+left as a surprise in the diff.
+
+1. **OAuth providers resolve by app password, not to null.** The plan had
+   `ToSmtp`/`ToMailbox` return null for anything with `AuthKind == oauth2`, so
+   Google, Microsoft and Yahoo would have been decorative until Phase 2 — three
+   of five cards that an admin could fill in and that would silently fall back to
+   the shared relay. But all three accept an app password over ordinary
+   SMTP/IMAP, which is a complete credential, not a half-configured one. They now
+   use the password path, and Phase 2 prefers XOAUTH2 when tokens are present with
+   this as the fallback. The screen says so in as many words, so nobody goes
+   hunting for a Connect button that does not exist yet.
+
+2. **`ResolveSenderAsync` owns the legacy columns too, and *every* sender calls
+   it.** § 4.5 named `TestEmail` as the one to rewrite. It was not the only one —
+   `NotificationService` and `AnnouncementService` each had their own copy of the
+   same `UseSharedSmtp` block. Fixing the test alone would have left it proving a
+   transport that two of the three real senders did not use, which is the precise
+   false proof § 4.5 exists to prevent. The legacy fallback now lives inside
+   `ResolveSenderAsync` (and `ResolveReceiver` for the mailbox), all three callers
+   go through it, and the deprecated columns are read in exactly one place — so
+   Phase 5 deletes one method rather than hunting three.
+
+3. **A separate `GET`/`PUT /api/admin/email/config`.** The new screen does not
+   edit the deprecated SMTP columns, but `PUT /api/admin/settings/email` writes
+   them on every save — so saving a From name through it would have cleared the
+   credentials a rollback lands on, quietly undoing the whole point of keeping
+   them. The narrow endpoint touches only the installation-level settings
+   (identity, mode, inbound connector, poll interval) and clears the delivery
+   proof, since the From address is part of what a delivered test proved. The old
+   endpoint stays until Phase 5 for the React screen, which is still live.
+
+**Deferred, deliberately:** `email_oauth_states` ships with Phase 2, not Phase 1
+— an empty table with no code path is schema nobody can review against a caller.
+Deleting the React page is deferred to a single cleanup pass at the end of the
+whole SPA migration, at the user's instruction; both screens write compatible
+data in the meantime.
 
 ---
 
@@ -453,6 +561,11 @@ current documentation beats recollection every time.
 
 ## 9. Risks
 
+- **Locking the installation out of itself.** The highest-severity risk here, and
+  it is not an email bug — it is `LoginSettingsController` acting on a stale or
+  wrong `last_verified_at` (§ 4.5). Self-hosted means no support desk and no
+  recovery. Treat every rule in § 4.5 as a correctness requirement, and cover
+  them in the checklist rather than trusting review to catch them.
 - **Refresh-token loss is silent.** A revoked or expired refresh token turns into
   a polling worker that logs a warning every 60 seconds while inbound email
   quietly stops. Surface it: `last_error` on the provider row, a `danger` badge on
@@ -483,15 +596,18 @@ current documentation beats recollection every time.
 
 ## 10. Documentation to update, in the same changes
 
-- `docs/trackly-plan.md` — § Email Architecture (Option B is no longer
-  IMAP-only), § Email Configuration (the new schema), and the endpoint list.
-- `docs/admin-guide.md` § 9 Email — rewrite for cards; it currently describes
-  dropdowns and points at "Admin ▾ → Channels → Email".
-- `docs/go-live.md` — the callback URL that must be registered per provider, and
-  the fact that OAuth client credentials are entered in the admin UI rather than
-  configured as `Email:*` keys. The shared-relay keys are unchanged.
-- `.claude/skills/trackly-ui/references/components.md` — a row for
-  `tk-integration-card`.
+- ✅ `docs/trackly-plan.md` — § Email Architecture and § Email Configuration
+  updated for the provider table and the endpoint list (Phase 1).
+- ✅ `docs/admin-guide.md` § 9 Email — rewritten for cards; it described dropdowns
+  and pointed at "Admin ▾ → Channels → Email".
+- ✅ `docs/go-live.md` — the provider table, the carry-forward migration and the
+  "re-send the test after any change" rule. The shared-relay keys are unchanged.
+  The per-provider OAuth callback URL lands with Phase 2.
+- ~~`.claude/skills/trackly-ui/references/components.md` — a row for
+  `tk-integration-card`.~~ **Not needed.** The provider card is markup inside
+  `email-settings.ts`, not a component: it is used in exactly one place, and a
+  design-system entry for a single caller is a shape nobody can change without
+  guessing who else depends on it. Promote it if a second screen wants one.
 
 ---
 
@@ -506,6 +622,10 @@ current documentation beats recollection every time.
 - [ ] `state` is single-use — replaying a callback URL fails
 - [ ] No secret is ever returned by any endpoint (`has*` booleans only)
 - [ ] Test button reports a real failure with a usable message
+- [ ] After Phase 1, the test sends through the **designated sending provider**, not the shared relay
+- [ ] Connect, disconnect, enable, credential edit and sender reassignment each clear `email_configs.last_verified_at`
+- [ ] Testing a non-sending provider does **not** set `email_configs.last_verified_at`
+- [ ] With password login off and email as the only method, clearing the proof does not strand the installation — `LoginSettingsController` still refuses the unsafe transition
 - [ ] Four states on every card and panel; both colour modes
 - [ ] No horizontal page scroll at 380px
 - [ ] `en.json` and `hi.json` structurally identical

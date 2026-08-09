@@ -640,7 +640,13 @@ CREATE TABLE announcement_deliveries (
 
 ### Outbound (Trackly → customer)
 
-Any SMTP relay works: SendGrid, Mailgun, Postmark, AWS SES, or the enterprise's own relay. Trackly connects as a client and sends. What matters is the headers stamped on every notification email — they enable reply threading:
+Any SMTP relay works: SendGrid, Mailgun, Postmark, AWS SES, or the enterprise's own relay. Trackly connects as a client and sends.
+
+**Which relay is a row, not a column.** `email_providers` holds one row per configured provider — Google, Microsoft 365, Yahoo, generic SMTP, Amazon SES — and `email_configs.sending_provider_id` names the one that actually sends (null ⇒ the shared deployment relay). Several can be connected at once; exactly one sends and at most one receives. See `docs/email-providers-plan.md` for the full design.
+
+**One resolver, and every sender uses it.** `EmailProviderService.ResolveSenderAsync` turns the designation into `SmtpSettings?`. `NotificationService`, `AnnouncementService` and the email test all call it, so the test proves the transport real mail goes through — anything else would be a false proof, and a false proof is what unlocks turning off the last working way in (invariant 8).
+
+What matters on the wire is the headers stamped on every notification email — they enable reply threading:
 
 ```
 From:        Acme Support <support@tickets.acme.com>
@@ -750,19 +756,66 @@ With either connector, an email that matches no existing ticket can **create a n
 
 ## Email Configuration
 
-Per workspace in `/admin/settings/email`. Admin provides their own SMTP credentials (Gmail, SendGrid, Mailgun, etc.) or uses a shared deployment-level SMTP configured at install time.
+Per workspace in `/admin/settings/email`. The admin connects one or more providers and says which one sends and which receives; with none designated, mail goes through the shared deployment-level relay configured at install time.
 
 ```sql
+-- One row per configured provider. Trackly ships the servers, ports and scopes
+-- for each in EmailProviderCatalog, so the admin supplies only the account.
+CREATE TABLE email_providers (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    provider      TEXT NOT NULL,                 -- google | microsoft | yahoo | smtp | ses
+    enabled       BOOLEAN NOT NULL DEFAULT false,
+    account_email TEXT,
+    -- OAuth (the operator's own app registration; Phase 2 uses these)
+    oauth_client_id                TEXT,
+    oauth_client_secret_encrypted  TEXT,          -- AES-256-GCM
+    oauth_tokens_encrypted         TEXT,          -- AES-256-GCM JSON (refresh token)
+    oauth_scopes                   TEXT,
+    -- SMTP / IMAP. Google, Microsoft and Yahoo authenticate with an app
+    -- password here until XOAUTH2 ships; the columns are the same either way.
+    smtp_host TEXT, smtp_port INT, smtp_username TEXT,
+    smtp_password_encrypted TEXT,                 -- AES-256-GCM
+    smtp_use_start_tls BOOLEAN NOT NULL DEFAULT true,
+    imap_host TEXT, imap_port INT, imap_username TEXT,
+    imap_password_encrypted TEXT,                 -- AES-256-GCM
+    -- SES
+    ses_region TEXT, ses_access_key_id TEXT,
+    ses_secret_key_encrypted TEXT,                -- AES-256-GCM
+    -- Per-provider health. NOT the delivery proof — see email_configs below.
+    last_verified_at TIMESTAMPTZ,
+    last_error       TEXT,
+    last_polled_at   TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (workspace_id, provider)
+);
+
 CREATE TABLE email_configs (
     id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id           UUID NOT NULL UNIQUE REFERENCES workspaces(id),
-    -- Outbound
+    -- Which provider does which job. Kept here rather than as a flag on
+    -- email_providers because it is workspace policy, not a property of a
+    -- credential. sending_provider_id NULL ⇒ the shared deployment relay.
+    sending_provider_id    UUID REFERENCES email_providers(id) ON DELETE SET NULL,
+    receiving_provider_id  UUID REFERENCES email_providers(id) ON DELETE SET NULL,
+    -- The INSTALLATION-WIDE proof that a test message was actually delivered —
+    -- the only thing invariant 8 counts before password sign-in may be turned
+    -- off. Distinct from email_providers.last_verified_at, which only says one
+    -- provider's credentials authenticate. Every provider mutation clears this.
+    last_verified_at       TIMESTAMPTZ,
+    -- DEPRECATED outbound columns — superseded by email_providers. The
+    -- EmailProviders migration copied them into an 'smtp' provider row and
+    -- pointed sending_provider_id at it; they are left in place so a rollback
+    -- still has credentials nobody could retype, and dropped one release later.
+    -- Read in exactly one place: EmailProviderService.LegacySmtp.
     use_shared_smtp        BOOLEAN DEFAULT true,
     smtp_host              TEXT,
     smtp_port              INT,
     smtp_user              TEXT,
     smtp_password_encrypted TEXT,                -- AES-256-GCM (ISecretProtector)
     smtp_use_start_tls     BOOLEAN DEFAULT true,
+    -- Still current: who mail appears to come from.
     from_name              TEXT,
     from_email             TEXT,
     -- Interaction mode
@@ -775,7 +828,9 @@ CREATE TABLE email_configs (
     inbound_provider       TEXT,                 -- sendgrid | mailgun | postmark | ses
     inbound_reply_domain   TEXT,                 -- e.g. tickets.acme.com
     inbound_webhook_secret_encrypted TEXT,       -- AES-256-GCM; verifies the HMAC
-    -- Option B: mailbox polling
+    -- Option B: mailbox polling. DEPRECATED alongside the SMTP columns above —
+    -- the mailbox is now receiving_provider_id. Same rollback reasoning, same
+    -- one reader: EmailProviderService.LegacyMailbox.
     mailbox_protocol       TEXT,                 -- imap | ms_graph | gmail_api
     mailbox_address        TEXT,                 -- e.g. support@acme.com
     mailbox_host           TEXT,                 -- IMAP host (imap only)
@@ -1248,7 +1303,12 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | POST   | `/api/users/members` | Session | admin — create staff, returns a temporary password once |
 | POST   | `/api/users/{id}/password` | Session | admin — reset a password, revoke their sessions |
 | GET/PUT| `/api/admin/login-settings` | Session | admin — sign-in method toggles (refuses the last one) |
-| POST   | `/api/admin/settings/email/test` | Session | admin — send a test email; records the proof |
+| POST   | `/api/admin/settings/email/test` | Session | admin — send a test email through the designated sender; records the delivery proof |
+| GET    | `/api/admin/email/providers` | Session | admin — every supported provider, configured or not, plus which sends/receives |
+| PUT/DELETE | `/api/admin/email/providers/{provider}` | Session | admin — save or forget one provider's credentials |
+| POST   | `/api/admin/email/providers/{provider}/test` | Session | admin — authenticate one provider; **does not** record the delivery proof |
+| PUT    | `/api/admin/email/roles` | Session | admin — designate the sending and receiving providers |
+| GET/PUT| `/api/admin/email/config` | Session | admin — From identity, mode, inbound connector (never the deprecated SMTP columns) |
 | POST   | `/api/invitations` | Session | admin — invite agents by email |
 | POST   | `/api/invitations/accept` | None | Accept invite via token, create account |
 | GET    | `/api/public/workspaces/{slug}/branding` | None | Public, cacheable — branding for form/widget |

@@ -604,30 +604,62 @@ on the submit form (deflection).
 
 **What it is.** Two-way email: Trackly **notifies** customers/agents by email, and
 customers can **reply by email** (or email you to open a ticket).
-**Where:** **Admin ▾ → Channels → Email**.
+**Where:** **Admin ▾ → Workspace → Email**.
 
-**Set up — interaction mode & sending.**
-- **Interaction mode** — notifications-only, or notifications **plus inbound**
+**Set up — connect a provider.** The page is a grid of every provider Trackly
+supports — **Google, Microsoft 365, Yahoo, any SMTP server, and Amazon SES** —
+shown whether or not you have configured them. Trackly already knows each one's
+servers and ports, so you supply only the account. Connect as many as you like:
+a spare account costs nothing and is there when the main one has a bad day.
+
+- **Google / Microsoft 365 / Yahoo** — create an **app password** in that account
+  and paste it in. (One-click sign-in is not built yet; the page says so.) The
+  server and port fill themselves in.
+- **SMTP** — the escape hatch. Host, port, username, password: works against
+  anything with an SMTP port, including your own mail server.
+- **Amazon SES** — a region plus the SMTP credentials SES issues. Sending only —
+  SES does not hold a mailbox for Trackly to read.
+
+Everything except SES can also **receive**: give it the IMAP details as well and
+Trackly can poll that mailbox for replies.
+
+**Set up — say which provider does what.** Connecting a provider does not put it
+to work. Two dropdowns decide that:
+- **Send mail through** — notifications, sign-in codes and invitations all take
+  this route. Leave it on the deployment's own relay if you have one.
+- **Receive replies from** — the mailbox Trackly polls and turns into tickets and
   replies.
-- **Sending** — use the deployment’s shared relay, or enter your **own SMTP**
-  host/credentials (encrypted at rest) and a From name/address.
 
-**Set up — inbound (pick one):**
-- **Parse webhook** — add an **MX record** on a subdomain pointing at your email
-  provider (SendGrid/Mailgun/…), which posts inbound mail to Trackly. Trackly
-  verifies an HMAC signature against your stored webhook secret.
-- **Mailbox polling (IMAP)** — enter a mailbox host/user/app-password; Trackly
-  polls it on an interval. _(Requires the server to run continuously — a
-  deployment concern; see go-live.md §4.)_
-- **New ticket via email** toggle — turn cold inbound mail into tickets (off by
-  default).
+**Prove it works.** **Send a test email** delivers a real message, through
+whatever is designated, to your own address. This is the only evidence Trackly
+accepts that outbound email works, and it is what §3.1 requires before you may
+turn password sign-in off. **Any change on this page clears that proof** —
+changing the sender, or even the From address, changes what the last test
+actually demonstrated, so send another one. The per-provider **Test** button is a
+weaker claim on purpose: it proves those credentials sign in, not that mail
+arrives.
+
+**Set up — replies and inbound.**
+- **What email can do** — notifications only, one-way (customers reply), or
+  two-way (both sides reply).
+- **How inbound mail arrives** — poll the mailbox above, or a **parse webhook**:
+  add an **MX record** on a subdomain pointing at your email provider
+  (SendGrid/Mailgun/…), which posts inbound mail to Trackly. Trackly verifies an
+  HMAC signature against your stored webhook secret. _(Polling requires the
+  server to run continuously — a deployment concern; see go-live.md §4.)_
+- **Open a ticket from a cold email** — turn inbound mail that matches no ticket
+  into a new one (off by default).
 
 **Set up — notifications.** Toggle each notification (customer on create/reply/
 status; agent on assign/reply/reassign) and the **CSAT survey** on resolution
-(§16). Replies from non-participants are rejected; private notes never go out.
+(§16). Each saves as you switch it. Replies from non-participants are rejected;
+private notes never go out.
 
-_Deployment note: without a configured relay, mail is written to the server log —
-fine for testing, not for real users._
+_Credentials are AES-256-GCM encrypted at rest and never shown back — a blank
+password box means "keep the stored one", not "clear it"._
+
+_Deployment note: with nothing designated and no shared relay configured, mail is
+written to the server log — fine for testing, not for real users._
 
 ---
 

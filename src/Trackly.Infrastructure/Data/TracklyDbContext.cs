@@ -41,6 +41,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<WorkspaceBranding> WorkspaceBrandings => Set<WorkspaceBranding>();
     public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
     public DbSet<EmailConfig> EmailConfigs => Set<EmailConfig>();
+    public DbSet<EmailProvider> EmailProviders => Set<EmailProvider>();
     public DbSet<StorageConfig> StorageConfigs => Set<StorageConfig>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<InboundEmailEvent> InboundEmailEvents => Set<InboundEmailEvent>();
@@ -590,6 +591,26 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.Property(c => c.NewTicketViaEmail).HasDefaultValue(false);
             e.Property(c => c.PollIntervalSeconds).HasDefaultValue(60);
             e.HasOne(c => c.Workspace).WithMany().HasForeignKey(c => c.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            // SetNull, not Cascade: deleting a provider must not delete the
+            // workspace's entire email configuration along with it. Losing the
+            // pointer falls back to the shared relay, which still delivers.
+            e.HasOne(c => c.SendingProvider).WithMany().HasForeignKey(c => c.SendingProviderId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(c => c.ReceivingProvider).WithMany().HasForeignKey(c => c.ReceivingProviderId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<EmailProvider>(e =>
+        {
+            e.ToTable("email_providers");
+            // One row per provider. Two Gmail connections would be two sets of
+            // credentials for one mailbox with nothing to tell them apart.
+            e.HasIndex(p => new { p.WorkspaceId, p.Provider }).IsUnique();
+            e.Property(p => p.Enabled).HasDefaultValue(false);
+            e.Property(p => p.SmtpUseStartTls).HasDefaultValue(true);
+            e.HasOne(p => p.Workspace).WithMany().HasForeignKey(p => p.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

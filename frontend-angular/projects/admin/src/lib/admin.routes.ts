@@ -26,6 +26,11 @@ export const adminRoutes: Routes = [
     loadComponent: () => import('./sso-settings').then((m) => m.AdminSsoSettings),
   },
   {
+    // Which mail providers this installation sends and receives through.
+    path: 'settings/email',
+    loadComponent: () => import('./email-settings').then((m) => m.AdminEmailSettings),
+  },
+  {
     path: 'settings/configuration',
     loadComponent: () => import('./configuration').then((m) => m.AdminConfiguration),
   },
@@ -56,6 +61,5 @@ export const adminRoutes: Routes = [
   { path: 'channels', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.messagingChannels', from: 'frontend/src/pages/admin/ChannelsPage.tsx' } },
   { path: 'widget', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.widget', from: 'frontend/src/pages/admin/WidgetPage.tsx' } },
   { path: 'settings/ai', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.aiCopilot', from: 'frontend/src/pages/admin/AiSettingsPage.tsx' } },
-  { path: 'settings/email', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.email', from: 'frontend/src/pages/admin/EmailSettingsPage.tsx' } },
   { path: 'settings/branding', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.branding', from: 'frontend/src/pages/admin/BrandingSettingsPage.tsx' } },
 ];
