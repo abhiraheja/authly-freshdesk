@@ -943,6 +943,8 @@
       "disconnectHeading": "Disconnect this provider?",
       "disconnectBody": "Trackly forgets {{name}}’s credentials. Anything it was sending or receiving stops until another provider takes over.",
       "disconnected": "Provider disconnected",
+      "connected": "{{name}} connected",
+      "connectFailed": "Could not connect that account",
       "free": "Free",
       "paid": "Paid",
       "enableAria": "Use {{name}}",
@@ -1025,8 +1027,16 @@
       },
       "form": {
         "setupDocs": "How to set up {{name}}",
-        "appPasswordHeading": "Use an app password for now",
-        "appPasswordBody": "Signing in to {{name}} with one click is not built yet. Create an app password in your {{name}} account and paste it below — it works the same way and can be revoked from there at any time.",
+        "connectedHeading": "Connected",
+        "connectedBody": "Trackly is signed in to {{account}} through {{name}}. It renews its own access; no password is stored.",
+        "ownAppHeading": "Register Trackly in your own {{name}} account",
+        "ownAppBody": "Trackly is self-hosted, so the app is yours, not ours. Create an OAuth client in your {{name}} console, add the redirect URI below to it, then paste the client ID and secret here.",
+        "redirectUri": "Redirect URI",
+        "redirectUriHint": "Add this to your OAuth client exactly as shown. One extra character and the provider refuses the connection with an error Trackly never sees.",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "connect": "Connect {{name}}",
+        "appPasswordBody": "Prefer not to register an app? An app password from your {{name}} account works too — fill in the sending and receiving details below instead.",
         "accountEmail": "Account address",
         "accountEmailHint": "The mailbox this account owns, e.g. the address replies arrive at.",
         "sending": "Sending",
@@ -1054,7 +1064,9 @@
         "errMailbox": "Fill in both the mailbox username and password, or neither.",
         "errRegion": "Enter the region.",
         "errAccessKey": "Enter the access key ID.",
-        "errSecret": "Enter the secret key."
+        "errSecret": "Enter the secret key.",
+        "errClientSecret": "Enter the client secret.",
+        "errConnectOrPassword": "Either connect the account, or fill in the sending details with an app password."
       }
     }
   },

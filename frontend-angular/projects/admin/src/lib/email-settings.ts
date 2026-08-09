@@ -83,6 +83,13 @@ type Capability = 'all' | 'send' | 'receive';
            page out from under whatever is being edited next. -->
       @if (data.value(); as saved) {
         <div class="space-y-4">
+          <!-- The provider bounced the browser back here with a refusal. Shown
+               as an alert rather than a toast: it arrives on a page load, and a
+               toast the admin was not watching for disappears unread. -->
+          @if (connectError(); as failure) {
+            <tk-alert tone="danger" [heading]="'admin.email.connectFailed' | transloco">{{ failure }}</tk-alert>
+          }
+
           @if (!saved.lastVerifiedAt) {
             <tk-alert tone="warning" [heading]="'admin.email.unprovenHeading' | transloco">
               {{ 'admin.email.unprovenBody' | transloco }}
@@ -348,7 +355,12 @@ type Capability = 'all' | 'send' | 'receive';
                provider straight off it. -->
           <tk-drawer [(open)]="drawerOpen" [heading]="editing()?.displayName ?? ''">
             @if (editing(); as provider) {
-              <tk-email-provider-form [provider]="provider" />
+              <tk-email-provider-form
+                [provider]="provider"
+                [redirectUri]="saved.oauthRedirectUri"
+                [connecting]="connecting()"
+                (connect)="startConnect()"
+              />
             }
 
             <div drawer-footer class="flex w-full flex-wrap items-center gap-2">
@@ -434,6 +446,8 @@ export class AdminEmailSettings {
   protected readonly drawerOpen = signal(false);
   protected readonly editing = signal<EmailProvider | null>(null);
   protected readonly savingProvider = signal(false);
+  protected readonly connecting = signal(false);
+  protected readonly connectError = signal<string | null>(null);
   protected readonly savingConfig = signal(false);
   protected readonly testing = signal(false);
   protected readonly busy = signal<EmailProviderKind | null>(null);
@@ -463,6 +477,8 @@ export class AdminEmailSettings {
   );
 
   constructor() {
+    this.readConnectOutcome();
+
     effect(() => {
       const saved = this.data.value();
       if (!saved) return;
@@ -483,6 +499,53 @@ export class AdminEmailSettings {
       // Blank means keep — the server never sent it back.
       this.inboundWebhookSecret.set('');
     });
+  }
+
+  /**
+   * What the provider redirect left in the query string.
+   *
+   * `?connected=` is a breadcrumb only — the provider list from the server is
+   * the truth about connection state, and rendering "Connected" from a query
+   * param would let anyone claim it by editing the URL. Both params are stripped
+   * afterwards so a refresh does not replay the message.
+   */
+  private readConnectOutcome(): void {
+    const params = new URLSearchParams(window.location.search);
+    const connected = params.get('connected');
+    const failed = params.get('email_error');
+    if (!connected && !failed) return;
+
+    if (failed) this.connectError.set(failed);
+    else this.toast.success(this.transloco.translate('admin.email.connected', { name: connected }));
+
+    params.delete('connected');
+    params.delete('email_error');
+    const query = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (query ? `?${query}` : ''));
+  }
+
+  /**
+   * Saves what is in the drawer, then hands the browser to the provider.
+   *
+   * Save first, always: the client id and secret have to be readable server-side
+   * by the time the provider redirects back, and that callback carries no
+   * session — it cannot ask the browser for anything the admin typed.
+   */
+  protected async startConnect(): Promise<void> {
+    const form = this.form();
+    const provider = this.editing();
+    if (!form || !provider) return;
+
+    this.connecting.set(true);
+    try {
+      await this.api.saveProvider(provider.provider, form.body());
+      const { authorizeUrl } = await this.api.connect(provider.provider);
+      // A full-page navigation, not a popup — see EmailApi.connect.
+      window.location.assign(authorizeUrl);
+    } catch (error) {
+      this.toast.error(errorMessage(error));
+      this.connecting.set(false);
+    }
   }
 
   protected when(value: string): string {

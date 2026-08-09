@@ -14,11 +14,21 @@ public interface IMailboxReader
         CancellationToken cancellationToken = default);
 }
 
+/// <param name="Password">Null when <paramref name="AccessToken"/> carries the credential.</param>
+/// <param name="AccessToken">
+/// An OAuth access token, authenticated with SASL XOAUTH2 instead of a password.
+///
+/// A nullable field rather than a discriminator: exactly one of the two is ever
+/// set, so the transport branches on `AccessToken is not null` in one place. It
+/// is short-lived by design — resolve the connection immediately before use and
+/// never cache one.
+/// </param>
 public record MailboxConnection(
     string Host,
     int Port,
     string Username,
-    string Password,
+    string? Password,
+    string? AccessToken = null,
     bool UseSsl = true);
 
 public record FetchedEmail(

@@ -42,6 +42,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<WorkspaceInvitation> WorkspaceInvitations => Set<WorkspaceInvitation>();
     public DbSet<EmailConfig> EmailConfigs => Set<EmailConfig>();
     public DbSet<EmailProvider> EmailProviders => Set<EmailProvider>();
+    public DbSet<EmailOAuthState> EmailOAuthStates => Set<EmailOAuthState>();
     public DbSet<StorageConfig> StorageConfigs => Set<StorageConfig>();
     public DbSet<NotificationSettings> NotificationSettings => Set<NotificationSettings>();
     public DbSet<InboundEmailEvent> InboundEmailEvents => Set<InboundEmailEvent>();
@@ -611,6 +612,17 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.Property(p => p.Enabled).HasDefaultValue(false);
             e.Property(p => p.SmtpUseStartTls).HasDefaultValue(true);
             e.HasOne(p => p.Workspace).WithMany().HasForeignKey(p => p.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<EmailOAuthState>(e =>
+        {
+            e.ToTable("email_oauth_states");
+            // Unique because it is what the callback is looked up by, and two
+            // rows sharing a state would make "single-use" unenforceable.
+            e.HasIndex(s => s.State).IsUnique();
+            e.HasIndex(s => s.ExpiresAt); // cleanup sweeps
+            e.HasOne(s => s.Workspace).WithMany().HasForeignKey(s => s.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

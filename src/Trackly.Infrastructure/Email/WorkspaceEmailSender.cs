@@ -38,7 +38,12 @@ public class WorkspaceEmailSender(
             await client.ConnectAsync(overrideSmtp.Host, overrideSmtp.Port,
                 overrideSmtp.UseStartTls ? SecureSocketOptions.StartTlsWhenAvailable : SecureSocketOptions.Auto,
                 cancellationToken);
-            if (!string.IsNullOrEmpty(overrideSmtp.Username))
+            // XOAUTH2 when a token was resolved, password otherwise — the same
+            // single branch as ImapMailboxReader, and for the same reason.
+            if (overrideSmtp.AccessToken is { Length: > 0 } accessToken)
+                await client.AuthenticateAsync(
+                    new SaslMechanismOAuth2(overrideSmtp.Username ?? "", accessToken), cancellationToken);
+            else if (!string.IsNullOrEmpty(overrideSmtp.Username))
                 await client.AuthenticateAsync(overrideSmtp.Username, overrideSmtp.Password ?? "", cancellationToken);
             await client.SendAsync(mime, cancellationToken);
             await client.DisconnectAsync(true, cancellationToken);

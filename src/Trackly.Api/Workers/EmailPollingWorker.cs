@@ -59,8 +59,20 @@ public class EmailPollingWorker(
         {
             if (cfg.LastPolledAt is { } last && now - last < TimeSpan.FromSeconds(cfg.PollIntervalSeconds))
                 continue;
-            if (providers.ResolveReceiver(cfg) is not { } conn)
+            // Resolving can now renew an OAuth token, so it can also fail — a
+            // revoked grant must land on the provider card as an error rather
+            // than take the whole polling tick down with it.
+            MailboxConnection? conn;
+            try
+            {
+                conn = await providers.ResolveReceiverAsync(cfg, ct);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Could not resolve the mailbox for workspace {WorkspaceId}", cfg.WorkspaceId);
                 continue;
+            }
+            if (conn is null) continue;
 
             // Claim before work so a crash doesn't immediately re-poll.
             cfg.LastPolledAt = now;

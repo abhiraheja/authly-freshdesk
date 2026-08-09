@@ -10,9 +10,15 @@ public interface IWorkspaceEmailSender
     Task SendAsync(SmtpSettings? overrideSmtp, EmailMessage message, CancellationToken cancellationToken = default);
 }
 
+/// <param name="AccessToken">
+/// An OAuth access token, authenticated with SASL XOAUTH2 instead of a password —
+/// see <see cref="MailboxConnection.AccessToken"/> for why it is a nullable field
+/// rather than a mode. Short-lived: resolve it per send, never hold one.
+/// </param>
 public record SmtpSettings(
     string Host,
     int Port,
     string? Username,
     string? Password,
-    bool UseStartTls);
+    bool UseStartTls,
+    string? AccessToken = null);

@@ -475,7 +475,7 @@ Each phase builds, passes `npx ng build` + `dotnet build`, and is shippable alon
 |---|---|---|
 | **0** | Verification spikes (§ 8). No production code. | knowledge |
 | **1** ✅ | `email_providers` migration with the data carry-forward; **every outbound path rewired onto `ResolveSenderAsync` (§ 4.5)**; the screen ported to Angular as cards with the SMTP/app-password and manual-IMAP paths wired, including both test buttons. | the new UI, feature parity |
-| **2** | `IEmailOAuthClient`, connect/callback/disconnect/refresh, XOAUTH2 in both transports, **Google** card live. | one-click Google |
+| **2** ✅ | `IEmailOAuthClient`, connect/callback/disconnect/refresh, XOAUTH2 in both transports, **Google** card live. | one-click Google |
 | **3** | **Microsoft** card — same flow, or Graph if Phase 0 says so. | one-click M365 |
 | **4** | **Yahoo** card, then **AWS SES** outbound via the SES SMTP endpoint. | all five cards live |
 | **5** | Second migration dropping the deprecated `email_configs` columns. | cleanup |
@@ -524,6 +524,55 @@ Deleting the React page is deferred to a single cleanup pass at the end of the
 whole SPA migration, at the user's instruction; both screens write compatible
 data in the meantime.
 
+### What Phase 2 actually shipped, where it differs from this plan
+
+1. **`EmailOAuthApp` carries the catalogue entry, not a provider string.** § 5.2
+   called for "a static per-provider endpoint table" inside `EmailOAuthClient`.
+   That table already exists — `EmailProviderCatalog` holds the authorize URL,
+   token URL and scopes, because the card renders from it. A second copy in
+   Infrastructure would be two places where "Google's token endpoint" is written
+   down, and the failure mode of them disagreeing is an opaque provider-side
+   error. So `EmailOAuthApp` is `(EmailProviderDescriptor, ClientId, ClientSecret)`
+   and the client reads endpoints off the descriptor. Two fields were added to the
+   descriptor for it: `RevokeEndpoint` and `OfflineConsent`.
+
+2. **A connect that returns no refresh token is refused, not stored.** The plan
+   said `access_type=offline&prompt=consent` where the provider needs it; it did
+   not say what to do when the response comes back without a refresh token
+   anyway. Storing it produces a connection that works for an hour and then fails
+   in a background worker long after the admin has closed the tab — the exact
+   silent failure § 9 lists as the second-worst outcome. `CompleteConnectAsync`
+   now rejects the grant and says how to fix it (remove Trackly from the
+   account's connected apps and re-consent).
+
+3. **A token beats a stored password, and the fields hide when connected.**
+   `ToSmtpAsync` / `ToMailboxAsync` prefer XOAUTH2 and fall back to a password,
+   as § 3 intended — but that makes the SMTP/IMAP password boxes on a connected
+   card inputs that are read by nothing. They are hidden while a connection is
+   live (their values still round-trip on save, so nothing is lost), because
+   otherwise the natural response to a delivery problem is to re-type a password
+   that cannot possibly help.
+
+4. **The form always sends `oauthClientId`, even while hidden.** `PUT
+   /api/admin/email/providers/{provider}` overwrites every non-secret field, so
+   omitting the client id would null it — and a connected provider with no client
+   id cannot refresh, which surfaces an hour later as mail stopping. Called out
+   here because it is invisible in the diff and the next person to touch that
+   form will not expect it.
+
+5. **`ResolveReceiver(EmailConfig)` became async.** Resolving can now renew a
+   token, so it can also fail. The polling worker catches per-config rather than
+   letting one revoked grant take down the whole tick, and the failure is written
+   to `email_providers.last_error` so the card turns red — a connection that dies
+   overnight must not be visible only in a log.
+
+**Known behaviour, accepted:** `GetAccessTokenAsync` calls `SaveChangesAsync` to
+persist a rotated token, and it runs inside whatever scope asked for the
+transport. Every current caller resolves before it mutates (the polling worker
+claims `last_polled_at` afterwards; `NotificationService.ResolveAsync` only
+reads), so nothing is flushed early today. Worth remembering before calling a
+sender mid-transaction.
+
 ---
 
 ## 8. Decide before Phase 2 — spikes, not opinions
@@ -539,14 +588,26 @@ current documentation beats recollection every time.
    Microsoft docs and a live tenant.
    *Fallback:* Graph `sendMail` + `messages`, behind the existing
    `IWorkspaceEmailSender` / `IMailboxReader` interfaces.
-2. **Google: which scope, and does the operator's app need verification?**
-   IMAP/SMTP access uses a restricted scope. An app published **Internal** to the
-   operator's own Workspace organisation should avoid the external-app assessment
-   entirely — which is precisely what self-hosting buys us. Confirm that, and
-   confirm the behaviour for an operator on a personal Gmail account rather than
-   Workspace, which cannot publish internally.
-   *Fallback:* document Workspace-only for the Google card; personal Gmail uses
-   the SMTP card with an app password.
+2. ✅ **Google: which scope, and does the operator's app need verification?**
+   **Checked 2026-08-09 against Google's current developer documentation. The
+   assumption holds; the fallback is the documented answer for personal Gmail.**
+   - `https://mail.google.com/` is the scope for IMAP, POP and SMTP, and it is
+     the only one — the narrower `gmail.send` / `gmail.readonly` pair works
+     against the Gmail REST API alone. Already what the catalogue asks for.
+   - It is **restricted**. A public app using it needs Google's verification and
+     a CASA security assessment. An app published **Internal** to the operator's
+     own Workspace organisation avoids both — which is exactly the point of
+     self-hosting, and is now written up in `admin-guide.md` § 9.
+   - A personal Gmail account cannot publish internally, so it takes the app
+     password path. **The fallback shipped as the documented answer**, not as a
+     contingency: the card offers Connect and an app password side by side.
+   - Bonus finding that changes nothing but is worth recording: Google Workspace
+     stopped accepting **plain** passwords for IMAP/SMTP/POP in March 2025.
+     **App passwords still work** (with 2-Step Verification on the account), so
+     the Phase 1 fallback is not quietly dead.
+   - `openid email` was added to the requested scopes so the token response
+     carries an id_token naming the mailbox that actually consented. Without it a
+     connected card can only say "Connected".
 3. **Yahoo: what does registering the operator's own OAuth app involve?**
    Yahoo is **in scope** — the question is mechanics, not whether to ship it:
    which developer console the operator uses, which scope grants IMAP/SMTP, and
@@ -617,9 +678,12 @@ current documentation beats recollection every time.
 - [ ] Existing IMAP-polling installation still receives after the Phase 1 migration
 - [ ] Connect → consent → callback stores tokens; `account_email` shows on the card
 - [ ] Access token refreshes automatically; polling survives expiry
+- [ ] A consent that returns no refresh token is **refused**, with a message saying how to re-consent
 - [ ] Disconnect clears tokens, revokes at the provider, and unsets the role pointers
 - [ ] A provider designated for receiving is polled; a second connected-but-not-designated provider is not
 - [ ] `state` is single-use — replaying a callback URL fails
+- [ ] A revoked grant turns the card red with a usable message; it does not stop the polling tick for other workspaces
+- [ ] The redirect URI shown on the card is what the server actually sends (change `App:ApiBaseUrl` and check both)
 - [ ] No secret is ever returned by any endpoint (`has*` booleans only)
 - [ ] Test button reports a real failure with a usable message
 - [ ] After Phase 1, the test sends through the **designated sending provider**, not the shared relay

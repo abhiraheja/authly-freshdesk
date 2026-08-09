@@ -51,6 +51,10 @@ public static class DependencyInjection
         // The fallback for providers that never issue an id_token on the web —
         // today Facebook alone. See OAuth2Client for why it is not OIDC.
         services.AddSingleton<IOAuth2Client, OAuth2Client>();
+        // Mail connections rather than logins — a refreshable IMAP/SMTP
+        // credential, not an identity. Shares the "oidc" HttpClient; stateless,
+        // so a singleton like its siblings.
+        services.AddSingleton<IEmailOAuthClient, EmailOAuthClient>();
         services.AddScoped<IAiCopilot, AnthropicAiCopilot>();
 
         return services;

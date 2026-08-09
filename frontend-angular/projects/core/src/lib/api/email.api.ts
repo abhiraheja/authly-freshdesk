@@ -91,6 +91,16 @@ export interface EmailProvidersResponse {
    * authenticate. Every provider change clears this.
    */
   readonly lastVerifiedAt: string | null;
+
+  /**
+   * The exact URI the provider must redirect back to, echoed by the server.
+   *
+   * Shown so the admin can copy it into their own Google or Entra console. It has
+   * to match byte for byte — a trailing slash is a failure at the provider with a
+   * message that never reaches Trackly, and it is the most common way this setup
+   * goes wrong.
+   */
+  readonly oauthRedirectUri: string;
 }
 
 /**
@@ -195,6 +205,17 @@ export class EmailApi {
 
   saveProvider(provider: EmailProviderKind, body: EmailProviderBody): Promise<EmailProvider> {
     return this.api.put<EmailProvider>(`/api/admin/email/providers/${provider}`, body);
+  }
+
+  /**
+   * Begins the OAuth handshake and returns where to send the browser.
+   *
+   * The caller navigates the whole page there — never a popup. Popups get
+   * blocked, need `postMessage` plumbing to report back, and fail outright in an
+   * embedded browser view, all to save one page load.
+   */
+  connect(provider: EmailProviderKind): Promise<{ authorizeUrl: string }> {
+    return this.api.post<{ authorizeUrl: string }>(`/api/admin/email/providers/${provider}/connect`, {});
   }
 
   /** Forgets the credentials and the row — a disconnected provider stores nothing. */

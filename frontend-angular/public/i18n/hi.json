@@ -943,6 +943,8 @@
       "disconnectHeading": "यह प्रोवाइडर हटाएँ?",
       "disconnectBody": "Trackly {{name}} के क्रेडेंशियल भूल जाएगा। यह जो भी भेज या ले रहा था, वह किसी दूसरे प्रोवाइडर के आने तक रुक जाएगा।",
       "disconnected": "प्रोवाइडर हटा दिया गया",
+      "connected": "{{name}} जुड़ गया",
+      "connectFailed": "वह अकाउंट नहीं जुड़ सका",
       "free": "मुफ़्त",
       "paid": "सशुल्क",
       "enableAria": "{{name}} इस्तेमाल करें",
@@ -1025,8 +1027,16 @@
       },
       "form": {
         "setupDocs": "{{name}} कैसे सेट करें",
-        "appPasswordHeading": "फ़िलहाल ऐप पासवर्ड इस्तेमाल करें",
-        "appPasswordBody": "{{name}} में एक क्लिक से साइन-इन अभी बना नहीं है। अपने {{name}} अकाउंट में ऐप पासवर्ड बनाकर नीचे डालें — यह उसी तरह काम करता है और वहीं से कभी भी रद्द किया जा सकता है।",
+        "connectedHeading": "जुड़ा हुआ है",
+        "connectedBody": "Trackly {{name}} के ज़रिए {{account}} में साइन-इन है। पहुँच अपने आप नवीनीकृत होती रहती है; कोई पासवर्ड सहेजा नहीं जाता।",
+        "ownAppHeading": "Trackly को अपने {{name}} अकाउंट में रजिस्टर करें",
+        "ownAppBody": "Trackly आपके अपने सर्वर पर चलता है, इसलिए ऐप आपका है, हमारा नहीं। अपने {{name}} कंसोल में एक OAuth क्लाइंट बनाएँ, नीचे दिया redirect URI उसमें जोड़ें, फिर client ID और secret यहाँ डालें।",
+        "redirectUri": "Redirect URI",
+        "redirectUriHint": "यह ठीक इसी रूप में अपने OAuth क्लाइंट में जोड़ें। एक अक्षर भी अलग हुआ तो प्रोवाइडर कनेक्शन ठुकरा देगा, और वह त्रुटि Trackly तक कभी नहीं पहुँचेगी।",
+        "clientId": "Client ID",
+        "clientSecret": "Client secret",
+        "connect": "{{name}} जोड़ें",
+        "appPasswordBody": "ऐप रजिस्टर नहीं करना चाहते? अपने {{name}} अकाउंट का ऐप पासवर्ड भी चलेगा — उसके बदले नीचे भेजने और लेने की जानकारी भर दें।",
         "accountEmail": "अकाउंट का पता",
         "accountEmailHint": "इस अकाउंट का मेलबॉक्स, यानी वह पता जहाँ जवाब आते हैं।",
         "sending": "भेजना",
@@ -1054,7 +1064,9 @@
         "errMailbox": "मेलबॉक्स का यूज़रनेम और पासवर्ड दोनों भरें, या दोनों खाली छोड़ें।",
         "errRegion": "रीजन डालें।",
         "errAccessKey": "access key ID डालें।",
-        "errSecret": "secret key डालें।"
+        "errSecret": "secret key डालें।",
+        "errClientSecret": "client secret डालें।",
+        "errConnectOrPassword": "या तो अकाउंट जोड़ें, या भेजने की जानकारी ऐप पासवर्ड के साथ भरें।"
       }
     }
   },

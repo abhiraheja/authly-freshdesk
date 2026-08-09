@@ -22,7 +22,15 @@ public class ImapMailboxReader : IMailboxReader
         await client.ConnectAsync(connection.Host, connection.Port,
             connection.UseSsl ? SecureSocketOptions.SslOnConnect : SecureSocketOptions.StartTls,
             cancellationToken);
-        await client.AuthenticateAsync(connection.Username, connection.Password, cancellationToken);
+        // XOAUTH2 where the provider gave us a token, a password otherwise. The
+        // rest of this class — and the entire inbound pipeline behind it — does
+        // not know or care which happened: OAuth is an authentication mechanism
+        // here, not a second transport.
+        if (connection.AccessToken is { Length: > 0 } accessToken)
+            await client.AuthenticateAsync(
+                new SaslMechanismOAuth2(connection.Username, accessToken), cancellationToken);
+        else
+            await client.AuthenticateAsync(connection.Username, connection.Password ?? "", cancellationToken);
 
         var inbox = client.Inbox;
         await inbox.OpenAsync(FolderAccess.ReadWrite, cancellationToken);

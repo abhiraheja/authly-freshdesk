@@ -644,6 +644,8 @@ Any SMTP relay works: SendGrid, Mailgun, Postmark, AWS SES, or the enterprise's 
 
 **Which relay is a row, not a column.** `email_providers` holds one row per configured provider — Google, Microsoft 365, Yahoo, generic SMTP, Amazon SES — and `email_configs.sending_provider_id` names the one that actually sends (null ⇒ the shared deployment relay). Several can be connected at once; exactly one sends and at most one receives. See `docs/email-providers-plan.md` for the full design.
 
+**OAuth is an authentication mechanism, not a second transport.** Google (and Microsoft and Yahoo when their cards land) authenticate IMAP and SMTP with **SASL XOAUTH2** — MailKit's `SaslMechanismOAuth2` — so `ImapMailboxReader` and `WorkspaceEmailSender` each gained one branch and the inbound pipeline, threading, dedup and attachment handling are untouched. `SmtpSettings.AccessToken` / `MailboxConnection.AccessToken` carry it; exactly one of token or password is ever set. `EmailProviderService.GetAccessTokenAsync` renews inside a five-minute margin, serialised per provider row because Google rotates refresh tokens and two concurrent refreshes invalidate each other.
+
 **One resolver, and every sender uses it.** `EmailProviderService.ResolveSenderAsync` turns the designation into `SmtpSettings?`. `NotificationService`, `AnnouncementService` and the email test all call it, so the test proves the transport real mail goes through — anything else would be a false proof, and a false proof is what unlocks turning off the last working way in (invariant 8).
 
 What matters on the wire is the headers stamped on every notification email — they enable reply threading:
@@ -767,13 +769,14 @@ CREATE TABLE email_providers (
     provider      TEXT NOT NULL,                 -- google | microsoft | yahoo | smtp | ses
     enabled       BOOLEAN NOT NULL DEFAULT false,
     account_email TEXT,
-    -- OAuth (the operator's own app registration; Phase 2 uses these)
+    -- OAuth (the operator's own app registration — Trackly ships no client id)
     oauth_client_id                TEXT,
     oauth_client_secret_encrypted  TEXT,          -- AES-256-GCM
     oauth_tokens_encrypted         TEXT,          -- AES-256-GCM JSON (refresh token)
     oauth_scopes                   TEXT,
-    -- SMTP / IMAP. Google, Microsoft and Yahoo authenticate with an app
-    -- password here until XOAUTH2 ships; the columns are the same either way.
+    -- SMTP / IMAP. A connected provider authenticates with XOAUTH2 and ignores
+    -- these; Microsoft and Yahoo use an app password here until their OAuth
+    -- cards ship, and the columns are the same either way.
     smtp_host TEXT, smtp_port INT, smtp_username TEXT,
     smtp_password_encrypted TEXT,                 -- AES-256-GCM
     smtp_use_start_tls BOOLEAN NOT NULL DEFAULT true,
@@ -789,6 +792,22 @@ CREATE TABLE email_providers (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (workspace_id, provider)
+);
+
+-- Correlation for an in-flight Connect. Exactly sso_login_states' job for a
+-- mailbox rather than a person: the code_verifier must survive the redirect and
+-- must never reach the browser, and the single-use state is what makes the
+-- cookie-less callback safe.
+CREATE TABLE email_oauth_states (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    provider      TEXT NOT NULL,
+    state         TEXT NOT NULL UNIQUE,
+    code_verifier TEXT NOT NULL,
+    return_url    TEXT,
+    expires_at    TIMESTAMPTZ NOT NULL,
+    consumed_at   TIMESTAMPTZ,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE TABLE email_configs (
@@ -1307,6 +1326,8 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | GET    | `/api/admin/email/providers` | Session | admin — every supported provider, configured or not, plus which sends/receives |
 | PUT/DELETE | `/api/admin/email/providers/{provider}` | Session | admin — save or forget one provider's credentials |
 | POST   | `/api/admin/email/providers/{provider}/test` | Session | admin — authenticate one provider; **does not** record the delivery proof |
+| POST   | `/api/admin/email/providers/{provider}/connect` | Session | admin — start the mail OAuth handshake, returns `{ authorizeUrl }` |
+| GET    | `/api/email/oauth/callback` | None | Where the provider redirects back; protected by the single-use `state` row, not a cookie |
 | PUT    | `/api/admin/email/roles` | Session | admin — designate the sending and receiving providers |
 | GET/PUT| `/api/admin/email/config` | Session | admin — From identity, mode, inbound connector (never the deprecated SMTP columns) |
 | POST   | `/api/invitations` | Session | admin — invite agents by email |

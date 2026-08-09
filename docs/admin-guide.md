@@ -612,9 +612,12 @@ shown whether or not you have configured them. Trackly already knows each one's
 servers and ports, so you supply only the account. Connect as many as you like:
 a spare account costs nothing and is there when the main one has a bad day.
 
-- **Google / Microsoft 365 / Yahoo** — create an **app password** in that account
-  and paste it in. (One-click sign-in is not built yet; the page says so.) The
-  server and port fill themselves in.
+- **Google** — click **Connect** and sign in at Google. See *Connecting Google*
+  below; there is a short one-off setup in your own Google Cloud console first.
+  Trackly then holds a token it renews itself, and no password at all.
+- **Microsoft 365 / Yahoo** — create an **app password** in that account and
+  paste it in. (One-click sign-in for these two is not built yet; the page says
+  so.) The server and port fill themselves in.
 - **SMTP** — the escape hatch. Host, port, username, password: works against
   anything with an SMTP port, including your own mail server.
 - **Amazon SES** — a region plus the SMTP credentials SES issues. Sending only —
@@ -622,6 +625,30 @@ a spare account costs nothing and is there when the main one has a bad day.
 
 Everything except SES can also **receive**: give it the IMAP details as well and
 Trackly can poll that mailbox for replies.
+
+**Connecting Google.** Trackly is self-hosted, so the OAuth app is **yours** —
+there is no Trackly app to consent to, which is exactly why nothing leaves your
+infrastructure. One-off, in your own [Google Cloud console](https://console.cloud.google.com/apis/credentials):
+
+1. Create an **OAuth client ID** of type *Web application*.
+2. Copy the **Redirect URI** shown on Trackly's Google card into that client's
+   *Authorised redirect URIs*. **Paste it exactly** — one extra character and
+   Google refuses the connection with an error Trackly never sees.
+3. Enable the scope `https://mail.google.com/`. Google classes it as
+   **restricted**: publishing the app **Internal** to your own Google Workspace
+   organisation needs no review. A **public** app using it needs Google's
+   verification and a security assessment — so if you are on a personal Gmail
+   account rather than Workspace, use the app password path instead.
+4. Paste the **client ID** and **client secret** into the Google card, click
+   **Connect**, and consent. The card then reads *Connected as you@yourdomain*.
+
+Trackly stores a refresh token (encrypted) and renews its own access. **Remove
+provider** hands that token back to Google, so the grant disappears from the
+account's connected apps rather than lingering.
+
+If a connection ever goes stale — someone revoked it in the Google account, or
+the app registration changed — the card turns red and says why, and inbound mail
+stops rather than failing silently. Click **Connect** again to re-consent.
 
 **Set up — say which provider does what.** Connecting a provider does not put it
 to work. Two dropdowns decide that:

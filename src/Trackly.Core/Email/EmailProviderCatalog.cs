@@ -39,6 +39,22 @@ public record EmailProviderDescriptor(
     /// provider, a completely different grant.
     /// </summary>
     string? Scopes = null,
+    /// <summary>
+    /// Where a refresh token is handed back to be invalidated. Null where the
+    /// provider publishes no revocation endpoint — disconnecting then clears the
+    /// tokens locally and the admin removes the grant in their own account.
+    /// </summary>
+    string? RevokeEndpoint = null,
+    /// <summary>
+    /// Whether the authorize request needs `access_type=offline&amp;prompt=consent`
+    /// to be handed a refresh token at all.
+    ///
+    /// Google's default is an access token that expires in an hour and no way to
+    /// renew it — which works perfectly in testing and stops the installation
+    /// receiving mail an hour after the admin has moved on. Microsoft and Yahoo
+    /// ask for the same thing through the `offline_access` scope instead.
+    /// </summary>
+    bool OfflineConsent = false,
     // ---- Fixed transport hosts, so the admin never types them ----
     string? SmtpHost = null,
     int? SmtpPort = null,
@@ -57,6 +73,11 @@ public static class EmailProviderCatalog
     /// only works against the Gmail REST API. An app published *Internal* to the
     /// operator's own Workspace organisation avoids Google's external-app
     /// verification entirely, which is what self-hosting buys here.
+    ///
+    /// `openid email` rides along so the token response carries an id_token whose
+    /// `email` claim names the mailbox that was actually connected. Without it a
+    /// connected card can only say "Connected", and an admin with two Google
+    /// accounts has no way to tell which one they consented with.
     /// </summary>
     public static readonly EmailProviderDescriptor Google = new(
         EmailProviderKind.Google,
@@ -64,7 +85,9 @@ public static class EmailProviderCatalog
         EmailAuthKind.OAuth2,
         AuthorizeEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
         TokenEndpoint: "https://oauth2.googleapis.com/token",
-        Scopes: "https://mail.google.com/",
+        Scopes: "https://mail.google.com/ openid email",
+        RevokeEndpoint: "https://oauth2.googleapis.com/revoke",
+        OfflineConsent: true,
         SmtpHost: "smtp.gmail.com",
         SmtpPort: 587,
         ImapHost: "imap.gmail.com",
@@ -89,7 +112,7 @@ public static class EmailProviderCatalog
         EmailAuthKind.OAuth2,
         AuthorizeEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
         TokenEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-        Scopes: "offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send",
+        Scopes: "openid email offline_access https://outlook.office.com/IMAP.AccessAsUser.All https://outlook.office.com/SMTP.Send",
         SmtpHost: "smtp.office365.com",
         SmtpPort: 587,
         ImapHost: "outlook.office365.com",
@@ -102,7 +125,7 @@ public static class EmailProviderCatalog
         EmailAuthKind.OAuth2,
         AuthorizeEndpoint: "https://api.login.yahoo.com/oauth2/request_auth",
         TokenEndpoint: "https://api.login.yahoo.com/oauth2/get_token",
-        Scopes: "mail-w",
+        Scopes: "openid email mail-w",
         SmtpHost: "smtp.mail.yahoo.com",
         SmtpPort: 587,
         ImapHost: "imap.mail.yahoo.com",

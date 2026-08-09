@@ -27,7 +27,8 @@ namespace Trackly.Api.Controllers;
 [Authorize(Policy = "Admin")]
 public class EmailProvidersController(
     TracklyDbContext db,
-    EmailProviderService providers) : ControllerBase
+    EmailProviderService providers,
+    IConfiguration configuration) : ControllerBase
 {
     public record SaveProviderRequest(
         bool? Enabled,
@@ -60,6 +61,11 @@ public class EmailProvidersController(
         return Ok(new
         {
             providers = rows.Select(r => ToResponse(r.Descriptor, r.Row)),
+            // Surfaced so the admin can paste it into their own Google or Entra
+            // console. A redirect URI that differs by one character from the
+            // registered one fails at the provider with a message that never
+            // reaches Trackly, and it is the most common way this setup goes wrong.
+            oauthRedirectUri = EmailOAuthController.CallbackUri(configuration, Request),
             // Which one does which job, by provider key rather than id — the id is
             // an implementation detail the screen has no other use for.
             sendingProvider = KeyOf(rows, config?.SendingProviderId),
@@ -113,6 +119,22 @@ public class EmailProvidersController(
     }
 
     /// <summary>
+    /// Starts the OAuth handshake. Returns the provider's authorize URL for the
+    /// browser to be sent to — a full-page redirect, not a popup, so it survives
+    /// popup blockers and embedded browser views.
+    /// </summary>
+    [HttpPost("{provider}/connect")]
+    public async Task<IActionResult> Connect(string provider, CancellationToken ct)
+    {
+        var (authorizeUrl, error) = await providers.StartConnectAsync(
+            User.GetWorkspaceId(), provider,
+            EmailOAuthController.CallbackUri(configuration, Request), ct);
+
+        if (error is not null) return BadRequest(new { error });
+        return Ok(new { authorizeUrl });
+    }
+
+    /// <summary>
     /// Forgets a provider's credentials. The row goes with them — a disabled
     /// provider that still holds a password is a stored secret nobody believes
     /// exists.
@@ -126,6 +148,11 @@ public class EmailProvidersController(
         var workspaceId = User.GetWorkspaceId();
         var row = await providers.FindAsync(workspaceId, descriptor.Provider, ct);
         if (row is null) return NoContent();
+
+        // Before the row goes: once it is gone there is no refresh token left to
+        // hand back, and an admin who disconnected would be leaving a live grant
+        // on their Google account with no way to find it from here.
+        await providers.RevokeAsync(row, ct);
 
         // The FK is SetNull, so the pointers clear themselves — but only after
         // SaveChanges, and the proof has to go in the same transaction.
@@ -253,12 +280,14 @@ public class EmailProvidersController(
         var row = await providers.FindAsync(workspaceId, descriptor.Provider, ct);
         if (row is null) return BadRequest(new { ok = false, error = "That provider is not configured yet." });
 
-        var mailbox = providers.ToMailbox(row);
-        if (mailbox is null)
-            return Ok(new { ok = false, error = "Add a mailbox host, username and password to test receiving." });
-
         try
         {
+            // Inside the try: resolving now renews an OAuth token, so "the
+            // connection expired" is one of the answers this button exists to give.
+            var mailbox = await providers.ToMailboxAsync(row, ct);
+            if (mailbox is null)
+                return Ok(new { ok = false, error = "Add a mailbox host, username and password to test receiving." });
+
             // Zero messages handled — connecting and authenticating is the whole
             // question, and consuming mail as a side effect of a test button would
             // be a genuinely surprising thing to do.

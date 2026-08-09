@@ -53,7 +53,7 @@ store. Empty strings in the committed `appsettings.json` are placeholders.
 | `Ai:ApiKey` | Anthropic (Claude) API key for the AI copilot. Unset ⇒ AI features stay off everywhere | per-env (only if using AI) | secret |
 | `Ai:Model` | Claude model id for the copilot (defaults to `claude-opus-5`) | optional | no |
 | `App:FrontendBaseUrl` | Absolute base URL of the SPA; used to build links in **emails** (magic links, invites, guest tracking, notifications) and SSO redirects | per-env (e.g. `https://app.trackly.com`) | no |
-| `App:ApiBaseUrl` | Public base URL of the API; used to build the **OIDC/SAML redirect (callback) URI**. Falls back to the request scheme+host if unset — set it explicitly behind a proxy | per-env (e.g. `https://app.trackly.com`) | no |
+| `App:ApiBaseUrl` | Public base URL of the API; used to build the **OIDC/SAML redirect (callback) URI** and the **mail OAuth callback URI**. Falls back to the request scheme+host if unset — set it explicitly behind a proxy | per-env (e.g. `https://app.trackly.com`) | no |
 | `Storage:LocalPath` | Directory for uploaded attachments + logos | per-env (see §3) | no |
 | `Email:Smtp:Host` | Shared/deployment-level SMTP relay host. Empty ⇒ emails are logged, not sent | per-env | no |
 | `Email:Smtp:Port` | SMTP port | default 587 | no |
@@ -228,10 +228,25 @@ only the **shared/deployment-level** pieces are environment config.
   `Security:MasterKey`. **No new environment config** — every provider is set up
   from inside the admin UI, deliberately, because SMTP is what an empty install
   lacks.
-  - Google/Microsoft/Yahoo authenticate with an **app password** over ordinary
-    SMTP/IMAP today. OAuth (XOAUTH2) is Phase 2 and will need each operator to
-    register their own Google Cloud project / Entra app — still stored in the DB,
-    not in config.
+  - **Google connects with OAuth (XOAUTH2).** The operator registers **their own**
+    OAuth client in **their own** Google Cloud project — Trackly ships no client
+    id — and pastes the id and secret into the Google card. Still DB config, not
+    environment config.
+    - **The redirect URI must be registered in that OAuth client, byte-identical.**
+      It is `{App:ApiBaseUrl}/api/email/oauth/callback`, and the Google card
+      shows the exact string to copy. Getting it wrong fails at Google with an
+      error that never reaches Trackly. **`App:ApiBaseUrl` must be set in prod** —
+      it falls back to the request's own host, which is wrong behind a proxy.
+    - Scope is `https://mail.google.com/`, which Google classes as **restricted**.
+      An app published **Internal** to the operator's own Workspace organisation
+      needs no verification. A **public** app using this scope needs Google's
+      verification and a CASA security assessment — so a personal Gmail account,
+      which cannot publish internally, should use the app password path instead.
+    - Google Workspace stopped accepting plain passwords for IMAP/SMTP/POP in
+      March 2025. **App passwords still work** and remain the fallback here, but
+      they require 2-Step Verification on the account.
+  - Microsoft 365 and Yahoo authenticate with an **app password** over ordinary
+    SMTP/IMAP. Their OAuth cards land in Phases 3 and 4.
   - SES needs the region's `email-smtp.{region}.amazonaws.com` reachable and a
     **verified identity** for the From address, or mail is rejected.
 - `email_configs.sending_provider_id` / `receiving_provider_id` say which

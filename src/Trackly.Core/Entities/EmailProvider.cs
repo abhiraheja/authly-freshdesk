@@ -94,6 +94,21 @@ public class EmailProvider
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
 
+/// <summary>
+/// What <see cref="EmailProvider.OauthTokensEncrypted"/> holds, once decrypted.
+///
+/// The refresh token is the valuable half — the access token is an hour's worth
+/// of credential that can always be minted again, while losing the refresh token
+/// means going back to the admin for another consent. Which is why a refresh
+/// response that omits one leaves the stored one alone rather than overwriting it
+/// with null.
+/// </summary>
+public record StoredOAuthTokens(
+    string AccessToken,
+    string? RefreshToken,
+    DateTime ExpiresAt,
+    string? Scope);
+
 public static class EmailProviderKind
 {
     public const string Google = "google";

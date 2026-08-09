@@ -1,9 +1,9 @@
-import { ChangeDetectionStrategy, Component, computed, effect, input, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { inject } from '@angular/core';
 import type { EmailProvider, EmailProviderBody } from '@trackly/core';
-import { Alert, Button, Field, Icon, InputDirective, Switch } from '@trackly/ui';
+import { Alert, Button, Field, Icon, InputDirective, Switch, ToastService } from '@trackly/ui';
 
 /**
  * The credentials for one mail provider, inside the drawer.
@@ -34,12 +34,69 @@ import { Alert, Button, Field, Icon, InputDirective, Switch } from '@trackly/ui'
       }
 
       @if (p.authKind === 'oauth2') {
-        <!-- Said plainly rather than shown as a disabled Connect button: an
-             admin who expects one-click linking needs to know it is an app
-             password today, before they go looking for a button. -->
-        <tk-alert tone="info" [heading]="'admin.email.form.appPasswordHeading' | transloco">
-          {{ 'admin.email.form.appPasswordBody' | transloco: { name: p.displayName } }}
-        </tk-alert>
+        @if (p.connected) {
+          <!-- Named, not just "Connected": an admin with two Google accounts
+               has no other way to tell which one consented. -->
+          <tk-alert tone="success" [heading]="'admin.email.form.connectedHeading' | transloco">
+            {{ 'admin.email.form.connectedBody' | transloco: { name: p.displayName, account: p.accountEmail ?? '' } }}
+          </tk-alert>
+        } @else {
+          <div class="space-y-4">
+            <tk-alert tone="info" [heading]="'admin.email.form.ownAppHeading' | transloco">
+              {{ 'admin.email.form.ownAppBody' | transloco: { name: p.displayName } }}
+            </tk-alert>
+
+            <!-- Copied into the provider console before Connect will work at
+                 all. Byte-identical or the provider rejects the handshake with
+                 a message that never reaches Trackly. -->
+            <div class="rounded-xl bg-muted p-3">
+              <p class="mb-1.5 flex items-center justify-between gap-2 text-meta font-semibold">
+                {{ 'admin.email.form.redirectUri' | transloco }}
+                <button tkButton variant="ghost" size="sm" (click)="copy(redirectUri())">
+                  <tk-icon name="link" [size]="14" />
+                  {{ 'common.copy' | transloco }}
+                </button>
+              </p>
+              <code class="block break-all text-meta text-muted-foreground">{{ redirectUri() }}</code>
+              <p class="mt-2 text-meta text-muted-foreground">
+                {{ 'admin.email.form.redirectUriHint' | transloco }}
+              </p>
+            </div>
+
+            <tk-field [label]="'admin.email.form.clientId' | transloco" for="oauth-client-id">
+              <input tkInput inset id="oauth-client-id" autocomplete="off" [(ngModel)]="oauthClientId" />
+            </tk-field>
+
+            <tk-field
+              [label]="'admin.email.form.clientSecret' | transloco"
+              for="oauth-client-secret"
+              [hint]="secretHint(p.hasOauthClientSecret)"
+            >
+              <input
+                tkInput
+                inset
+                id="oauth-client-secret"
+                type="password"
+                autocomplete="off"
+                [placeholder]="secretPlaceholder(p.hasOauthClientSecret)"
+                [(ngModel)]="oauthClientSecret"
+              />
+            </tk-field>
+
+            <button tkButton [disabled]="connecting() || !canConnect()" (click)="connect.emit()">
+              <tk-icon name="external-link" [size]="15" />
+              {{ 'admin.email.form.connect' | transloco: { name: p.displayName } }}
+            </button>
+
+            <!-- The app password is not a lesser option: it is the only one for
+                 a personal account that cannot publish an app internally, and
+                 it keeps working. Said out loud so nobody registers a Cloud
+                 project they did not need. -->
+            <p class="border-t border-border pt-4 text-meta text-muted-foreground">
+              {{ 'admin.email.form.appPasswordBody' | transloco: { name: p.displayName } }}
+            </p>
+          </div>
+        }
       }
 
       <tk-field
@@ -82,7 +139,12 @@ import { Alert, Button, Field, Icon, InputDirective, Switch } from '@trackly/ui'
             />
           </tk-field>
         </div>
-      } @else {
+      } @else if (!p.connected) {
+        <!-- Hidden once the account is connected, because they would be
+             ignored: a token beats a stored password in ToSmtpAsync, so
+             leaving the boxes on screen would invite an admin to fix a
+             delivery problem by re-typing a password nothing reads. The
+             values still round-trip on save — see body(). -->
         <div class="space-y-4">
           <p class="text-meta font-semibold uppercase tracking-wide text-muted-foreground">
             {{ 'admin.email.form.sending' | transloco }}
@@ -194,10 +256,26 @@ import { Alert, Button, Field, Icon, InputDirective, Switch } from '@trackly/ui'
 })
 export class EmailProviderForm {
   private readonly transloco = inject(TranslocoService);
+  private readonly toast = inject(ToastService);
 
   readonly provider = input.required<EmailProvider>();
 
+  /** Server-built, not `location.origin` — the API may be on another host. */
+  readonly redirectUri = input.required<string>();
+
+  /** Disables Connect while the page is saving and redirecting. */
+  readonly connecting = input(false);
+
+  /**
+   * Save-then-redirect is the page's job, not the form's: the client id has to
+   * reach the server before the handshake can start, and only the page knows
+   * how to save.
+   */
+  readonly connect = output<void>();
+
   protected readonly accountEmail = signal('');
+  protected readonly oauthClientId = signal('');
+  protected readonly oauthClientSecret = signal('');
   protected readonly smtpHost = signal('');
   protected readonly smtpPort = signal<number | null>(null);
   protected readonly smtpUsername = signal('');
@@ -217,6 +295,8 @@ export class EmailProviderForm {
     effect(() => {
       const p = this.provider();
       this.accountEmail.set(p.accountEmail ?? '');
+      this.oauthClientId.set(p.oauthClientId ?? '');
+      this.oauthClientSecret.set('');
       this.smtpHost.set(p.smtpHost ?? '');
       this.smtpPort.set(p.smtpPort);
       this.smtpUsername.set(p.smtpUsername ?? '');
@@ -250,6 +330,21 @@ export class EmailProviderForm {
       return null;
     }
 
+    if (p.authKind === 'oauth2') {
+      // Already linked: the token is the credential and there is nothing left
+      // to require.
+      if (p.connected) return null;
+
+      // Two complete answers, and the admin picks one. Requiring the SMTP
+      // fields as well would block the ordinary case — save the app
+      // registration, then click Connect.
+      if (this.hasAppRegistration()) {
+        if (!this.oauthClientSecret() && !p.hasOauthClientSecret) return t('admin.email.form.errClientSecret');
+        return null;
+      }
+      if (!this.hasStoredPassword()) return t('admin.email.form.errConnectOrPassword');
+    }
+
     // The host may be left blank when the catalogue has one — that is the
     // point of pre-filling it.
     if (!this.smtpHost().trim() && !p.defaultSmtpHost) return t('admin.email.form.errHost');
@@ -279,6 +374,14 @@ export class EmailProviderForm {
 
     return {
       accountEmail: this.accountEmail().trim(),
+      // Always sent, including while the fields are hidden behind a live
+      // connection: the server overwrites every non-secret field on save, so
+      // omitting the client id would null it — and a connected provider with no
+      // client id cannot refresh its token, which surfaces an hour later as mail
+      // silently stopping. The signals mirror what the server sent, so this
+      // round-trips rather than re-types.
+      oauthClientId: this.oauthClientId().trim(),
+      oauthClientSecret: this.oauthClientSecret() || undefined,
       smtpHost: this.smtpHost().trim(),
       smtpPort: this.smtpPort(),
       smtpUsername: this.smtpUsername().trim(),
@@ -290,6 +393,34 @@ export class EmailProviderForm {
       imapPassword: this.imapPassword() || undefined,
     };
   });
+
+  /** An app registration is on file or being typed right now. */
+  private readonly hasAppRegistration = computed(
+    () => this.oauthClientId().trim().length > 0 || !!this.provider().oauthClientId,
+  );
+
+  private readonly hasStoredPassword = computed(
+    () => this.smtpPassword().length > 0 || this.provider().hasSmtpPassword,
+  );
+
+  /**
+   * Connect needs the app registration to exist server-side by the time the
+   * provider redirects back, and the page saves before it redirects — so a
+   * secret typed but not yet saved counts.
+   */
+  protected readonly canConnect = computed(
+    () => this.hasAppRegistration() && (this.oauthClientSecret().length > 0 || this.provider().hasOauthClientSecret),
+  );
+
+  protected async copy(value: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(value);
+      this.toast.success(this.transloco.translate('common.copied'));
+    } catch {
+      // Clipboard access can be denied outright; the URI is on screen anyway.
+      this.toast.error(this.transloco.translate('common.copyFailed'));
+    }
+  }
 
   protected secretHint(stored: boolean): string {
     return this.transloco.translate(stored ? 'admin.email.form.storedHint' : 'admin.email.form.notStoredHint');
