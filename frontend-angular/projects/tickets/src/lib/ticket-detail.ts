@@ -61,6 +61,7 @@ import { ResolveDialog, type ResolvePayload } from './resolve-dialog';
 import { TicketActivityFeed } from './ticket-activity';
 import { TicketRelations } from './ticket-relations';
 import { TicketRelationBanner } from './ticket-relation-banner';
+import { TicketReleaseBanner } from './ticket-release-banner';
 import { TicketTasks } from './ticket-tasks';
 import { TicketAssets } from './ticket-assets';
 
@@ -129,6 +130,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
     TicketActivityFeed,
     TicketRelations,
     TicketRelationBanner,
+    TicketReleaseBanner,
     TicketTasks,
     TicketAssets,
     TicketDetailPanel,
@@ -158,6 +160,11 @@ const CHANNEL_ICON: Record<string, IconName> = {
             [summary]="data.relations"
             (openRelated)="threadTab.set('related')"
           />
+          <!-- "The fix goes out in 2.14, on the 14th" — up here because it is the
+               answer to the question the agent is about to be asked, and behind a
+               tab it would be found after they had already gone to ask someone.
+               Silent for the overwhelming majority of tickets. -->
+          <tk-ticket-release-banner [ticketId]="data.id" />
           <!-- Header: identity chips first, then the subject. The chips answer
                "what am I looking at" in one glance; the subject answers "about
                what", and it is the longer read. -->

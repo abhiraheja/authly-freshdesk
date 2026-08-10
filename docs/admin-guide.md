@@ -1692,6 +1692,27 @@ is asked while the site is on fire.
 types `55335` and gets a link. It has to contain `{id}`. Without it, task numbers
 are plain text, and a task nobody can open is a task only its author can test.
 
+### Linking the support ticket
+
+A task can also point at the Trackly ticket that reported the bug — search by
+number or subject in the Add task drawer. It is optional, and it is what turns a
+release plan into an answer to a customer.
+
+Once linked, three things happen for free:
+
+- The **ticket shows which release its fix goes out in**, above the header, with
+  the date. An agent answering *"when is my fix coming?"* does not have to find
+  somebody who knows.
+- Marking the release **Released** offers to resolve every linked ticket and tell
+  each customer their fix has shipped — one action instead of walking the list.
+  It is asked separately from the release confirmation, it names how many people
+  it writes to, and it is off unless you say yes. Shipping a fix and telling a
+  customer are two decisions.
+- **Release notes** (admin only) build a draft announcement from what actually
+  shipped, grouped by service. Edit it — the plan is written for your team, the
+  announcement is read by customers. It saves as an **unsent** draft under
+  Announcements; sending it stays a separate, deliberate action there.
+
 ### Shipping it
 
 A release will not go to **Ready** — or straight to **Deploying** — until it has
@@ -1702,8 +1723,14 @@ created, because that is the only cheap time to fix it.
 The rollback plan is required. It is the field every team skips and the only one
 that matters on the night it goes wrong.
 
-On the night: tick steps as you go. Ticking the first step of a **Ready** release
-starts it, so nobody has to remember a button. If you tick something while an
+On the night: tick steps as you go. **Everyone watching the release sees each
+tick as it happens** — no refreshing. That is the whole reason this is not a
+document: four people working the same checklist from four stale copies is how a
+step gets run twice or not at all. If the connection drops, the page still works
+and every tick still lands; only the other windows go quiet until it comes back.
+
+Ticking the first step of a **Ready** release starts it, so nobody has to
+remember a button. If you tick something while an
 earlier step in that service is still open, Trackly asks once and then records it
 as out of order — a rule that cannot be overridden is a rule that gets worked
 around outside the tool, where nothing is recorded.

@@ -630,6 +630,10 @@
       "done": "Updated {{count}} tickets.",
       "allFailed": "None of the {{count}} tickets could be updated. {{reason}}",
       "partial": "Updated {{done}}. {{failed}} could not be: {{reason}}"
+    },
+    "release": {
+      "shipping": "The fix for this ships in",
+      "shipped": "The fix for this shipped in"
     }
   },
   "status": {
@@ -1992,7 +1996,12 @@
       "releasedHeading": "Mark this release as done?",
       "releasedBody": "The plan becomes a record after this — steps and tasks can no longer be edited, only verified on production.",
       "rolledBackHeading": "Record a rollback?",
-      "rolledBackBody": "This says the release went out and had to be undone. It stays on the record, which is the point."
+      "rolledBackBody": "This says the release went out and had to be undone. It stays on the record, which is the point.",
+      "resolveHeading": "Resolve the linked tickets too?",
+      "resolveBody": "{{count}} open ticket(s) are linked to this release. Resolving them notifies each customer that their fix has shipped. This cannot be undone in one action.",
+      "resolveConfirm": "Resolve and notify",
+      "resolveSkip": "Just mark released",
+      "resolveDone": "Linked tickets resolved and customers notified"
     },
     "detail": {
       "noTitle": "Release plan",
@@ -2095,7 +2104,12 @@
       "test": "Test",
       "verify": "On prod",
       "testedBy": "tested by {{who}}, {{when}}",
-      "verifiedAs": "On prod: {{status}}"
+      "verifiedAs": "On prod: {{status}}",
+      "ticket": "Trackly ticket",
+      "ticketPlaceholder": "Search by number or subject",
+      "ticketHint": "Optional. Linking it is what lets the customer be told their fix shipped, and puts this release on their ticket.",
+      "ticketClear": "Unlink this ticket",
+      "ticketNoMatches": "No tickets match “{{query}}”"
     },
     "clone": {
       "heading": "Start the next release",
@@ -2118,7 +2132,20 @@
       "itemAdded": "added",
       "itemRemoved": "removed",
       "itemTested": "tested",
-      "itemVerified": "verified on prod"
+      "itemVerified": "verified on prod",
+      "ticketsResolved": "resolved linked tickets"
+    },
+    "notes": {
+      "open": "Release notes",
+      "heading": "Release notes",
+      "subject": "Subject",
+      "body": "Message",
+      "bodyHint": "Built from what actually shipped. Edit it — the plan is written for your team, the announcement is read by customers.",
+      "submit": "Save as draft",
+      "created": "Draft announcement created",
+      "defaultSubject": "What's new in {{version}}",
+      "draftOnlyHeading": "This saves a draft — it does not send",
+      "draftOnlyBody": "It appears under Announcements as unsent. Sending it to every customer stays a separate, deliberate action there."
     }
   }
 }

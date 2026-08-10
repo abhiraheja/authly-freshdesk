@@ -1,5 +1,7 @@
 import { Injectable, inject } from '@angular/core';
+import { HubConnectionBuilder, LogLevel, type HubConnection } from '@microsoft/signalr';
 import { ApiService } from './api.service';
+import { TRACKLY_CONFIG } from '../core.config';
 import type { UserSummary } from './tickets.api';
 
 /**
@@ -162,6 +164,8 @@ export interface ReleaseDetail {
   looseWorkItems: ReleaseWorkItem[];
   activity: ReleaseActivity[];
   readiness: ReleaseReadiness;
+  /** Linked Trackly tickets still open — the number the "resolve them too?" question needs. */
+  openTicketCount: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -257,6 +261,22 @@ export interface UpdateWorkItemBody {
 @Injectable({ providedIn: 'root' })
 export class ReleasesApi {
   private readonly api = inject(ApiService);
+  private readonly config = inject(TRACKLY_CONFIG);
+
+  /**
+   * A connection to the release hub, for a screen that wants live ticks.
+   *
+   * Delivery only — the REST call is still what changes anything, so a socket
+   * that never connects costs a stale panel and never a lost tick. The caller
+   * starts it, joins the release, and stops it on destroy.
+   */
+  connect(): HubConnection {
+    return new HubConnectionBuilder()
+      .withUrl(`${this.config.apiBaseUrl}${this.config.releaseHubPath}`)
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Warning)
+      .build();
+  }
 
   /** `status` accepts a real status or `open` — everything not yet finished. */
   list(status?: string): Promise<ReleaseSummary[]> {
@@ -281,8 +301,8 @@ export class ReleasesApi {
    * throws when it fails — the gate belongs to starting the deployment, so
    * skipping the `ready` label cannot skip the check.
    */
-  setStatus(id: string, status: string): Promise<ReleaseDetail> {
-    return this.api.post<ReleaseDetail>(`/api/releases/${id}/status`, { status });
+  setStatus(id: string, status: string, resolveTickets = false): Promise<ReleaseDetail> {
+    return this.api.post<ReleaseDetail>(`/api/releases/${id}/status`, { status, resolveTickets });
   }
 
   /** Copies the shape, never the record. Work items and ticks do not carry over. */

@@ -36,6 +36,10 @@ public record ReleaseDetailDto(
     IReadOnlyList<ReleaseWorkItemDto> LooseWorkItems,
     IReadOnlyList<ReleaseActivityDto> Activity,
     ReleaseReadinessDto Readiness,
+    // Linked Trackly tickets still open. The number the "resolve them too?"
+    // question needs — "are you sure?" without a count is a question nobody can
+    // actually answer.
+    int OpenTicketCount,
     DateTime CreatedAt,
     DateTime UpdatedAt);
 
@@ -138,7 +142,13 @@ public record UpdateReleaseRequest(
     string? Notes = null,
     string? RollbackPlan = null);
 
-public record SetReleaseStatusRequest(string Status);
+/// <summary>
+/// <paramref name="ResolveTickets"/> only means anything on the move to
+/// <c>released</c>: resolve every linked Trackly ticket and let its customer
+/// know. Off by default — shipping the fix and telling the person who reported
+/// it are two decisions, and only one of them is safe to make silently.
+/// </summary>
+public record SetReleaseStatusRequest(string Status, bool ResolveTickets = false);
 
 public record AddComponentRequest(
     Guid? ServiceId,

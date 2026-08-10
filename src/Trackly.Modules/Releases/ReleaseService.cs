@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Trackly.Core.Entities;
 using Trackly.Infrastructure.Data;
+using Trackly.Modules.Email;
 using Trackly.Modules.Tickets;
 
 namespace Trackly.Modules.Releases;
@@ -28,7 +29,11 @@ namespace Trackly.Modules.Releases;
 /// </item>
 /// </list>
 /// </summary>
-public class ReleaseService(TracklyDbContext db)
+public class ReleaseService(
+    TracklyDbContext db,
+    TicketStatusService statuses,
+    ActivityLog activity,
+    NotificationService notifications)
 {
     private IQueryable<Release> Visible(Actor actor) =>
         db.Releases.Where(r => r.WorkspaceId == actor.WorkspaceId);
@@ -123,13 +128,15 @@ public class ReleaseService(TracklyDbContext db)
             c.Status, c.StartedAt, c.CompletedAt, c.CompletedBy, c.Notes, c.Steps,
             items.Where(w => w.ComponentId == c.Id).ToList())).ToList();
 
-        var activity = await db.ReleaseActivities
+        var log = await db.ReleaseActivities
             .Where(a => a.ReleaseId == id)
             .OrderByDescending(a => a.CreatedAt)
             .Take(60)
             .Select(a => new ReleaseActivityDto(
                 a.Id, UserSummaryDto.From(a.Actor), a.Action, a.Detail, a.CreatedAt))
             .ToListAsync(ct);
+
+        var openTickets = await OpenLinkedTickets(id).CountAsync(ct);
 
         return new ReleaseDetailDto(
             release.Id, release.Version, release.Title, release.Status, release.ScheduledAt,
@@ -138,8 +145,9 @@ public class ReleaseService(TracklyDbContext db)
             UserSummaryDto.From(release.CreatedByUser),
             componentDtos,
             items.Where(w => w.ComponentId == null).ToList(),
-            activity,
+            log,
             Readiness(release, componentDtos.Count, items.Select(w => w.TestStatus)),
+            openTickets,
             release.CreatedAt, release.UpdatedAt);
     }
 
@@ -234,7 +242,8 @@ public class ReleaseService(TracklyDbContext db)
     /// *starting the deployment*, not to the label, so skipping the label cannot
     /// skip the check.
     /// </summary>
-    public async Task<ReleaseDetailDto?> SetStatusAsync(Actor actor, Guid id, string status, CancellationToken ct)
+    public async Task<ReleaseDetailDto?> SetStatusAsync(
+        Actor actor, Guid id, string status, bool resolveTickets, CancellationToken ct)
     {
         if (!ReleaseStatus.IsKnown(status)) throw new ArgumentException("Unknown release status.");
 
@@ -255,7 +264,85 @@ public class ReleaseService(TracklyDbContext db)
         Touch(release);
         Log(release.Id, actor, ReleaseAction.StatusChanged, $"{from} → {status}");
         await db.SaveChangesAsync(ct);
+
+        if (status == ReleaseStatus.Released && resolveTickets)
+            await ResolveLinkedTicketsAsync(actor, release, ct);
+
         return await GetAsync(actor, id, ct);
+    }
+
+    /// <summary>Linked Trackly tickets that have not finished yet.</summary>
+    private IQueryable<Ticket> OpenLinkedTickets(Guid releaseId) =>
+        db.ReleaseWorkItems
+            .Where(w => w.ReleaseId == releaseId && w.TicketId != null)
+            .Select(w => w.Ticket!)
+            .Distinct()
+            .Where(t => t.StatusCategory != TicketStatusCategory.Resolved
+                        && t.StatusCategory != TicketStatusCategory.Closed);
+
+    /// <summary>
+    /// Closes the loop the wiki never could: the fix shipped, so the people who
+    /// reported it get told, in one action instead of an agent remembering to
+    /// walk the list.
+    ///
+    /// Opt-in, never automatic. Shipping a fix and telling a customer are two
+    /// decisions, and the second one reaches people outside the workspace — the
+    /// kind of thing that has to be asked for rather than assumed.
+    ///
+    /// Mirrors <c>ProblemService.ResolveAsync</c> deliberately, including
+    /// bypassing the status workflow: a release landing is a decision about all
+    /// of its tickets at once, and a transition rule that blocked one of them
+    /// would leave the release shipped with a ticket still open under it.
+    /// </summary>
+    private async Task ResolveLinkedTicketsAsync(Actor actor, Release release, CancellationToken ct)
+    {
+        var resolved = await statuses.DefaultForCategoryAsync(
+            actor.WorkspaceId, TicketStatusCategory.Resolved, ct);
+
+        // The status each ticket is leaving, kept beside its id: the bulk update
+        // overwrites it and the activity log has to say what it was.
+        var affected = await OpenLinkedTickets(release.Id)
+            .Select(t => new { t.Id, t.Status })
+            .ToListAsync(ct);
+        if (affected.Count == 0) return;
+
+        var ticketIds = affected.Select(t => t.Id).ToList();
+
+        await db.Tickets
+            .Where(t => ticketIds.Contains(t.Id))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(t => t.Status, resolved.Value)
+                .SetProperty(t => t.StatusCategory, resolved.Category)
+                .SetProperty(t => t.ResolvedAt, DateTime.UtcNow)
+                .SetProperty(t => t.UpdatedAt, DateTime.UtcNow), ct);
+
+        // Names resolved once outside the loop; a release can carry hundreds.
+        var names = await db.TicketStatuses
+            .Where(s => s.WorkspaceId == actor.WorkspaceId)
+            .ToDictionaryAsync(s => s.Value, s => s.Name, ct);
+
+        // Two entries per ticket, matching a hand-made resolve: the status move,
+        // and the "resolved" event a manager scans for. Without them a queue of
+        // tickets goes quiet with nothing on any of them saying why — and here
+        // the why is unusually worth having, because it names the release.
+        var reason = string.IsNullOrWhiteSpace(release.Title)
+            ? release.Version
+            : $"{release.Version} — {release.Title}";
+
+        foreach (var ticket in affected)
+        {
+            activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
+                TicketActivityType.Status,
+                names.GetValueOrDefault(ticket.Status, ticket.Status), resolved.Name);
+            activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
+                TicketActivityType.Resolved, reason);
+        }
+
+        Log(release.Id, actor, ReleaseAction.TicketsResolved, affected.Count.ToString());
+        await db.SaveChangesAsync(ct);
+
+        foreach (var ticketId in ticketIds)
+            await notifications.OnStatusChangedAsync(ticketId, resolved.Name, ct);
     }
 
     /// <summary>
@@ -928,4 +1015,7 @@ public static class ReleaseAction
     public const string ItemRemoved = "item_removed";
     public const string ItemTested = "item_tested";
     public const string ItemVerified = "item_verified";
+
+    /// <summary>Detail carries the count — the log's job is to say how many people were written to.</summary>
+    public const string TicketsResolved = "tickets_resolved";
 }

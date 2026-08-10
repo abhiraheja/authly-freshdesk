@@ -151,6 +151,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
+app.MapHub<Trackly.Api.Releases.ReleaseHub>("/hubs/releases");
 
 // Container/orchestrator liveness. Anonymous, and deliberately does not touch
 // the database: first boot applies EF migrations, and a probe that waited on the

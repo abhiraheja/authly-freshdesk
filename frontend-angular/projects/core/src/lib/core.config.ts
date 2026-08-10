@@ -19,6 +19,8 @@ export interface TracklyConfig {
   readonly apiBaseUrl: string;
   /** SignalR live-chat hub path, relative to {@link apiBaseUrl}. */
   readonly chatHubPath: string;
+  /** SignalR release hub path — live ticks while a deployment is being run. */
+  readonly releaseHubPath: string;
 }
 
 export const TRACKLY_CONFIG = new InjectionToken<TracklyConfig>('TRACKLY_CONFIG');

@@ -849,11 +849,54 @@ provides the accountability rather than the permission wall. Only **deleting** a
 release is admin-only, and only while it has not shipped — anything that shipped
 is cancelled, never deleted.
 
-**Not yet built (deliberately deferred):** ticket-side "shipping in 2.14"
-(`GET /api/releases/for-ticket/{id}` exists; nothing renders it yet), bulk-
-resolving linked tickets when a release lands, release notes prefilled into an
-announcement, per-service step templates, a calendar view, and live tick
-delivery over the SignalR hub.
+### Closing the support loop
+
+Everything above would be true of a standalone release tool. What Trackly has
+that a wiki, a Jira version and a ServiceNow change record all need an
+integration to get is the **ticket that reported the bug**, already in the same
+database. Four things fall out of that, and they are the reason a work item
+carries `ticket_id` at all.
+
+**The ticket says when its fix ships.** `tk-ticket-release-banner` sits above the
+ticket header — not in the Related tab — because it is the answer to a question
+the agent is about to be asked, and behind a tab it gets found after they have
+already gone to ask a developer. Live releases first; if there are none, only the
+newest finished one, so a ticket reopened across three releases shows the row
+that matters rather than three rows of history. Past tense once it has gone out:
+"shipping in 2.14" on a release from last week reads as a promise and is
+actually history.
+
+**Marking a release `released` offers to resolve them.** `ResolveTickets` on the
+status request, off by default, asked as a separate confirmation *after* the
+release confirmation and only when `OpenTicketCount > 0` — the question carries
+the number, because "are you sure?" without one cannot be answered. It mirrors
+`ProblemService.ResolveAsync` exactly, including bypassing the status workflow: a
+release landing is a decision about all of its tickets at once, and a transition
+rule that blocked one would leave the release shipped with a ticket open under
+it. Each ticket gets both activity entries a hand-made resolve writes, and the
+`Resolved` one names the release. Kept opt-in because shipping a fix and telling
+a customer are two decisions, and the second leaves the workspace.
+
+**Release notes become a draft announcement.** Built from the work items grouped
+by component, editable before saving, and saved **unsent** as a `general`
+announcement. The announcements screen is built around the gap between writing
+one and sending it; a shortcut from here that closed that gap would be a way to
+mail every customer in the workspace from a screen about deployments. Admin-only,
+matching the announcements API.
+
+**Live ticks over `ReleaseHub`.** `/hubs/releases`, group per release, joined
+only after confirming the release is in the caller's workspace — invariant 1
+applies to sockets exactly as to queries. Broadcast from `ReleasesController`'s
+`FoundAsync` helper rather than from each endpoint, because fifteen call sites
+each remembering to broadcast is fourteen chances to forget. The payload is the
+whole release, so a client that missed a message never has to reconstruct what it
+missed, and delivery is best-effort in a `try/catch`: the REST response is the
+source of truth and a socket nobody is listening on must not fail a write that
+already succeeded. GETs deliberately do not broadcast — a newly-joined client
+calling GET would otherwise repaint everybody else's screen for nothing.
+
+**Still deferred:** per-service step templates, a release calendar, and metrics
+(time-to-deploy, rollback rate).
 
 ---
 

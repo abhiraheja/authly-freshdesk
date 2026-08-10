@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, inject, input, resource, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  inject,
+  input,
+  resource,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
@@ -7,13 +16,16 @@ import {
   RELEASE_TEST_TONE,
   RELEASE_TONE,
   ReleasesApi,
+  SessionStore,
   TicketsApi,
+  WorkspaceOpsApi,
   errorMessage,
   formatDateTime,
   timeAgo,
   toneFor,
   valueOr,
   type BusinessService,
+  type HubConnection,
   type ReleaseComponent,
   type ReleaseDetail as ReleaseDetailModel,
   type UserSummary,
@@ -91,6 +103,12 @@ const BLOCKER_ORDER = ['no_components', 'no_rollback_plan', 'failed_items', 'unt
               (click)="setStatus(action.status)"
             >
               {{ action.labelKey | transloco }}
+            </button>
+          }
+          @if (isAdmin()) {
+            <button tkButton variant="outline" [disabled]="busy()" (click)="startNotes()">
+              <tk-icon name="megaphone" [size]="16" />
+              {{ 'releases.notes.open' | transloco }}
             </button>
           }
           <button tkButton variant="outline" [disabled]="busy()" (click)="startClone()">
@@ -503,6 +521,64 @@ const BLOCKER_ORDER = ['no_components', 'no_rollback_plan', 'failed_items', 'unt
             <input tkInput id="item-url" name="item-url" [(ngModel)]="draftItemUrl" />
             <p class="mt-1.5 text-meta text-muted-foreground">{{ 'releases.item.urlHint' | transloco }}</p>
           </div>
+
+          <!-- Linking the Trackly ticket is what lets the customer be told their
+               fix shipped without anybody walking the list by hand. Optional:
+               plenty of tasks have no ticket behind them. -->
+          <div class="rounded-lg border border-border p-3">
+            <label tkLabel for="item-ticket">{{ 'releases.item.ticket' | transloco }}</label>
+
+            @if (pickedTicket(); as picked) {
+              <div class="flex items-center gap-2 rounded-md bg-muted/50 p-2">
+                <span class="font-mono text-meta text-muted-foreground">#{{ picked.id.slice(0, 8) }}</span>
+                <span class="min-w-0 flex-1 truncate text-body">{{ picked.subject }}</span>
+                <button
+                  tkButton
+                  variant="ghost"
+                  size="sm"
+                  [attr.aria-label]="'releases.item.ticketClear' | transloco"
+                  (click)="clearTicket()"
+                >
+                  <tk-icon name="x" [size]="14" />
+                </button>
+              </div>
+            } @else {
+              <input
+                tkInput
+                id="item-ticket"
+                name="item-ticket"
+                [placeholder]="'releases.item.ticketPlaceholder' | transloco"
+                [ngModel]="ticketQuery()"
+                (ngModelChange)="ticketQuery.set($event)"
+              />
+              <p class="mt-1.5 text-meta text-muted-foreground">{{ 'releases.item.ticketHint' | transloco }}</p>
+
+              <!-- Results only while something is typed. An idle list of recent
+                   tickets is a list nobody asked for. -->
+              @if (ticketQuery().trim().length > 1) {
+                @if (ticketMatches().length) {
+                  <ul class="mt-2 divide-y divide-border rounded-md border border-border">
+                    @for (match of ticketMatches(); track match.id) {
+                      <li>
+                        <button
+                          type="button"
+                          class="flex w-full items-center gap-2 px-2.5 py-2 text-left hover:bg-accent"
+                          (click)="pickTicket(match)"
+                        >
+                          <span class="font-mono text-meta text-muted-foreground">#{{ match.id.slice(0, 8) }}</span>
+                          <span class="min-w-0 flex-1 truncate text-body">{{ match.subject }}</span>
+                        </button>
+                      </li>
+                    }
+                  </ul>
+                } @else if (!ticketSearching()) {
+                  <p class="mt-2 rounded-md border border-dashed border-border px-3 py-3 text-center text-meta text-muted-foreground">
+                    {{ 'releases.item.ticketNoMatches' | transloco: { query: ticketQuery().trim() } }}
+                  </p>
+                }
+              }
+            }
+          </div>
         }
 
         <div>
@@ -522,6 +598,38 @@ const BLOCKER_ORDER = ['no_components', 'no_rollback_plan', 'failed_items', 'unt
       <div drawer-footer class="flex justify-end gap-2">
         <button tkButton variant="ghost" (click)="itemOpen.set(false)">{{ 'common.cancel' | transloco }}</button>
         <button tkButton [disabled]="busy() || !canSaveItem()" (click)="saveItem()">{{ 'common.save' | transloco }}</button>
+      </div>
+    </tk-drawer>
+
+    <!-- ── Release notes → an announcement ─────────────────────────── -->
+    <tk-drawer [(open)]="notesOpen" [heading]="'releases.notes.heading' | transloco">
+      <div class="space-y-4">
+        <!-- Says plainly that this writes and does not send. The announcements
+             screen is built around that gap and this must not quietly close it. -->
+        <tk-alert tone="info" [heading]="'releases.notes.draftOnlyHeading' | transloco">
+          {{ 'releases.notes.draftOnlyBody' | transloco }}
+        </tk-alert>
+
+        <div>
+          <label tkLabel for="notes-subject">{{ 'releases.notes.subject' | transloco }}</label>
+          <input tkInput id="notes-subject" name="notes-subject" maxlength="200" [(ngModel)]="draftNotesSubject" />
+        </div>
+
+        <div>
+          <label tkLabel for="notes-body">{{ 'releases.notes.body' | transloco }}</label>
+          <textarea tkInput id="notes-body" name="notes-body" rows="12" [(ngModel)]="draftNotesBody"></textarea>
+          <p class="mt-1.5 text-meta text-muted-foreground">{{ 'releases.notes.bodyHint' | transloco }}</p>
+        </div>
+
+        @if (formError(); as message) {
+          <tk-alert tone="danger" [heading]="'releases.actionFailed' | transloco">{{ message }}</tk-alert>
+        }
+      </div>
+      <div drawer-footer class="flex justify-end gap-2">
+        <button tkButton variant="ghost" (click)="notesOpen.set(false)">{{ 'common.cancel' | transloco }}</button>
+        <button tkButton [disabled]="busy() || !draftNotesSubject().trim()" (click)="saveNotes()">
+          {{ 'releases.notes.submit' | transloco }}
+        </button>
       </div>
     </tk-drawer>
 
@@ -555,12 +663,26 @@ export class ReleaseDetail {
 
   private readonly api = inject(ReleasesApi);
   private readonly tickets = inject(TicketsApi);
+  private readonly workspaceOps = inject(WorkspaceOpsApi);
+  private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
   private readonly confirm = inject(ConfirmService);
   private readonly toast = inject(ToastService);
   private readonly transloco = inject(TranslocoService);
 
   protected readonly stepKinds = RELEASE_STEP_KINDS;
+  /** Announcements are admin-only server-side, so the shortcut to them is too. */
+  protected readonly isAdmin = this.session.isAdmin;
+
+  private connection: HubConnection | null = null;
+
+  constructor() {
+    this.connectLive();
+    inject(DestroyRef).onDestroy(() => {
+      void this.connection?.stop().catch(() => {});
+      this.connection = null;
+    });
+  }
 
   protected readonly detail = resource({
     params: () => ({ id: this.id() }),
@@ -672,10 +794,32 @@ export class ReleaseDetail {
   protected readonly draftItemTitle = signal('');
   protected readonly draftItemUrl = signal('');
   protected readonly draftItemComponent = signal('');
+  protected readonly ticketQuery = signal('');
+  protected readonly pickedTicket = signal<{ id: string; subject: string } | null>(null);
+
+  /**
+   * The term goes to the server as typed, `#` and all — the API is what decides
+   * a leading hash means a ticket number, so the two cannot disagree about what
+   * was searched for.
+   */
+  private readonly ticketSearch = resource({
+    params: () => ({ q: this.ticketQuery().trim() }),
+    loader: ({ params }) =>
+      params.q.length > 1
+        ? this.tickets.list({ search: params.q, pageSize: 6 })
+        : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 6 }),
+  });
+
+  protected readonly ticketSearching = computed(() => this.ticketSearch.isLoading());
+  protected readonly ticketMatches = computed(() => this.ticketSearch.value()?.items ?? []);
 
   protected readonly cloneOpen = signal(false);
   protected readonly draftCloneVersion = signal('');
   protected readonly draftCloneSchedule = signal('');
+
+  protected readonly notesOpen = signal(false);
+  protected readonly draftNotesSubject = signal('');
+  protected readonly draftNotesBody = signal('');
 
   protected readonly componentHeading = computed(() =>
     this.editingComponentId() ? 'releases.component.editHeading' : 'releases.component.addHeading',
@@ -721,6 +865,37 @@ export class ReleaseDetail {
     this.detail.value.set(release);
   }
 
+  /**
+   * Live ticks, for the forty minutes when this screen has four people on it.
+   *
+   * This is the failure the wiki page could never fix: one person types "AuthV3
+   * done" and the other three find out twenty minutes later, because nobody
+   * refreshes a document mid-deployment.
+   *
+   * Best-effort throughout. Every state change already arrives through the REST
+   * response the actor gets; the socket only tells the *other* windows, so a
+   * connection that never opens costs a stale panel and nothing else. That is
+   * why nothing here surfaces an error.
+   */
+  private connectLive(): void {
+    const connection = this.api.connect();
+    this.connection = connection;
+
+    connection.on('releaseUpdated', (release: ReleaseDetailModel) => {
+      // Guard on id: one connection survives navigation between releases, and a
+      // late message from the previous one must not overwrite this one.
+      if (release?.id === this.id()) this.apply(release);
+    });
+
+    // Rejoin after a reconnect — group membership does not survive the socket.
+    connection.onreconnected(() => void connection.invoke('JoinRelease', this.id()).catch(() => {}));
+
+    void connection
+      .start()
+      .then(() => connection.invoke('JoinRelease', this.id()))
+      .catch(() => {});
+  }
+
   // ── Lifecycle ────────────────────────────────────────────────────────────
 
   protected async setStatus(status: string): Promise<void> {
@@ -736,10 +911,31 @@ export class ReleaseDetail {
       if (!ok) return;
     }
 
+    // Asked separately, and only when there is actually somebody to write to.
+    // Shipping the fix and telling the customer are two decisions; the second
+    // one leaves the workspace, so it is opted into rather than assumed — and
+    // the question carries the number, because "are you sure?" without one is a
+    // question nobody can answer.
+    let resolveTickets = false;
+    if (status === 'released' && (this.release()?.openTicketCount ?? 0) > 0) {
+      resolveTickets = await this.confirm.ask({
+        heading: this.transloco.translate('releases.confirm.resolveHeading'),
+        message: this.transloco.translate('releases.confirm.resolveBody', {
+          count: this.release()!.openTicketCount,
+        }),
+        confirmLabel: this.transloco.translate('releases.confirm.resolveConfirm'),
+        cancelLabel: this.transloco.translate('releases.confirm.resolveSkip'),
+        tone: 'primary',
+      });
+    }
+
     this.busy.set(true);
     this.actionError.set(null);
     try {
-      this.apply(await this.api.setStatus(this.id(), status));
+      this.apply(await this.api.setStatus(this.id(), status, resolveTickets));
+      if (resolveTickets) {
+        this.toast.success(this.transloco.translate('releases.confirm.resolveDone'));
+      }
     } catch (error) {
       this.actionError.set(errorMessage(error));
     } finally {
@@ -863,8 +1059,21 @@ export class ReleaseDetail {
     this.draftItemTitle.set('');
     this.draftItemUrl.set('');
     this.draftItemComponent.set('');
+    this.ticketQuery.set('');
+    this.pickedTicket.set(null);
     this.formError.set(null);
     this.itemOpen.set(true);
+  }
+
+  /** Fills the title from the subject when it is still empty — never overwrites what was typed. */
+  protected pickTicket(ticket: { id: string; subject: string }): void {
+    this.pickedTicket.set({ id: ticket.id, subject: ticket.subject });
+    this.ticketQuery.set('');
+    if (!this.draftItemTitle().trim()) this.draftItemTitle.set(ticket.subject);
+  }
+
+  protected clearTicket(): void {
+    this.pickedTicket.set(null);
   }
 
   protected startAssignItem(itemId: string, title: string): void {
@@ -888,10 +1097,63 @@ export class ReleaseDetail {
               title: this.draftItemTitle().trim(),
               externalKey: this.draftItemKey().trim() || null,
               externalUrl: this.draftItemUrl().trim() || null,
+              ticketId: this.pickedTicket()?.id ?? null,
               componentId: this.draftItemComponent() || null,
             }),
       this.itemOpen,
     );
+  }
+
+  // ── Release notes ────────────────────────────────────────────────────────
+
+  /**
+   * Builds the notes from what actually shipped: every task, grouped under the
+   * service it went out with. Editable before it is saved, because the plan is
+   * written for the team and the announcement is read by customers, and those
+   * are not the same sentences.
+   */
+  protected startNotes(): void {
+    const rel = this.release();
+    if (!rel) return;
+
+    const lines: string[] = [];
+    for (const component of rel.components) {
+      if (!component.workItems.length) continue;
+      lines.push(component.name, ...component.workItems.map((item) => `  • ${item.title}`), '');
+    }
+    for (const item of rel.looseWorkItems) lines.push(`• ${item.title}`);
+
+    this.draftNotesSubject.set(
+      this.transloco.translate('releases.notes.defaultSubject', { version: rel.version }),
+    );
+    this.draftNotesBody.set(lines.join('\n').trim());
+    this.formError.set(null);
+    this.notesOpen.set(true);
+  }
+
+  /**
+   * Creates it **unsent**, always — and says so in the drawer.
+   *
+   * The announcements screen is built around the gap between writing one and
+   * sending it, and a shortcut from here that skipped that gap would be a way to
+   * mail every customer in the workspace from a screen about deployments.
+   */
+  protected async saveNotes(): Promise<void> {
+    this.busy.set(true);
+    this.formError.set(null);
+    try {
+      await this.workspaceOps.createAnnouncement({
+        type: 'general',
+        subject: this.draftNotesSubject().trim(),
+        body: this.draftNotesBody().trim(),
+      });
+      this.notesOpen.set(false);
+      this.toast.success(this.transloco.translate('releases.notes.created'));
+    } catch (error) {
+      this.formError.set(errorMessage(error));
+    } finally {
+      this.busy.set(false);
+    }
   }
 
   // ── Clone ────────────────────────────────────────────────────────────────
