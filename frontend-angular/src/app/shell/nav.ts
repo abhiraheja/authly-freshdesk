@@ -32,7 +32,7 @@ export interface NavGroup {
  * different `?view=`, so the list's own filter bar and the sidebar are the same
  * piece of state — click "Open" in the rail and the filter bar reflects it.
  *
- * Admin has thirteen destinations, so it is collapsible; it opens automatically
+ * Admin has nineteen destinations, so it is collapsible; it opens automatically
  * on any `/admin` route (see the shell) and stays out of the way otherwise.
  */
 export const NAV: readonly NavGroup[] = [
@@ -93,6 +93,10 @@ export const NAV: readonly NavGroup[] = [
       { labelKey: 'nav.items.messaging', icon: 'message-circle', route: '/admin/channels' },
       { labelKey: 'nav.items.widget', icon: 'globe', route: '/admin/widget' },
       { labelKey: 'nav.items.email', icon: 'mail', route: '/admin/settings/email' },
+      // Directly under Email, and a row of its own: editing what the thirteen
+      // messages say is a separate job from wiring up a provider, and it was
+      // reachable only by knowing to look inside the Email page for a button.
+      { labelKey: 'nav.items.emailTemplates', icon: 'file-text', route: '/admin/settings/email/templates' },
       { labelKey: 'nav.items.storage', icon: 'upload-cloud', route: '/admin/settings/storage' },
       { labelKey: 'nav.items.branding', icon: 'palette', route: '/admin/settings/branding' },
       { labelKey: 'nav.items.login', icon: 'lock', route: '/admin/settings/login' },

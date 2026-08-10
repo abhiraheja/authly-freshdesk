@@ -749,7 +749,7 @@ written to the server log — fine for testing, not for real users._
 
 **What it is.** The subject and body of every message Trackly sends, editable as
 HTML, with your branding applied.
-**Where:** **Admin ▾ → Workspace → Email → Edit templates**.
+**Where:** **Admin ▾ → Email templates**, directly under Email.
 
 **Nothing here starts as your text.** Every template is **Built-in** until you
 edit it, and built-in means there is no copy of it in your database at all — the
@@ -959,7 +959,7 @@ Canned.
 | **People** | Members · Teams |
 | **Workflow** | Statuses & workflow · SLA policies · Automation · AI copilot |
 | **Ticket view** | Registers (§4.3) · Ticket layout (§23) |
-| **Channels** | Messaging (connectors) · Widget · Email (→ Email templates, §9.1) |
+| **Channels** | Messaging (connectors) · Widget · Email · Email templates (§9.1) |
 | **Workspace** | Branding · Login methods · SSO |
 
 **Customer-facing URLs:** `/submit` · `/portal` · `/kb` · `/chat` · guest tracking
