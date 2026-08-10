@@ -45,6 +45,7 @@ All standalone, all `OnPush`, all signal-based. Add new controls under
 | `Drawer` | `tk-drawer` | `[(open)]`, `heading`, `persistent`; `[drawer-footer]` |
 | `Dropdown` | `tk-dropdown` | `align`; `[dropdown-trigger]` + `[dropdown-menu]` |
 | `FloatingMenu` | `[tkFloating]` | `tkFloating` (anchor element), `align`, `matchWidth` — the only way to position a popup |
+| `BrandedFrame` | `tk-branded-frame` | `brandName`, `logoUrl`, `accent`, `footerText`, `hidePoweredBy`, `maxWidth`; `[frame-actions]` |
 | `PageHeader` | `tk-page-header` | `title` (required), `subtitle`; `[page-actions]` |
 | `Editor` | `tk-editor` | `[(value)]` (HTML), `placeholder`, `ariaLabel`, `rows`, `disabled`, `labels`; `[editor-tools]` slot |
 | `RichTextView` | `tk-rich-text` | `value`, `format` ('html' \| 'text'), `dark` |

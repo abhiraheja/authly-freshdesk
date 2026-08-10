@@ -23,9 +23,13 @@ import { guestRoutes } from '@trackly/guest';
  * Three rings:
  *  1. **Public** — auth screens, then the workspace-branded customer surfaces.
  *     Full-screen, outside the shell.
- *  2. **`authGuard`** — the shell. Signed-out visitors go to /login carrying the
- *     URL they wanted, so signing in lands them where they were headed.
- *  3. **`roleGuard`** — agent/admin and admin-only areas inside the shell.
+ *  2. **`authGuard`** — the customer portal and the shell. Signed-out visitors go
+ *     to /login carrying the URL they wanted, so signing in lands them where they
+ *     were headed. The portal is branded and light, so it is a sibling of the
+ *     shell rather than a child of it.
+ *  3. **`roleGuard`** — agent/admin and admin-only areas inside the shell. A
+ *     customer who reaches one is sent to `/portal`, which is why the shell needs
+ *     no customer branch of its own.
  *
  * Guards are the navigation story only. Every endpoint re-checks server-side; a
  * hidden route is not a permission.
@@ -44,16 +48,22 @@ export const routes: Routes = [
     loadComponent: () => import('@trackly/admin').then((m) => m.EmailOAuthCallback),
   },
 
-  // 2. The shell
+  // 2. Signed in, but not staff. The customer portal is workspace-branded and
+  // always light (invariant 6), so it carries its own frame instead of the
+  // Shell — and therefore sits beside it rather than inside it. Above the shell
+  // for the same reason as the callback above: `path: ''` matches by prefix.
+  {
+    path: 'portal',
+    canActivate: [authGuard],
+    loadChildren: () => import('@trackly/portal').then((m) => m.portalRoutes),
+  },
+
+  // 3. The shell — agents and admins
   {
     path: '',
     canActivate: [authGuard],
     loadComponent: () => import('./shell/shell').then((m) => m.Shell),
     children: [
-      {
-        path: 'portal',
-        loadChildren: () => import('@trackly/portal').then((m) => m.portalRoutes),
-      },
       {
         path: 'dashboard',
         canActivate: [roleGuard('agent', 'admin')],
@@ -97,14 +107,18 @@ export const routes: Routes = [
       {
         path: 'dashboard/chat',
         canActivate: [roleGuard('agent', 'admin')],
-        loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
-        data: { titleKey: 'comingSoon.titles.liveChat', from: 'frontend/src/pages/agent/ChatConsolePage.tsx' },
+        loadComponent: () => import('@trackly/tickets').then((m) => m.ChatConsole),
       },
+      // The list before the detail, for the reader — the paths do not collide.
       {
         path: 'dashboard/problems',
         canActivate: [roleGuard('agent', 'admin')],
-        loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
-        data: { titleKey: 'comingSoon.titles.problems', from: 'frontend/src/pages/agent/ProblemsPage.tsx' },
+        loadComponent: () => import('@trackly/tickets').then((m) => m.ProblemList),
+      },
+      {
+        path: 'dashboard/problems/:id',
+        canActivate: [roleGuard('agent', 'admin')],
+        loadComponent: () => import('@trackly/tickets').then((m) => m.ProblemDetail),
       },
       {
         path: 'dashboard/kb',
@@ -115,8 +129,7 @@ export const routes: Routes = [
       {
         path: 'dashboard/canned',
         canActivate: [roleGuard('agent', 'admin')],
-        loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
-        data: { titleKey: 'comingSoon.titles.cannedResponses', from: 'frontend/src/pages/agent/CannedResponsesPage.tsx' },
+        loadComponent: () => import('@trackly/tickets').then((m) => m.CannedResponses),
       },
       {
         path: 'admin',

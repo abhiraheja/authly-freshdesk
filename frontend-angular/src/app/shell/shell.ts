@@ -9,7 +9,7 @@ import { ThemeService } from '@trackly/core';
 import { Avatar, AvatarUpload, Button, ConfirmHost, Icon, Kbd, Modal, Toaster } from '@trackly/ui';
 import { CommandPalette } from './command-palette';
 import { NotificationBell } from './notification-bell';
-import { NAV, PORTAL_NAV, type NavGroup, type NavItem } from './nav';
+import { NAV, type NavGroup, type NavItem } from './nav';
 
 /**
  * The authenticated app shell: sidebar + top bar, with routed pages rendering
@@ -18,9 +18,10 @@ import { NAV, PORTAL_NAV, type NavGroup, type NavItem } from './nav';
  * Only the `<main>` pane scrolls — the sidebar and top bar never move. That is
  * what makes navigation feel fixed rather than the page sliding under a header.
  *
- * This is a **Trackly-owned** surface: it wears the Trackly palette and supports
- * dark mode. Customer-facing surfaces use `BrandedFrame` instead, wear the
- * workspace's colour, and are always light (invariant 6).
+ * This is a **Trackly-owned** surface for agents and admins: it wears the Trackly
+ * palette and supports dark mode. Customer-facing surfaces — the portal included
+ * — use `BrandedFrame` instead, wear the workspace's colour, and are always light
+ * (invariant 6). They are siblings of this route, never children of it.
  */
 @Component({
   selector: 'tk-shell',
@@ -84,24 +85,23 @@ export class Shell {
    * somebody acts on a ticket, and by the time you have navigated you are
    * looking at a fresh page anyway. A timer would be spending requests to keep a
    * sidebar number honest between two clicks.
-   *
-   * Customers never load it — `/api/dashboard/stats` is agent-only, and the
-   * portal rail has no counts on it.
    */
   private readonly stats = resource({
-    params: () => ({ url: this.url(), customer: this.session.isCustomer() }),
-    loader: ({ params }) =>
-      params.customer
-        ? Promise.resolve(null)
-        : this.api.stats().catch(() => null),
+    params: () => ({ url: this.url() }),
+    loader: () => this.api.stats().catch(() => null),
   });
 
   protected readonly counts = computed<Readonly<Record<string, number>>>(
     () => (this.stats.value() as unknown as Record<string, number> | null) ?? {},
   );
 
+  /**
+   * The rail, filtered to what this person may reach.
+   *
+   * No customer branch: `/portal` is a sibling of the shell, not a route inside
+   * it, and `roleGuard` sends a customer there before the shell ever activates.
+   */
   protected readonly groups = computed<readonly NavGroup[]>(() => {
-    if (this.session.isCustomer()) return PORTAL_NAV;
     const isAdmin = this.session.isAdmin();
     return NAV.filter((g) => !g.adminOnly || isAdmin).map((g) => ({
       ...g,

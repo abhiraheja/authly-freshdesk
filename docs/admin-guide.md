@@ -432,8 +432,19 @@ category-management screen yet — this is a known gap.)_
 and replies, branded as your workspace.
 **Where (customer):** `/portal`.
 
+**What they can do.** Three screens: their ticket list (Open / Resolved / All,
+with the most recent hundred), a short form to raise a new one (subject, an
+optional category, a message and attachments — priority and routing stay yours to
+decide), and the ticket itself as a conversation they can reply to and attach
+files in. Private notes never appear, and neither does anything internal:
+department, tags, SLA and the agent-facing resolution note are all withheld.
+
 **Set up.** Nothing beyond branding (§10). Customers reach it after signing in
 (magic link) or from links in notification emails.
+
+**How it looks.** The portal carries **your** header — your logo, name and
+primary colour — not Trackly's, and it is always light. Everything is derived
+from the one colour you set in Branding, so there is nothing else to configure.
 
 ### 4.7 Guest submission
 
@@ -456,7 +467,14 @@ never see private notes.
 manage; agents insert them with the **⚡** button in the reply box.
 
 **Set up / use.** Create a titled snippet; agents pick it while replying and edit
-before sending.
+before sending. The **title** is what an agent scans in the ⚡ menu, so name it
+for the situation ("Refund processed"), not with the first line of the reply.
+
+Inserting **appends** to whatever is already in the reply box rather than
+replacing it, so two snippets can go into one reply and a half-typed sentence
+survives a mis-click. The ⚡ button is hidden entirely until the workspace has at
+least one snippet. Snippets are workspace-wide, not per-agent — the point is that
+everyone answers the same question the same way.
 
 ### 5.2 Tags
 
@@ -480,10 +498,26 @@ pane) or automatically via an automation rule (§7, “Assign team”).
 
 **What it is.** Group many related tickets under one underlying **problem** (e.g.
 an outage), so you can track and communicate once.
-**Where:** **Problems** (top nav).
+**Where:** **Problems** (top nav) for the list; each problem has its own page.
 
-**Use.** Create a problem, link the affected tickets, and update its status as you
-investigate and resolve.
+**Use.** Create a problem from the list, then link the affected tickets **from
+each ticket**, in its Related panel — that is where an agent notices the
+duplicate, so it is where the link is made.
+
+A problem moves through four stages, which answer a different question from a
+ticket's status: **Investigating → Identified → Monitoring → Resolved**. Change
+the stage from the picker on the problem's page.
+
+**Resolving.** *Resolve problem + tickets* ends the problem **and every open
+ticket under it** in one action, and each of those requesters is told their
+ticket is done — so the confirmation names the count before it happens. This
+deliberately bypasses the per-ticket resolve rules (§4.3): closing a problem is
+one decision about all of its tickets, and a rule that blocked one would leave
+the problem resolved with a ticket still open underneath it.
+
+Unlinking a ticket returns it to being its own ticket and changes nothing else
+about it. **Customers never see any of this** — they only ever see their own
+ticket.
 
 ---
 
@@ -930,7 +964,19 @@ add a SignalR backplane). See go-live.md §8._
 
 **Use.** Agents watch the console for incoming chats, respond in real time, and
 click **End → ticket** to file the transcript (each message becomes a comment).
-Visitors can also end the chat themselves.
+Visitors can also end the chat themselves. Ending is confirmed, because a chat
+cannot be reopened — the follow-up happens on the ticket, and the visitor is
+shown its reference before their window closes.
+
+Unanswered chats carry a **New** chip in the console until an agent replies, so
+the list reads as a queue rather than a history.
+
+**If WebSockets are blocked**, the chat does not break: every message is sent and
+saved over ordinary HTTP, and only *live* delivery is lost. The console shows a
+banner with a Refresh button and the visitor's window shows an amber dot instead
+of a green one — so neither side is left guessing why the other has gone quiet.
+A visitor who reloads keeps their conversation (it is held for the tab's
+lifetime); closing the tab ends it, which is deliberate on a shared machine.
 
 ---
 

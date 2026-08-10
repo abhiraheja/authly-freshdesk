@@ -22,7 +22,8 @@
     "copy": "Copy",
     "copied": "Copied",
     "copyFailed": "Could not copy — select the text instead.",
-    "done": "Done"
+    "done": "Done",
+    "actions": "Actions"
   },
   "nav": {
     "main": "Main",
@@ -37,7 +38,6 @@
       "tickets": "Tickets",
       "workspace": "Workspace",
       "admin": "Admin",
-      "support": "Support",
       "byStatus": "By status"
     },
     "items": {
@@ -66,8 +66,6 @@
       "storage": "Storage",
       "branding": "Branding",
       "sso": "SSO",
-      "myTickets": "My tickets",
-      "newTicket": "New ticket",
       "configuration": "Configuration",
       "ticketLayout": "Ticket layout",
       "statuses": "Statuses & workflow",
@@ -446,7 +444,11 @@
         "servicesAffected": "{{count}} service affected",
         "assets": "{{count}} asset",
         "respondersPending": "{{count}} awaiting reply"
-      }
+      },
+      "insertCanned": "Insert a canned response",
+      "noCanned": "No snippets yet.",
+      "cannedFailed": "Couldn't load your snippets.",
+      "manageCanned": "Manage canned responses"
     },
     "noCustomer": "No customer",
     "links": {
@@ -686,15 +688,9 @@
       "signingIn": "Signing you in",
       "submitTicket": "Submit a ticket",
       "knowledgeBase": "Knowledge base",
-      "liveChat": "Live chat",
       "rateSupport": "Rate your support",
       "yourTicket": "Your ticket",
       "acceptInvitation": "Accept invitation",
-      "myTickets": "My tickets",
-      "newTicket": "New ticket",
-      "ticket": "Ticket",
-      "problems": "Problems",
-      "cannedResponses": "Canned responses",
       "analytics": "Analytics",
       "announcements": "Announcements",
       "members": "Members",
@@ -1563,5 +1559,188 @@
       "heading": "No services yet",
       "body": "An admin adds them under Settings → Catalogue. Agents then mark which ones a ticket has broken."
     }
+  },
+  "portal": {
+    "newTicket": "New ticket",
+    "account": "Your account",
+    "tickets": {
+      "title": "My tickets",
+      "tabs": {
+        "open": "Open",
+        "resolved": "Resolved",
+        "all": "All"
+      },
+      "updated": "Updated {{time}} ago",
+      "replyOne": "1 reply",
+      "replies": "{{count}} replies",
+      "truncated": "Showing your {{shown}} most recent tickets of {{total}}.",
+      "empty": "No tickets yet",
+      "emptyBody": "When you need help, open a ticket and the support team will pick it up.",
+      "emptyTab": "Nothing in this tab",
+      "emptyTabBody": "Switch to All to see every ticket you have raised.",
+      "loadFailed": "Couldn't load your tickets"
+    },
+    "new": {
+      "title": "New ticket",
+      "subtitle": "Tell us what happened and the support team will take it from here.",
+      "subject": "Subject",
+      "subjectPlaceholder": "A short summary of the problem",
+      "category": "What is this about?",
+      "noCategory": "Not sure",
+      "message": "Message",
+      "messagePlaceholder": "Describe what happened, what you expected, and any error message you saw.",
+      "attachments": "Attachments",
+      "submit": "Submit ticket",
+      "failed": "Couldn't submit your ticket"
+    },
+    "detail": {
+      "opened": "Opened {{when}}",
+      "you": "You",
+      "team": "Team",
+      "resolution": "How this was resolved",
+      "replyLabel": "Your reply",
+      "replyPlaceholder": "Write a reply…",
+      "attach": "Attach files",
+      "send": "Send",
+      "sendFailed": "Couldn't send your reply",
+      "loadFailed": "Couldn't load this ticket"
+    }
+  },
+  "canned": {
+    "title": "Canned responses",
+    "count": "{{count}} snippets",
+    "countOne": "1 snippet",
+    "add": "New snippet",
+    "newHeading": "New snippet",
+    "editHeading": "Edit snippet",
+    "columns": {
+      "title": "Title",
+      "body": "Snippet"
+    },
+    "form": {
+      "title": "Title",
+      "titlePlaceholder": "Refund processed",
+      "titleHint": "What an agent will look for in the ⚡ menu — not the first line of the reply.",
+      "body": "Snippet",
+      "bodyPlaceholder": "The reply an agent can send as it is, or edit before sending."
+    },
+    "empty": "No canned responses yet",
+    "emptyBody": "Write the answers your team sends over and over, then insert them from the ⚡ button in a reply.",
+    "editOne": "Edit {{title}}",
+    "deleteOne": "Delete {{title}}",
+    "deleteHeading": "Delete this snippet?",
+    "deleteMessage": "“{{title}}” will no longer be offered in the reply box. Replies already sent are unaffected.",
+    "deleted": "“{{title}}” deleted",
+    "saved": "“{{title}}” saved",
+    "saveFailed": "Couldn't save the snippet",
+    "loadFailed": "Couldn't load canned responses"
+  },
+  "problems": {
+    "title": "Problems",
+    "subtitle": "One root cause, and every ticket reporting it. Customers never see the grouping.",
+    "add": "New problem",
+    "create": "Create problem",
+    "newHeading": "New problem",
+    "tabs": {
+      "open": "Open",
+      "resolved": "Resolved",
+      "all": "All"
+    },
+    "columns": {
+      "problem": "Problem",
+      "status": "Stage",
+      "tickets": "Tickets",
+      "owner": "Owner",
+      "updated": "Updated"
+    },
+    "status": {
+      "investigating": "Investigating",
+      "identified": "Identified",
+      "monitoring": "Monitoring",
+      "resolved": "Resolved"
+    },
+    "form": {
+      "title": "What is happening?",
+      "titlePlaceholder": "Payment gateway down",
+      "description": "Root cause",
+      "descriptionPlaceholder": "What you know so far, and what you are checking next.",
+      "linkHint": "Tickets are linked from the ticket itself, under Related."
+    },
+    "meta": "{{count}} tickets",
+    "metaOwned": "{{count}} tickets · owned by {{owner}}",
+    "cause": "Root cause",
+    "linked": "Linked tickets",
+    "linkedCount": "{{count}} tickets under this cause",
+    "linkedOne": "1 ticket under this cause",
+    "noTickets": "No tickets linked yet",
+    "noTicketsBody": "Open a ticket reporting this and link it from its Related panel.",
+    "resolveAll": "Resolve problem + tickets",
+    "resolveHeading": "Resolve this problem?",
+    "resolveMessage": "“{{title}}” and its {{count}} open tickets will be resolved. Each requester is told their ticket is done.",
+    "resolveMessageOne": "“{{title}}” and its 1 open ticket will be resolved. The requester is told their ticket is done.",
+    "resolveConfirm": "Resolve everything",
+    "resolved": "“{{title}}” resolved",
+    "resolvedHeading": "This problem is closed",
+    "resolvedAt": "Resolved {{when}}.",
+    "created": "“{{title}}” created",
+    "createFailed": "Couldn't create the problem",
+    "actionFailed": "That didn't work",
+    "unlinkOne": "Unlink {{subject}}",
+    "unlinkHeading": "Unlink this ticket?",
+    "unlinkMessage": "“{{subject}}” goes back to being its own ticket. Nothing about it changes otherwise.",
+    "unlinkConfirm": "Unlink",
+    "unlinked": "“{{subject}}” unlinked",
+    "empty": "No problems yet",
+    "emptyBody": "When the same fault arrives on several tickets, group them here so one investigation covers all of them.",
+    "emptyTab": "Nothing in this tab",
+    "emptyTabBody": "Switch to All to see every problem, including the ones already resolved.",
+    "loadFailed": "Couldn't load problems",
+    "loadOneFailed": "Couldn't load this problem"
+  },
+  "chat": {
+    "title": "Live chat",
+    "subtitle": "{{count}} chats open",
+    "subtitleOne": "1 chat open",
+    "active": "Active ({{count}})",
+    "new": "New",
+    "waiting": "started {{time}} ago",
+    "you": "You",
+    "visitor": {
+      "title": "Chat with us",
+      "subtitle": "Ask your question and someone from the team will answer.",
+      "name": "Your name (optional)",
+      "email": "Email (optional)",
+      "emailHint": "Give us an email and we can follow up if the chat drops.",
+      "start": "Start chat",
+      "support": "Support",
+      "agentTyping": "Someone is typing…",
+      "connected": "Connected",
+      "reconnecting": "Reconnecting…",
+      "opener": "Say hello — the team will be with you shortly.",
+      "messageLabel": "Your message",
+      "messagePlaceholder": "Type a message and press Enter…",
+      "end": "End chat",
+      "endedHeading": "Chat ended",
+      "endedBody": "The conversation has been saved. If you left an email, you can reply to it any time.",
+      "reference": "Your reference is"
+    },
+    "visitorTyping": "Visitor is typing…",
+    "send": "Send",
+    "replyLabel": "Your reply",
+    "replyPlaceholder": "Type a reply and press Enter…",
+    "noMessages": "No messages yet.",
+    "end": "End → ticket",
+    "endHeading": "End this chat?",
+    "endMessage": "The transcript becomes a ticket and the visitor’s window closes. A chat cannot be reopened — follow up on the ticket instead.",
+    "endConfirm": "End and create ticket",
+    "ended": "Chat ended — transcript saved as a ticket",
+    "emptyQueue": "Nobody waiting",
+    "emptyQueueBody": "New chats appear here the moment a visitor starts one.",
+    "pickHeading": "Pick a chat",
+    "pickBody": "Choose someone from the list to read and answer their conversation.",
+    "loadFailed": "Couldn’t load chats",
+    "refresh": "Refresh",
+    "offlineHeading": "Live updates are off",
+    "offlineBody": "New messages will not appear on their own. Everything still sends and saves."
   }
 }

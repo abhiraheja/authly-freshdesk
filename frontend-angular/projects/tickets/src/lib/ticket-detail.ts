@@ -27,6 +27,7 @@ import {
   toneFor,
   valueOr,
   type Attachment,
+  type CannedResponse,
   type Comment,
   type UpdateTicketBody,
 } from '@trackly/core';
@@ -37,6 +38,7 @@ import {
   Badge,
   Button,
   Card,
+  Dropdown,
   Editor,
   FilePicker,
   Icon,
@@ -48,6 +50,7 @@ import {
   Tabs,
   ToastService,
   isEmptyHtml,
+  textToHtml,
   type AttachmentItem,
   type IconName,
   type MentionCandidate,
@@ -112,6 +115,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
     Badge,
     Button,
     Card,
+    Dropdown,
     Editor,
     FilePicker,
     Icon,
@@ -477,6 +481,40 @@ const CHANNEL_ICON: Record<string, IconName> = {
                 >
                   <tk-icon name="paperclip" [size]="15" />
                 </button>
+
+                <!-- Always here, even with nothing in it. This button used to be
+                     hidden until the list arrived, which made a workspace with no
+                     snippets and a failed request look identical — and both look
+                     like the feature does not exist. The menu says which it is. -->
+                <tk-dropdown>
+                  <button
+                    type="button"
+                    class="editor-tool"
+                    dropdown-trigger
+                    [disabled]="sending()"
+                    [attr.aria-label]="'tickets.detail.insertCanned' | transloco"
+                    [title]="'tickets.detail.insertCanned' | transloco"
+                  >
+                    <tk-icon name="zap" [size]="15" />
+                  </button>
+                  <div dropdown-menu class="max-h-80 w-80 overflow-y-auto">
+                    @for (snippet of cannedList(); track snippet.id) {
+                      <button type="button" class="menu-item block w-full text-left" (click)="insertCanned(snippet)">
+                        <span class="block truncate font-semibold">{{ snippet.title }}</span>
+                        <span class="block truncate text-meta text-muted-foreground">{{ snippet.body }}</span>
+                      </button>
+                    } @empty {
+                      <p class="px-3 py-2 text-meta text-muted-foreground">
+                        {{ (canned.error() ? 'tickets.detail.cannedFailed' : 'tickets.detail.noCanned') | transloco }}
+                      </p>
+                    }
+                    <div class="menu-sep"></div>
+                    <a class="menu-item" routerLink="/dashboard/canned">
+                      <tk-icon name="pencil" [size]="16" />
+                      {{ 'tickets.detail.manageCanned' | transloco }}
+                    </a>
+                  </div>
+                </tk-dropdown>
               </span>
             </tk-editor>
 
@@ -944,8 +982,35 @@ export class TicketDetail {
    */
   protected readonly agentList = computed(() => valueOr(this.agents, []));
 
+  /** Read from the template: an empty menu has to say WHY it is empty. */
+  protected readonly canned = resource({ loader: () => this.api.cannedResponses() });
+
+  /**
+   * The workspace's snippets, for the ⚡ button.
+   *
+   * `valueOr` because the composer must not depend on it: a workspace with no
+   * snippets, or a failed request, hides the button and leaves everything else
+   * working. Loaded with the ticket rather than when the menu opens, so the first
+   * click shows a list instead of a spinner.
+   */
+  protected readonly cannedList = computed(() => valueOr<CannedResponse[]>(this.canned, []));
+
   /** The editor's own emptiness rule — see the note in `send()`. */
   protected readonly composerEmpty = computed(() => isEmptyHtml(this.body()));
+
+  /**
+   * Drops a snippet into the composer — **appended, never replacing**.
+   *
+   * Two snippets in one reply is a normal thing to want, and an agent who has
+   * already typed a sentence should not lose it to a mis-click. The body is
+   * stored as plain text, so it is escaped on the way in: a snippet containing
+   * "<3" is three characters, not a broken tag.
+   */
+  protected insertCanned(snippet: CannedResponse): void {
+    const addition = `<p>${textToHtml(snippet.body)}</p>`;
+    const current = this.body();
+    this.body.set(isEmptyHtml(current) ? addition : current + addition);
+  }
 
   /**
    * Toolbar wording for the editor.

@@ -462,6 +462,44 @@ export interface ProblemSummary {
   resolvedAt: string | null;
 }
 
+/**
+ * A problem's own lifecycle, which is **not** a ticket's.
+ *
+ * A ticket asks "has this person been helped?"; a problem asks "do we understand
+ * the cause, and is it still happening?". Mapping one onto the other would lose
+ * the two states in the middle, which are the whole reason an incident gets a
+ * problem instead of a tag.
+ */
+export const PROBLEM_STATUSES = ['investigating', 'identified', 'monitoring', 'resolved'] as const;
+export type ProblemStatusValue = (typeof PROBLEM_STATUSES)[number];
+
+export interface ProblemDetail extends ProblemSummary {
+  description: string | null;
+  createdBy: UserSummary | null;
+  /** Every ticket filed under this cause, newest activity first. */
+  tickets: TicketSummary[];
+}
+
+export interface UpdateProblemBody {
+  title?: string;
+  description?: string;
+  status?: string;
+  assigneeId?: string;
+  unassign?: boolean;
+}
+
+/** A reusable reply snippet, inserted from the ⚡ button in the composer. */
+export interface CannedResponse {
+  id: string;
+  title: string;
+  body: string;
+}
+
+export interface SaveCannedResponse {
+  title: string;
+  body: string;
+}
+
 /** A step on the ticket.  null means open — there is no second flag. */
 export interface TicketTask {
   id: string;
@@ -1343,16 +1381,40 @@ export class TicketsApi {
     return this.api.get<TicketActivity[]>(`/api/tickets/${ticketId}/activity`);
   }
 
-  // ── Problems (associations) ───────────────────────────────────────────────
+  // ── Problems ──────────────────────────────────────────────────────────────
 
   /**
-   * The workspace's problems, for the picker on a ticket.
+   * The workspace's problems — the list page, and the picker on a ticket.
    *
    * Agent-facing: a problem groups tickets across customers, and its title
    * usually describes an outage affecting other people entirely.
    */
   problems(): Promise<ProblemSummary[]> {
     return this.api.get<ProblemSummary[]>('/api/problems');
+  }
+
+  /** One problem plus every ticket underneath it. */
+  problem(id: string): Promise<ProblemDetail> {
+    return this.api.get<ProblemDetail>(`/api/problems/${id}`);
+  }
+
+  createProblem(body: { title: string; description?: string; assigneeId?: string }): Promise<ProblemDetail> {
+    return this.api.post<ProblemDetail>('/api/problems', body);
+  }
+
+  updateProblem(id: string, body: UpdateProblemBody): Promise<ProblemDetail> {
+    return this.api.patch<ProblemDetail>(`/api/problems/${id}`, body);
+  }
+
+  /**
+   * Ends the problem, and by default every ticket under it.
+   *
+   * The bulk resolve deliberately bypasses the per-ticket resolve gate: closing a
+   * problem is one decision about all of its tickets, and a rule that blocked one
+   * of them would leave the problem resolved with a ticket still open under it.
+   */
+  resolveProblem(id: string, bulkResolveTickets = true): Promise<ProblemDetail> {
+    return this.api.post<ProblemDetail>(`/api/problems/${id}/resolve`, { bulkResolveTickets });
   }
 
   linkProblem(problemId: string, ticketId: string): Promise<void> {
@@ -1362,6 +1424,24 @@ export class TicketsApi {
   /** Keyed by the TICKET: a ticket belongs to at most one problem. */
   unlinkProblem(ticketId: string): Promise<void> {
     return this.api.delete<void>(`/api/problems/tickets/${ticketId}`);
+  }
+
+  // ── Canned responses ──────────────────────────────────────────────────────
+
+  cannedResponses(): Promise<CannedResponse[]> {
+    return this.api.get<CannedResponse[]>('/api/canned-responses');
+  }
+
+  createCannedResponse(body: SaveCannedResponse): Promise<CannedResponse> {
+    return this.api.post<CannedResponse>('/api/canned-responses', body);
+  }
+
+  updateCannedResponse(id: string, body: SaveCannedResponse): Promise<CannedResponse> {
+    return this.api.put<CannedResponse>(`/api/canned-responses/${id}`, body);
+  }
+
+  deleteCannedResponse(id: string): Promise<void> {
+    return this.api.delete<void>(`/api/canned-responses/${id}`);
   }
 
   // ── Related tickets ───────────────────────────────────────────────────────

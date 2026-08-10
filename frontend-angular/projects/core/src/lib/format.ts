@@ -61,6 +61,21 @@ export const IMPACT_TONE: Record<string, ToneLabel> = {
   minor: { tone: 'info', labelKey: 'impact.minor' },
 };
 
+/**
+ * A problem's own lifecycle — not a ticket's, and deliberately coloured for the
+ * question it answers: **do we know what is going on, and is it still going on?**
+ *
+ * `monitoring` is `primary` rather than a second green: the fix is in, but
+ * nobody has signed it off yet, and a green chip there is how a problem gets
+ * forgotten one step before the end.
+ */
+export const PROBLEM_TONE: Record<string, ToneLabel> = {
+  investigating: { tone: 'warning', labelKey: 'problems.status.investigating' },
+  identified: { tone: 'info', labelKey: 'problems.status.identified' },
+  monitoring: { tone: 'primary', labelKey: 'problems.status.monitoring' },
+  resolved: { tone: 'success', labelKey: 'problems.status.resolved' },
+};
+
 export const ROLE_TONE: Record<string, ToneLabel> = {
   admin: { tone: 'primary', labelKey: 'role.admin' },
   agent: { tone: 'info', labelKey: 'role.agent' },

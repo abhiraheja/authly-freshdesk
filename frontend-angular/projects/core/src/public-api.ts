@@ -19,6 +19,7 @@ export * from './lib/api/http.interceptors';
 // Typed endpoints
 export * from './lib/api/admin.api';
 export * from './lib/api/analytics.api';
+export * from './lib/api/chat.api';
 export * from './lib/api/email.api';
 export * from './lib/api/notifications.api';
 export * from './lib/api/public.api';
@@ -33,6 +34,7 @@ export * from './lib/auth/guards';
 
 // Theme + formatting
 export * from './lib/theme/theme.service';
+export * from './lib/theme/brand-tokens';
 export * from './lib/ui-prefs.store';
 export * from './lib/format';
 export * from './lib/resource-utils';

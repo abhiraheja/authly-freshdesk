@@ -295,23 +295,36 @@ models.
 
 ---
 
-## 6. Customer-facing shells — outside this system
+## 6. Customer-facing shells — `BrandedFrame`, not `Shell`
 
-Customer surfaces keep their own frame:
+Customer surfaces keep their own frame. `tk-branded-frame` (`@trackly/ui`) **is**
+that frame — the counterpart to `Shell`, not a variation of it:
 
-- workspace `primaryColor` header bar, workspace logo, `pageTitle`
-- page background `#F6F4FA`, cards white with `#E9E4F5` border
-- **always light** — no colour-mode toggle, no dark tokens
+- workspace `primaryColor` header bar, workspace logo, workspace name
+- **always light** — it calls `ThemeService.forceLight()` on entry and releases
+  it on destroy, so an agent who looks at the portal gets their dark mode back
 - "Powered by Trackly" footer unless `hidePoweredBy`
-- max width 560 (forms) / 720 (portal lists)
+- `maxWidth` 560 (a single form) / 860 (a list or a conversation)
+- **no navigation rail.** A customer has two destinations; 280px of Trackly
+  chrome to hold them would be the loudest thing on their page.
 
 Which surfaces: `/submit`, `/kb`, `/chat`, `/csat/:id`, `/tickets/:id` (guest),
 `/invite/:token`, `/portal/*`, `/login?workspace=slug`, the widget, and every
 notification email.
 
+**They are siblings of the shell in `app.routes.ts`, never children of it** —
+`/portal` sits above the shell's `path: ''`, which matches by prefix. A branded
+surface routed inside the shell would inherit the Trackly brand block, the ⌘K
+palette and a dark-mode toggle it must not have.
+
 The tokens in `tokens.md` describe **Trackly's** palette. On a customer surface
-the only colour that matters is `branding.primaryColor`. Typography, spacing,
-radius and motion tokens still apply — they are brand-neutral.
+the only colour that matters is `branding.primaryColor` — `brandTokens()` in
+`@trackly/core` derives the rest of the palette from that one hex (hover step,
+a foreground that passes contrast, the selected tint and its ink, a whisper of
+brand in the page background and borders) and `BrandedFrame` writes them onto its
+own element as `--primary`, `--accent` and friends. Every component inside then
+re-skins with no branded variant anywhere. Typography, spacing, radius and motion
+tokens still apply unchanged — they are brand-neutral.
 
 ---
 

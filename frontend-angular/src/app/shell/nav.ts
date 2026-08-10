@@ -161,13 +161,6 @@ export const NAV: readonly NavGroup[] = [
   },
 ];
 
-/** The customer portal's much shorter rail. */
-export const PORTAL_NAV: readonly NavGroup[] = [
-  {
-    labelKey: 'nav.groups.support',
-    items: [
-      { labelKey: 'nav.items.myTickets', icon: 'ticket', route: '/portal' },
-      { labelKey: 'nav.items.newTicket', icon: 'plus', route: '/portal/tickets/new' },
-    ],
-  },
-];
+// There is deliberately no portal rail here. `/portal` renders outside this
+// shell in `BrandedFrame` — a customer has two destinations, and 280px of
+// Trackly chrome to hold them would be the loudest thing on their page.

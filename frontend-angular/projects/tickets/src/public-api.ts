@@ -14,3 +14,7 @@ export * from './lib/customer-form';
 export * from './lib/my-tasks';
 export * from './lib/asset-register';
 export * from './lib/service-board';
+export * from './lib/canned-responses';
+export * from './lib/chat-console';
+export * from './lib/problem-list';
+export * from './lib/problem-detail';
