@@ -1,0 +1,509 @@
+<div class="mx-auto max-w-[1100px]">
+  <a class="mb-3 inline-flex items-center gap-1 text-meta font-semibold text-muted-foreground hover:text-foreground" routerLink="/admin/widget">
+    <tk-icon name="chevron-left" [size]="16" />
+    {{ 'admin.widget.backToList' | transloco }}
+  </a>
+
+  @if (widget(); as w) {
+    <div class="mb-4 flex flex-wrap items-center gap-3">
+      <h1 class="font-display text-page font-extrabold">{{ w.name }}</h1>
+      <code class="rounded-lg bg-muted px-2 py-1 text-meta text-muted-foreground">{{ w.publicToken }}</code>
+      <button
+        tkButton
+        variant="ghost"
+        size="sm"
+        iconOnly
+        [attr.aria-label]="'admin.widget.copyToken' | transloco"
+        (click)="copy(w.publicToken)"
+      >
+        <tk-icon name="copy" [size]="16" />
+      </button>
+    </div>
+
+    <!-- The plaintext key exists in a response exactly twice: on create and on
+         regenerate. Shown as an alert rather than a field, because it is a thing
+         to act on now and not a value the screen holds. -->
+    @if (plainSecret(); as secret) {
+      <tk-alert tone="warning" [heading]="'admin.widget.secretOnceHeading' | transloco">
+        <p>{{ 'admin.widget.secretOnceBody' | transloco }}</p>
+        <div class="mt-2 flex flex-wrap items-center gap-2">
+          <code class="break-all rounded-lg bg-card px-2 py-1 text-meta">{{ secret }}</code>
+          <button tkButton variant="outline" size="sm" (click)="copy(secret)">
+            <tk-icon name="copy" [size]="14" />
+            {{ 'common.copy' | transloco }}
+          </button>
+        </div>
+      </tk-alert>
+    }
+
+    <div class="mt-4">
+      <tk-tabs [tabs]="tabs()" [(active)]="tab" panelId="widget-panel" />
+    </div>
+
+    <div id="widget-panel" role="tabpanel" class="mt-4" [attr.aria-labelledby]="'tab-' + tab()">
+      @switch (tab()) {
+        <!-- ─────────────── Configuration ─────────────── -->
+        @case ('configuration') {
+          <div class="grid gap-4 lg:grid-cols-[1fr_300px]">
+            <div class="space-y-4">
+              <tk-card
+                [heading]="'admin.widget.basics' | transloco"
+                [subheading]="'admin.widget.basicsHint' | transloco"
+              >
+                <div class="space-y-4">
+                  <tk-field [label]="'admin.widget.name' | transloco" for="widget-name" required>
+                    <input tkInput id="widget-name" name="widget-name" [(ngModel)]="name" />
+                  </tk-field>
+
+                  <tk-field
+                    [label]="'admin.widget.tagline' | transloco"
+                    for="widget-tagline"
+                    [hint]="'admin.widget.taglineHint' | transloco"
+                  >
+                    <input tkInput id="widget-tagline" name="widget-tagline" [(ngModel)]="tagline" />
+                  </tk-field>
+
+                  <tk-field
+                    [label]="'admin.widget.greeting' | transloco"
+                    for="widget-greeting"
+                    [hint]="'admin.widget.greetingHint' | transloco"
+                  >
+                    <input tkInput id="widget-greeting" name="widget-greeting" [(ngModel)]="greeting" />
+                  </tk-field>
+
+                  <tk-field
+                    [label]="'admin.widget.team' | transloco"
+                    [hint]="'admin.widget.teamHint' | transloco"
+                  >
+                    <tk-select
+                      [(value)]="teamId"
+                      inputId="widget-team"
+                      [ariaLabel]="'admin.widget.team' | transloco"
+                    >
+                      <tk-option value="" [label]="'admin.widget.noTeam' | transloco" />
+                      @for (team of teams(); track team.id) {
+                        <tk-option [value]="team.id" [label]="team.name" />
+                      }
+                    </tk-select>
+                  </tk-field>
+
+                  <tk-field
+                    [label]="'admin.widget.theme' | transloco"
+                    [hint]="'admin.widget.themeHint' | transloco"
+                  >
+                    <div class="flex items-center gap-2">
+                      <input
+                        type="color"
+                        class="h-9 w-12 cursor-pointer rounded-lg border border-border bg-card p-1"
+                        [attr.aria-label]="'admin.widget.theme' | transloco"
+                        [ngModel]="effectiveColour()"
+                        name="widget-colour-picker"
+                        (ngModelChange)="primaryColor.set($event)"
+                      />
+                      <input
+                        tkInput
+                        class="w-32"
+                        name="widget-colour"
+                        placeholder="#2563EB"
+                        [(ngModel)]="primaryColor"
+                        [attr.aria-label]="'admin.widget.themeHex' | transloco"
+                      />
+                      @if (primaryColor()) {
+                        <button tkButton variant="ghost" size="sm" (click)="primaryColor.set('')">
+                          {{ 'admin.widget.inherit' | transloco }}
+                        </button>
+                      }
+                    </div>
+                  </tk-field>
+                </div>
+              </tk-card>
+
+              <tk-card
+                [heading]="'admin.widget.launch' | transloco"
+                [subheading]="'admin.widget.launchHint' | transloco"
+              >
+                <div class="divide-y divide-border">
+                  <label class="flex items-center justify-between gap-3 py-2.5">
+                    <span>
+                      <span class="block text-body">{{ 'admin.widget.active' | transloco }}</span>
+                      <span class="block text-meta text-muted-foreground">{{ 'admin.widget.activeHint' | transloco }}</span>
+                    </span>
+                    <tk-switch [(checked)]="isActive" [ariaLabel]="'admin.widget.active' | transloco" />
+                  </label>
+
+                  <label class="flex items-center justify-between gap-3 py-2.5">
+                    <span>
+                      <span class="block text-body">{{ 'admin.widget.hideLauncher' | transloco }}</span>
+                      <span class="block text-meta text-muted-foreground">{{ 'admin.widget.hideLauncherHint' | transloco }}</span>
+                    </span>
+                    <tk-switch [(checked)]="hideLauncher" [ariaLabel]="'admin.widget.hideLauncher' | transloco" />
+                  </label>
+
+                  <label class="flex items-center justify-between gap-3 py-2.5">
+                    <span class="text-body">{{ 'admin.widget.launchWidget' | transloco }}</span>
+                    <tk-switch [(checked)]="launchWidget" [ariaLabel]="'admin.widget.launchWidget' | transloco" />
+                  </label>
+
+                  <label class="flex items-center justify-between gap-3 py-2.5">
+                    <span>
+                      <span class="block text-body">{{ 'admin.widget.showForm' | transloco }}</span>
+                      <span class="block text-meta text-muted-foreground">{{ 'admin.widget.showFormHint' | transloco }}</span>
+                    </span>
+                    <tk-switch [(checked)]="showWidgetForm" [ariaLabel]="'admin.widget.showForm' | transloco" />
+                  </label>
+
+                  <label class="flex items-center justify-between gap-3 py-2.5">
+                    <span class="text-body">{{ 'admin.widget.showClose' | transloco }}</span>
+                    <tk-switch [(checked)]="showCloseButton" [ariaLabel]="'admin.widget.showClose' | transloco" />
+                  </label>
+
+                  <label class="flex items-center justify-between gap-3 py-2.5">
+                    <span>
+                      <span class="block text-body">{{ 'admin.widget.showSend' | transloco }}</span>
+                      <span class="block text-meta text-muted-foreground">{{ 'admin.widget.showSendHint' | transloco }}</span>
+                    </span>
+                    <tk-switch [(checked)]="showSendButton" [ariaLabel]="'admin.widget.showSend' | transloco" />
+                  </label>
+                </div>
+              </tk-card>
+
+              <tk-card
+                [heading]="'admin.widget.identity' | transloco"
+                [subheading]="'admin.widget.identityHint' | transloco"
+              >
+                <div class="space-y-4">
+                  <label class="flex items-center justify-between gap-3">
+                    <span class="text-body">{{ 'admin.widget.identityEnable' | transloco }}</span>
+                    <tk-switch
+                      [(checked)]="identityVerificationEnabled"
+                      [ariaLabel]="'admin.widget.identityEnable' | transloco"
+                    />
+                  </label>
+
+                  <div>
+                    <!-- A heading, not a label: the value below it is a code
+                         block and a Regenerate button, not a form control. -->
+                    <p class="text-meta font-semibold">{{ 'admin.widget.secretKey' | transloco }}</p>
+                    <div class="mt-1.5 flex flex-wrap items-center gap-2">
+                      <code class="rounded-lg bg-muted px-2.5 py-1.5 text-meta text-muted-foreground">
+                        {{ w.secretKeyMasked ?? ('admin.widget.noSecret' | transloco) }}
+                      </code>
+                      <button tkButton variant="outline" size="sm" [disabled]="regenerating()" (click)="regenerate()">
+                        @if (regenerating()) {
+                          <tk-spinner [size]="14" />
+                        }
+                        {{ 'admin.widget.regenerate' | transloco }}
+                      </button>
+                    </div>
+                    <p class="mt-1.5 text-meta text-muted-foreground">{{ 'admin.widget.secretHint' | transloco }}</p>
+                  </div>
+
+                  <div class="rounded-xl border border-border p-3">
+                    <p class="text-body font-semibold">{{ 'admin.widget.verifyJwt' | transloco }}</p>
+                    <p class="mt-0.5 text-meta text-muted-foreground">{{ 'admin.widget.verifyJwtHint' | transloco }}</p>
+                    <textarea
+                      tkInput
+                      inset
+                      rows="3"
+                      class="mt-2 font-mono text-meta"
+                      name="widget-jwt"
+                      [placeholder]="'admin.widget.verifyJwtPlaceholder' | transloco"
+                      [(ngModel)]="jwtInput"
+                      [attr.aria-label]="'admin.widget.verifyJwt' | transloco"
+                    ></textarea>
+                    <button
+                      tkButton
+                      variant="outline"
+                      size="sm"
+                      class="mt-2"
+                      [disabled]="verifying() || !jwtInput().trim()"
+                      (click)="verifyJwt()"
+                    >
+                      @if (verifying()) {
+                        <tk-spinner [size]="14" />
+                      }
+                      {{ 'admin.widget.verify' | transloco }}
+                    </button>
+
+                    @if (jwtResult(); as result) {
+                      <div class="mt-3">
+                        <tk-alert [tone]="result.valid ? 'success' : 'danger'">
+                          @if (result.valid) {
+                            <p>{{ 'admin.widget.jwtValid' | transloco: { id: result.uniqueId } }}</p>
+                          } @else {
+                            <p>{{ result.error }}</p>
+                          }
+                        </tk-alert>
+                        @if (result.valid && claimRows(result).length) {
+                          <dl class="mt-2 space-y-1">
+                            @for (claim of claimRows(result); track claim.key) {
+                              <div class="flex gap-2 text-meta">
+                                <dt class="font-semibold text-muted-foreground">{{ claim.key }}</dt>
+                                <dd class="break-all">{{ claim.value }}</dd>
+                              </div>
+                            }
+                          </dl>
+                        }
+                      </div>
+                    }
+                  </div>
+
+                  <label class="flex items-center justify-between gap-3 border-t border-border pt-4">
+                    <span>
+                      <span class="block text-body">{{ 'admin.widget.requireEmail' | transloco }}</span>
+                      <span class="block text-meta text-muted-foreground">{{ 'admin.widget.requireEmailHint' | transloco }}</span>
+                    </span>
+                    <tk-switch
+                      [(checked)]="requireEmailVerification"
+                      [ariaLabel]="'admin.widget.requireEmail' | transloco"
+                    />
+                  </label>
+                </div>
+              </tk-card>
+
+              <tk-card
+                [heading]="'admin.widget.domains' | transloco"
+                [subheading]="'admin.widget.domainsHint' | transloco"
+              >
+                <textarea
+                  tkInput
+                  rows="4"
+                  class="font-mono text-meta"
+                  name="widget-origins"
+                  placeholder="https://acme.com&#10;https://app.acme.com"
+                  [(ngModel)]="allowedOrigins"
+                  [attr.aria-label]="'admin.widget.domains' | transloco"
+                ></textarea>
+                <p class="mt-2 text-meta text-muted-foreground">{{ 'admin.widget.domainsEmpty' | transloco }}</p>
+              </tk-card>
+
+              @if (saveError(); as failure) {
+                <tk-alert tone="danger">{{ failure }}</tk-alert>
+              }
+
+              <div class="flex flex-wrap items-center gap-2">
+                <button tkButton [disabled]="saving()" (click)="save()">
+                  @if (saving()) {
+                    <tk-spinner [size]="16" />
+                  }
+                  {{ 'admin.widget.update' | transloco }}
+                </button>
+                <span class="flex-1"></span>
+                <button tkButton variant="danger" (click)="remove()">
+                  {{ 'admin.widget.delete' | transloco }}
+                </button>
+              </div>
+            </div>
+
+            <div class="lg:sticky lg:top-4 lg:self-start">
+              <tk-widget-preview
+                [name]="name()"
+                [greeting]="greeting()"
+                [tagline]="tagline()"
+                [colour]="effectiveColour()"
+                [hideLauncher]="hideLauncher()"
+                [showWidgetForm]="showWidgetForm()"
+                [showCloseButton]="showCloseButton()"
+                [hidePoweredBy]="hidePoweredBy()"
+              />
+            </div>
+          </div>
+        }
+
+        <!-- ─────────────── Branding ─────────────── -->
+        @case ('branding') {
+          <div class="max-w-[720px] space-y-4">
+            <!-- The one thing an admin must understand before editing anything
+                 on this tab. Not a footnote: these fields are worn by surfaces
+                 that have no widget in sight. -->
+            <tk-alert tone="info" [heading]="'admin.widget.brandingScopeHeading' | transloco">
+              {{ 'admin.widget.brandingScopeBody' | transloco }}
+            </tk-alert>
+
+            <tk-card
+              [heading]="'admin.widget.logo' | transloco"
+              [subheading]="'admin.widget.logoHint' | transloco"
+            >
+              <div class="flex flex-wrap items-center gap-3">
+                @if (branding()?.hasLogo) {
+                  <tk-badge tone="success" dot>{{ 'admin.widget.logoPresent' | transloco }}</tk-badge>
+                } @else {
+                  <span class="text-meta text-muted-foreground">{{ 'admin.widget.logoAbsent' | transloco }}</span>
+                }
+                <label tkButton variant="outline" class="cursor-pointer">
+                  @if (uploadingLogo()) {
+                    <tk-spinner [size]="14" />
+                  }
+                  {{ 'admin.widget.uploadLogo' | transloco }}
+                  <input
+                    type="file"
+                    class="hidden"
+                    accept="image/png,image/svg+xml,image/jpeg,image/webp"
+                    (change)="uploadLogo($event)"
+                  />
+                </label>
+              </div>
+            </tk-card>
+
+            <tk-card [heading]="'admin.widget.workspaceColour' | transloco">
+              <div class="space-y-4">
+                <tk-field
+                  [label]="'admin.widget.defaultColour' | transloco"
+                  [hint]="'admin.widget.defaultColourHint' | transloco"
+                >
+                  <div class="flex items-center gap-2">
+                    <input
+                      type="color"
+                      class="h-9 w-12 cursor-pointer rounded-lg border border-border bg-card p-1"
+                      name="brand-colour-picker"
+                      [attr.aria-label]="'admin.widget.defaultColour' | transloco"
+                      [(ngModel)]="brandColor"
+                    />
+                    <input
+                      tkInput
+                      class="w-32"
+                      name="brand-colour"
+                      [(ngModel)]="brandColor"
+                      [attr.aria-label]="'admin.widget.themeHex' | transloco"
+                    />
+                  </div>
+                </tk-field>
+
+                <tk-field [label]="'admin.widget.pageTitle' | transloco" for="brand-page-title">
+                  <input tkInput id="brand-page-title" name="brand-page-title" [(ngModel)]="pageTitle" />
+                </tk-field>
+
+                <tk-field [label]="'admin.widget.welcomeText' | transloco" for="brand-welcome">
+                  <input tkInput id="brand-welcome" name="brand-welcome" [(ngModel)]="welcomeText" />
+                </tk-field>
+
+                <tk-field
+                  [label]="'admin.widget.footerText' | transloco"
+                  for="brand-footer"
+                  [hint]="'admin.widget.footerTextHint' | transloco"
+                >
+                  <input tkInput id="brand-footer" name="brand-footer" [(ngModel)]="footerText" />
+                </tk-field>
+
+                <label class="flex items-center justify-between gap-3 border-t border-border pt-4">
+                  <span>
+                    <span class="block text-body">{{ 'admin.widget.hidePoweredBy' | transloco }}</span>
+                    <span class="block text-meta text-muted-foreground">{{ 'admin.widget.hidePoweredByHint' | transloco }}</span>
+                  </span>
+                  <tk-switch [(checked)]="hidePoweredBy" [ariaLabel]="'admin.widget.hidePoweredBy' | transloco" />
+                </label>
+
+                <div class="border-t border-border pt-4">
+                  <button tkButton [disabled]="savingBranding()" (click)="saveBranding()">
+                    @if (savingBranding()) {
+                      <tk-spinner [size]="16" />
+                    }
+                    {{ 'common.save' | transloco }}
+                  </button>
+                </div>
+              </div>
+            </tk-card>
+          </div>
+        }
+
+        <!-- ─────────────── Integration ─────────────── -->
+        @case ('integration') {
+          <div class="grid gap-4 lg:grid-cols-[1fr_300px]">
+            <div class="space-y-4">
+              <tk-card
+                [heading]="'admin.widget.snippet' | transloco"
+                [subheading]="'admin.widget.snippetHint' | transloco"
+              >
+                <div card-actions class="flex gap-1">
+                  <button
+                    type="button"
+                    [class]="platform() === 'web' ? chipActiveClass : chipClass"
+                    (click)="platform.set('web')"
+                  >
+                    {{ 'admin.widget.web' | transloco }}
+                  </button>
+                  <button
+                    type="button"
+                    [class]="platform() === 'mobile' ? chipActiveClass : chipClass"
+                    (click)="platform.set('mobile')"
+                  >
+                    {{ 'admin.widget.mobile' | transloco }}
+                  </button>
+                </div>
+
+                @if (platform() === 'web') {
+                  <pre class="max-h-[280px] overflow-auto rounded-xl bg-muted p-3 text-meta"><code>{{ w.snippet }}</code></pre>
+                  <div class="mt-3 flex flex-wrap items-center gap-2">
+                    <button tkButton variant="outline" size="sm" (click)="copy(w.snippet)">
+                      <tk-icon name="copy" [size]="14" />
+                      {{ 'admin.widget.copySnippet' | transloco }}
+                    </button>
+                    <a
+                      class="text-meta font-semibold text-primary underline"
+                      href="https://github.com/abhiraheja/authly-freshdesk/blob/main/docs/admin-guide.md#the-embeddable-widget"
+                      target="_blank"
+                      rel="noopener"
+                    >
+                      {{ 'admin.widget.knowMore' | transloco }}
+                    </a>
+                  </div>
+                } @else {
+                  <!-- Honest rather than a placeholder snippet that would not
+                       compile: there is no mobile SDK yet, and a copy button
+                       that yields nothing usable is worse than saying so. -->
+                  <tk-alert tone="info" [heading]="'admin.widget.mobileHeading' | transloco">
+                    {{ 'admin.widget.mobileBody' | transloco }}
+                  </tk-alert>
+                }
+              </tk-card>
+
+              <tk-card
+                [heading]="'admin.widget.variables' | transloco"
+                [subheading]="'admin.widget.variablesHint' | transloco"
+              >
+                <dl class="space-y-2 text-meta">
+                  <div class="flex flex-wrap gap-2">
+                    <dt class="w-40 shrink-0 font-mono font-semibold">unique_id</dt>
+                    <dd class="flex-1 text-muted-foreground">{{ 'admin.widget.varUniqueId' | transloco }}</dd>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <dt class="w-40 shrink-0 font-mono font-semibold">name / mail / number</dt>
+                    <dd class="flex-1 text-muted-foreground">{{ 'admin.widget.varContact' | transloco }}</dd>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <dt class="w-40 shrink-0 font-mono font-semibold">token</dt>
+                    <dd class="flex-1 text-muted-foreground">{{ 'admin.widget.varToken' | transloco }}</dd>
+                  </div>
+                  <div class="flex flex-wrap gap-2">
+                    <dt class="w-40 shrink-0 font-mono font-semibold">variables</dt>
+                    <dd class="flex-1 text-muted-foreground">{{ 'admin.widget.varBag' | transloco }}</dd>
+                  </div>
+                </dl>
+              </tk-card>
+            </div>
+
+            <div class="lg:sticky lg:top-4 lg:self-start">
+              <tk-widget-preview
+                [name]="name()"
+                [greeting]="greeting()"
+                [tagline]="tagline()"
+                [colour]="effectiveColour()"
+                [hideLauncher]="hideLauncher()"
+                [showWidgetForm]="showWidgetForm()"
+                [showCloseButton]="showCloseButton()"
+                [hidePoweredBy]="hidePoweredBy()"
+              />
+            </div>
+          </div>
+        }
+      }
+    </div>
+  } @else if (loadError()) {
+    <tk-alert tone="danger" [heading]="'admin.widget.loadFailed' | transloco">{{ loadError() }}</tk-alert>
+  } @else {
+    <div class="space-y-3">
+      <span tkSkeleton class="block h-10 w-64"></span>
+      <span tkSkeleton class="block h-64 w-full"></span>
+    </div>
+  }
+</div>

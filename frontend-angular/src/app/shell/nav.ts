@@ -154,7 +154,10 @@ export const NAV: readonly NavGroup[] = [
       // reachable only by knowing to look inside the Email page for a button.
       { labelKey: 'nav.items.emailTemplates', icon: 'file-text', route: '/admin/settings/email/templates' },
       { labelKey: 'nav.items.storage', icon: 'upload-cloud', route: '/admin/settings/storage' },
-      { labelKey: 'nav.items.branding', icon: 'palette', route: '/admin/settings/branding' },
+      // No Branding row. It lives on the widget screen's Branding tab now, so a
+      // second entry here would be two doors into one record — and the one thing
+      // the merge was for is that an admin stops wondering which of them wins
+      // (docs/widget-plan.md § 4.2).
       { labelKey: 'nav.items.login', icon: 'lock', route: '/admin/settings/login' },
       { labelKey: 'nav.items.sso', icon: 'shield-check', route: '/admin/settings/sso' },
     ],

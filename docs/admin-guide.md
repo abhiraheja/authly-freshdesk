@@ -74,7 +74,7 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
    of your own installation. That is also why Trackly has passwords at all (§3.1). Once this has run, `/setup` is closed permanently —
    everyone else joins by invitation (§3.2) or SSO (§3.3).
 2. **Invite your team** — **Admin ▾ → People → Members** (§3.2).
-3. **Set your branding** — **Admin ▾ → Workspace → Branding** (§10) so customer
+3. **Set your branding** — **Admin ▾ → Widget → Branding tab** (§10) so customer
    surfaces show your logo and colour.
 4. **Decide how tickets arrive** — a shareable submit form and portal work out of
    the box; add **email** (§9), the **widget** (§11), **live chat** (§15), or
@@ -840,24 +840,79 @@ handlers are removed._
 to **every customer-facing surface** (submit form, portal, guest view, widget, KB,
 live chat, CSAT, notification emails). Trackly’s own agent/admin screens are
 unaffected.
-**Where:** **Admin ▾ → Workspace → Branding**.
 
-**Set up.** Upload a logo, pick a primary colour, set the page title and copy.
-Changes apply everywhere customers see you.
+**Where:** **Admin ▾ → Widget → Branding tab**. There is no separate Branding
+screen — it moved onto the widget screen so there is exactly one place to edit it.
+The tab says so at the top, because it is easy to assume a setting on a widget
+screen only affects that widget. It does not: your logo is on the sign-in page and
+in the header of every email Trackly sends.
+
+**Set up.** Upload a logo, pick the workspace's default primary colour, set the
+page title and copy, and decide whether to hide "Powered by Trackly".
+
+**One exception.** A single widget can wear a different colour — **Widget theme**
+on that widget's Configuration tab overrides the workspace colour for that widget
+alone. Clear it to go back to inheriting.
 
 ---
 
 ## 11. Embeddable widget
 
-**What it is.** A snippet you drop on your website so visitors can reach support
-without leaving your site. **Where:** **Admin ▾ → Channels → Widget**.
+**What it is.** A chat panel you drop on your website so visitors can raise a
+conversation and follow it up without leaving your site.
+**Where:** **Admin ▾ → Widget**.
 
-**Set up.** Choose an **embed type** (floating button / inline / link) and a
-**theme**, pick which **fields** the form collects, then copy the generated embed
-snippet onto your site. The widget renders your branded submit form.
+**More than one.** A workspace runs as many widgets as it has places to embed one.
+The marketing site and the signed-in app usually want different greetings, and a
+staging site wants its own token so it can be revoked without touching production.
+Each widget has its own **public token**, its own launch defaults and its own
+allowed domains.
 
-_Deployment note: `/widget.js` and the widget endpoints must be reachable over
-HTTPS from wherever you embed them (go-live.md §8)._
+### Set up
+
+1. **New widget**, then give it a **name**, a **tagline** and a **greeting**. The
+   greeting is followed by the visitor's first name when Trackly knows it.
+2. **Assign team** routes this widget's conversations to one team.
+3. **Launch options** are defaults — an embedding page may override any of them
+   per page. Hide launcher is for sites that open the panel from their own button.
+4. **Allowed domains**, one origin per line. Leave empty and any site can load the
+   widget. This list is the only thing stopping that, so fill it in.
+5. **Integration tab** → copy the snippet onto your site, just before `</body>`.
+
+### Identity verification
+
+The widget token is **public** — it is in the page source of every site that
+embeds the widget. It names a widget; it authorises nothing.
+
+That matters because the panel shows a visitor everything they have raised. If a
+typed-in email address were enough to unlock that, anyone could type your CEO's
+address and read their support history. So:
+
+- An **unverified** visitor sees only the conversations they raised **from that
+  browser**.
+- A **verified** visitor sees everything belonging to their contact record.
+
+There are two ways to become verified. Either your site signs a **JWT** with the
+widget's secret key and passes it in the snippet's `token` field — this is what
+"Identity verification" is for, and your server signs it, never your page — or the
+visitor confirms a code emailed to them, which is what **Require email
+verification** switches on.
+
+**Secret key.** Shown in full exactly once, when you create the widget or
+regenerate the key. Regenerating takes effect immediately with no overlap window,
+so update your server's signing config first and press the button second. The
+**Verify JWT** box takes a token your server produced and tells you whether
+Trackly would accept it, and who it says the visitor is — the fastest way to debug
+an integration.
+
+### The preview
+
+The panel beside the form is a live mock: it repaints as you type, so the colour
+picker is legible. It is not a real session, so looking at it does not add you to
+the widget's own usage figures.
+
+_Deployment note: `/widget.js`, the widget endpoints and the `/widget/:token` page
+must all be reachable over HTTPS from wherever you embed them (go-live.md §8)._
 
 ---
 
@@ -978,10 +1033,10 @@ Canned.
 | **People** | Members · Teams |
 | **Workflow** | Statuses & workflow · SLA policies · Automation · AI copilot |
 | **Ticket view** | Registers (§4.3) · Ticket layout (§23) |
-| **Channels** | Messaging (connectors) · Widget · Email · Email templates (§9.1) |
-| **Workspace** | Branding · Login methods · SSO |
+| **Channels** | Messaging (connectors) · Widget (branding lives on its Branding tab, §10) · Email · Email templates (§9.1) |
+| **Workspace** | Login methods · SSO |
 
-**Customer-facing URLs:** `/submit` · `/portal` · `/kb` · `/chat` · guest tracking
+**Customer-facing URLs:** `/submit` · `/portal` · `/kb` · `/chat` · `/widget/<token>` (the embedded panel) · guest tracking
 & CSAT links (emailed), all with `?workspace=<slug>` where shown.
 
 ---

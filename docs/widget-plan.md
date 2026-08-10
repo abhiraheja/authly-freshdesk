@@ -661,8 +661,31 @@ Each is independently shippable and leaves the existing widget working.
 | 3 ✅ | Conversation list + thread + reply + attachments, trust rule, `widget_conversation_reads` + `unreadCount` + read receipt, SignalR per-visitor group with polling fallback | Two browsers with different visitor tokens cannot see each other's conversations — asserted by test |
 | 4 ✅ | `/widget.js` rewritten: `initChatWidget`, open/close/identify, branded launcher, postMessage handshake, back-compat path | The snippet in § 7.1 works on a plain HTML page |
 | 5 ✅ | Angular customer surface `/widget/:token` (home, details form, thread, closed section) | Four states each, brand-coloured, light |
-| 6 | Angular admin `/admin/widget` list + Configuration/Branding/Integration tabs with live preview; `/admin/settings/branding` route and nav entry removed (§ 4.2) | React `WidgetPage.tsx` is no longer reachable and branding is editable in exactly one place |
+| 6 ✅ | Angular admin `/admin/widget` list + Configuration/Branding/Integration tabs with live preview; `/admin/settings/branding` route and nav entry removed (§ 4.2) | React `WidgetPage.tsx` is no longer reachable and branding is editable in exactly one place |
 | 7 | Docs | § 11 |
+
+Phase 6 shipped with `scripts/verify-widget-phase6.ps1` — 19 assertions. The
+done-when's second half is checked from **both** ends, because "editable in
+exactly one place" is not provable from one: the Branding nav row is gone, *and*
+`/admin/settings/branding` lands on the widget screen.
+
+- **The old branding URL redirects, it is not deleted.** It is in bookmarks and
+  in older revisions of the admin guide, and a 404 would read as "branding was
+  removed" rather than "branding moved".
+- **The live preview is a mock, not the panel in an iframe**, and both reasons
+  matter. An iframe would only show what had been *saved*, which would stop the
+  colour picker being a picker; and loading `/widget/:token` opens a visitor
+  session, so an admin looking at a settings screen would write a
+  `widget_visitors` row and appear in that widget's own usage figures. The mock
+  uses the same `brandVars()` the real panel does, so what an admin sees is what
+  a customer gets — including the black-or-white text decision.
+- **The Mobile SDK tab says there is no SDK.** A placeholder snippet that does
+  not compile is worse than a sentence admitting the gap.
+
+While verifying it, `App:ApiBaseUrl` in `appsettings.Development.json` turned out
+to still say `:5037` while everything else in the repo runs the API on `:5210` —
+harmless until phase 6 put the generated snippet on screen, at which point every
+dev copy of it pointed at a dead port. Corrected.
 
 Phase 5 shipped with `scripts/verify-widget-phase5.ps1` — 19 assertions, and
 nothing in it is stubbed: the loader is the real `widget.js`, the panel is the

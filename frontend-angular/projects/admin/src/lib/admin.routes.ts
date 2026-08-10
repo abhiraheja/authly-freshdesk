@@ -73,7 +73,20 @@ export const adminRoutes: Routes = [
   { path: 'teams', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.teams', from: 'frontend/src/pages/admin/TeamsPage.tsx' } },
   { path: 'automation', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.automation', from: 'frontend/src/pages/admin/AutomationPage.tsx' } },
   { path: 'channels', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.messagingChannels', from: 'frontend/src/pages/admin/ChannelsPage.tsx' } },
-  { path: 'widget', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.widget', from: 'frontend/src/pages/admin/WidgetPage.tsx' } },
+  {
+    // Every embeddable widget the workspace runs, and — on its Branding tab —
+    // the workspace branding record (docs/widget-plan.md § 4.2).
+    path: 'widget',
+    loadComponent: () => import('./widget-list').then((m) => m.AdminWidgetList),
+  },
+  {
+    path: 'widget/:id',
+    loadComponent: () => import('./widget-editor').then((m) => m.AdminWidgetEditor),
+  },
   { path: 'settings/ai', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.aiCopilot', from: 'frontend/src/pages/admin/AiSettingsPage.tsx' } },
-  { path: 'settings/branding', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.branding', from: 'frontend/src/pages/admin/BrandingSettingsPage.tsx' } },
+  // /admin/settings/branding is deliberately gone — branding is edited on the
+  // widget screen's Branding tab now, so there is exactly one place for it
+  // (§ 4.2). A redirect rather than a deletion, because the URL is in bookmarks
+  // and in the admin guide's older revisions.
+  { path: 'settings/branding', redirectTo: 'widget', pathMatch: 'full' },
 ];

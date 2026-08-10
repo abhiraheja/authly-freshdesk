@@ -25,6 +25,7 @@ export * from './lib/api/public.api';
 export * from './lib/api/sso.api';
 export * from './lib/api/tickets.api';
 export * from './lib/api/widget.api';
+export * from './lib/api/widget-admin.api';
 export * from './lib/auth/auth.api';
 
 // Session + routing
