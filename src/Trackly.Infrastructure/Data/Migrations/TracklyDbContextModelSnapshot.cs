@@ -2255,6 +2255,10 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.HasIndex("TeamId")
                         .HasDatabaseName("ix_tickets_team_id");
 
+                    b.HasIndex("ResolveDueAt", "FirstResponseDueAt")
+                        .HasDatabaseName("ix_tickets_sla_sweep")
+                        .HasFilter("status_category NOT IN ('resolved', 'closed')");
+
                     b.HasIndex("WorkspaceId", "AssigneeId")
                         .HasDatabaseName("ix_tickets_workspace_id_assignee_id");
 

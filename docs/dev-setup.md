@@ -246,6 +246,38 @@ In Development the API also applies pending migrations on startup, so once the
 migration exists you can just restart the API. (Install the tool once if needed:
 `dotnet tool install --global dotnet-ef`.)
 
+> **The 43 phase-by-phase migrations were squashed into one `InitialCreate`**
+> before the first production deploy, while no deployed database existed yet.
+>
+> **Any database created before the squash is now unusable** — its
+> `__EFMigrationsHistory` lists migration IDs that no longer exist, so EF sees
+> `InitialCreate` as pending and fails with *"relation already exists"*. There is
+> no repair worth doing on a dev box; drop and recreate:
+>
+> ```bash
+> docker compose down -v && docker compose up -d   # wipes the dev volume
+> ```
+>
+> Then start the API — it rebuilds the schema and you claim `/setup` again.
+>
+> Two things the squash changed on purpose, both verified by diffing a database
+> built from the old chain against one built from the new migration (tables,
+> columns, constraints and indexes):
+>
+> - **`ix_tickets_sla_sweep` now lives in the model** (`TracklyDbContext`, with
+>   `HasFilter`), not in raw migration SQL. It was raw SQL, which meant it existed
+>   in the database but not in the model — and it vanished the first time the
+>   squash was generated. `SlaBreachWorker` sweeps on it.
+> - **20 columns lost their database-level `DEFAULT`** (`is_active`,
+>   `sort_order`, `must_change_password`, …) and this is intentional. Those
+>   defaults only ever existed because `ADD COLUMN … NOT NULL` on a populated
+>   table requires one — migration scaffolding, not design. Nothing in the app
+>   relies on them: there is no raw SQL anywhere in `src/`, so EF always sends an
+>   explicit value. Declaring them with `HasDefaultValue` instead would have been
+>   worse — EF omits a property holding its CLR default from the INSERT, so
+>   setting `IsActive = false` on a column defaulting to `true` would silently
+>   write `true`.
+
 ### Verification scripts
 
 Each phase has a PowerShell suite in `scripts/` that drives the **running** API and

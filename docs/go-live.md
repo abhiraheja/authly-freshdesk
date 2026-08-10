@@ -31,8 +31,13 @@ sensible default.
    database backup.
 
 Migrations apply automatically on boot (`Trackly:AutoMigrate`, default true), which
-is what a container pointed at an empty database needs. If you set it false, apply
-them yourself as a deploy step:
+is what a container pointed at an empty database needs. The whole schema is a
+**single `InitialCreate`** — the phase-by-phase chain was squashed before the
+first production deploy, while no deployed database existed to be upgraded. That
+also means there is no upgrade path *from* a pre-squash database: any that exists
+is a development one, and it must be dropped and recreated (see
+`docs/dev-setup.md` §7). If you set `AutoMigrate` false, apply them yourself as a
+deploy step:
 ```
 dotnet ef database update --project src/Trackly.Infrastructure --startup-project src/Trackly.Api
 ```

@@ -12,8 +12,8 @@ using Trackly.Infrastructure.Data;
 namespace Trackly.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(TracklyDbContext))]
-    [Migration("20260809024611_EmailOAuthStates")]
-    partial class EmailOAuthStates
+    [Migration("20260810051542_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -933,34 +933,6 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_verified_at");
 
-                    b.Property<string>("MailboxAddress")
-                        .HasColumnType("text")
-                        .HasColumnName("mailbox_address");
-
-                    b.Property<string>("MailboxHost")
-                        .HasColumnType("text")
-                        .HasColumnName("mailbox_host");
-
-                    b.Property<string>("MailboxOauthTokensEncrypted")
-                        .HasColumnType("text")
-                        .HasColumnName("mailbox_oauth_tokens_encrypted");
-
-                    b.Property<string>("MailboxPasswordEncrypted")
-                        .HasColumnType("text")
-                        .HasColumnName("mailbox_password_encrypted");
-
-                    b.Property<int?>("MailboxPort")
-                        .HasColumnType("integer")
-                        .HasColumnName("mailbox_port");
-
-                    b.Property<string>("MailboxProtocol")
-                        .HasColumnType("text")
-                        .HasColumnName("mailbox_protocol");
-
-                    b.Property<string>("MailboxUsername")
-                        .HasColumnType("text")
-                        .HasColumnName("mailbox_username");
-
                     b.Property<bool>("NewTicketViaEmail")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -981,37 +953,9 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("sending_provider_id");
 
-                    b.Property<string>("SmtpHost")
-                        .HasColumnType("text")
-                        .HasColumnName("smtp_host");
-
-                    b.Property<string>("SmtpPasswordEncrypted")
-                        .HasColumnType("text")
-                        .HasColumnName("smtp_password_encrypted");
-
-                    b.Property<int?>("SmtpPort")
-                        .HasColumnType("integer")
-                        .HasColumnName("smtp_port");
-
-                    b.Property<bool>("SmtpUseStartTls")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("smtp_use_start_tls");
-
-                    b.Property<string>("SmtpUser")
-                        .HasColumnType("text")
-                        .HasColumnName("smtp_user");
-
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
-
-                    b.Property<bool>("UseSharedSmtp")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("boolean")
-                        .HasDefaultValue(true)
-                        .HasColumnName("use_shared_smtp");
 
                     b.Property<Guid>("WorkspaceId")
                         .HasColumnType("uuid")
@@ -1152,6 +1096,10 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("text")
                         .HasColumnName("oauth_scopes");
 
+                    b.Property<string>("OauthTenantId")
+                        .HasColumnType("text")
+                        .HasColumnName("oauth_tenant_id");
+
                     b.Property<string>("OauthTokensEncrypted")
                         .HasColumnType("text")
                         .HasColumnName("oauth_tokens_encrypted");
@@ -1211,6 +1159,71 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_email_providers_workspace_id_provider");
 
                     b.ToTable("email_providers", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.EmailTemplate", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BodyHtml")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("body_html");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true)
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("key");
+
+                    b.Property<string>("Locale")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("en")
+                        .HasColumnName("locale");
+
+                    b.Property<bool>("Standalone")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("standalone");
+
+                    b.Property<string>("Subject")
+                        .HasColumnType("text")
+                        .HasColumnName("subject");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("UpdatedById")
+                        .HasColumnType("uuid")
+                        .HasColumnName("updated_by_id");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_email_templates");
+
+                    b.HasIndex("UpdatedById")
+                        .HasDatabaseName("ix_email_templates_updated_by_id");
+
+                    b.HasIndex("WorkspaceId", "Key", "Locale")
+                        .IsUnique()
+                        .HasDatabaseName("ix_email_templates_workspace_id_key_locale");
+
+                    b.ToTable("email_templates", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.EmailToken", b =>
@@ -2244,6 +2257,10 @@ namespace Trackly.Infrastructure.Data.Migrations
 
                     b.HasIndex("TeamId")
                         .HasDatabaseName("ix_tickets_team_id");
+
+                    b.HasIndex("ResolveDueAt", "FirstResponseDueAt")
+                        .HasDatabaseName("ix_tickets_sla_sweep")
+                        .HasFilter("status_category NOT IN ('resolved', 'closed')");
 
                     b.HasIndex("WorkspaceId", "AssigneeId")
                         .HasDatabaseName("ix_tickets_workspace_id_assignee_id");
@@ -3733,6 +3750,26 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_email_providers_workspaces_workspace_id");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.EmailTemplate", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "UpdatedBy")
+                        .WithMany()
+                        .HasForeignKey("UpdatedById")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_email_templates_users_updated_by_id");
+
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_email_templates_workspaces_workspace_id");
+
+                    b.Navigation("UpdatedBy");
 
                     b.Navigation("Workspace");
                 });

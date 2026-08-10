@@ -225,6 +225,19 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             // take the resolution of every ticket they ever closed with them.
             e.HasOne(t => t.ResolvedBy).WithMany().HasForeignKey(t => t.ResolvedById)
                 .OnDelete(DeleteBehavior.SetNull);
+            // SlaBreachWorker's own query: open tickets with a deadline coming
+            // up, swept across every workspace at once — hence no workspace_id
+            // leading column. Partial, because resolved and closed tickets are
+            // the bulk of the table and can never match.
+            //
+            // Declared here rather than as raw SQL in a migration: it used to be
+            // the latter, which meant it existed in the database but not in the
+            // model, so it silently vanished the first time the migrations were
+            // squashed. The name is pinned because the worker's plan is the whole
+            // reason this index exists.
+            e.HasIndex(t => new { t.ResolveDueAt, t.FirstResponseDueAt })
+                .HasDatabaseName("ix_tickets_sla_sweep")
+                .HasFilter("status_category NOT IN ('resolved', 'closed')");
         });
 
         modelBuilder.Entity<TicketTimeEntry>(e =>
