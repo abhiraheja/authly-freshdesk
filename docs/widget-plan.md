@@ -428,8 +428,15 @@ more than one. Trackly accepts it and, for now, supports index `0`.
 
 ### 7.2 What it does
 
-1. Reads or mints a `visitorId` (UUID) in `localStorage`, keyed per widget token.
-2. `GET …/config` → brand colour, greeting, tagline, launch defaults.
+1. ~~Reads or mints a `visitorId` (UUID) in `localStorage`.~~ **Dropped in phase 4,
+   for the reason § 5.2 already gives: the visitor token is server-issued and the
+   frame owns it. The loader never holds a credential, which is why it can be a
+   plain script on somebody else's page.**
+2. `GET …/config` → brand colour, greeting, tagline, launch defaults, **and
+   `frameUrl`**. The frame URL is told to the loader rather than derived from the
+   script's own origin: API and SPA share an origin in production but not in
+   development, so a loader that guessed would work locally in exactly the way
+   that hides the bug until deployment.
 3. Injects the launcher (brand colour, **not** a hardcoded indigo) unless
    `hide_launcher`.
 4. Creates the iframe at `/widget/{token}` — hidden on load so it can report
@@ -448,7 +455,18 @@ and no conversation exists yet. One `resize`-free hidden frame is cheaper than a
 second polling channel in the loader.
 
 Both sides validate `event.origin` against the expected origin and ignore
-anything else — the widget lives on a page the operator's customer controls.
+anything else — the widget lives on a page the operator's customer controls. The
+loader also checks `event.source === iframe.contentWindow`: the origin alone
+would trust any frame from the panel's host, and the source alone would trust a
+frame that had navigated somewhere else.
+
+**The public widget API is the one CORS surface in Trackly** (added in phase 4,
+because the loader is the first caller that is genuinely cross-origin). Any
+origin is allowed, deliberately: CORS cannot make a per-widget decision, and the
+per-widget `allowed_origins` check inside the service is the real boundary
+(§ 9.2). What makes "any origin" safe is that the surface carries no ambient
+authority — every request is credential-less, the visitor token being a header
+the caller must already hold rather than a cookie a browser attaches for them.
 
 ### 7.3 Back-compatibility
 
@@ -458,12 +476,16 @@ The current `data-workspace` / `data-embed` / `data-theme` / `data-user-name` /
 loader resolves that workspace's first active widget and self-initialises. Old
 snippets keep working; the Integration tab only ever generates the new form.
 
-**Until phase 4 lands, the Integration tab keeps generating the `data-*` form**,
-because that is still the only form `widget.js` understands — generating the
-§ 7.1 snippet earlier would hand admins something inert. It already emits
-`data-widget="{public_token}"` alongside `data-workspace`, which the current
-loader ignores and the phase-4 loader reads, so a snippet pasted before the
-rewrite addresses the right widget after it.
+**Since phase 4 the generated snippet is the § 7.1 form**, and only the token is
+baked into it. Every launch default is already the admin's, set on the very
+screen the snippet is copied from; writing them into the markup would freeze them
+there, so an admin who later unticked "hide launcher" would find every embedded
+page still overriding it. The commented keys show a host page what it *may*
+override, which is a different thing from Trackly asserting it.
+
+`GET /api/public/workspaces/{slug}/widget` gained `publicToken` so the
+`data-workspace` path has something to switch to; the three fields beside it stay
+because an older loader is still on somebody's page reading them.
 
 ---
 
@@ -637,10 +659,33 @@ Each is independently shippable and leaves the existing widget working.
 | 1 ✅ | Reshaped `widget_configs` + `widget_visitors` + `tickets.widget_visitor_id`, EF migration with backfill, admin CRUD, secret encrypt/regenerate/verify | An admin can create two widgets over the API and each has its own token; the old snippet still renders |
 | 2 ✅ | Public config + session endpoints, JWT verification, contact-upsert service, ticket creation with `Channel = widget` and `RequesterId` | A widget ticket appears on the Customer Detail screen's "previous tickets" with no UI change |
 | 3 ✅ | Conversation list + thread + reply + attachments, trust rule, `widget_conversation_reads` + `unreadCount` + read receipt, SignalR per-visitor group with polling fallback | Two browsers with different visitor tokens cannot see each other's conversations — asserted by test |
-| 4 | `/widget.js` rewritten: `initChatWidget`, open/close/identify, branded launcher, postMessage handshake, back-compat path | The snippet in § 7.1 works on a plain HTML page |
+| 4 ✅ | `/widget.js` rewritten: `initChatWidget`, open/close/identify, branded launcher, postMessage handshake, back-compat path | The snippet in § 7.1 works on a plain HTML page |
 | 5 | Angular customer surface `/widget/:token` (home, details form, thread, closed section) | Four states each, brand-coloured, light |
 | 6 | Angular admin `/admin/widget` list + Configuration/Branding/Integration tabs with live preview; `/admin/settings/branding` route and nav entry removed (§ 4.2) | React `WidgetPage.tsx` is no longer reachable and branding is editable in exactly one place |
 | 7 | Docs | § 11 |
+
+Phase 4 shipped with `scripts/verify-widget-phase4.ps1` — 43 assertions, and the
+first suite here that runs in a **real browser**. It had to: every claim is about
+the DOM, about `postMessage` and about origins, none of which an HTTP client can
+check. `scripts/widget-loader-harness.mjs` serves a plain HTML page carrying the
+§ 7.1 snippet verbatim plus a panel stub, and the stub is served on **whatever
+port the widget's own `frameUrl` names** — so the loader is exercised against the
+URL it will really use, with no override anywhere, and the host page and panel
+are genuinely different origins as they are in production.
+
+Running it that way is what found the phase's one real defect: **the public
+widget API sent no CORS headers at all**, so `widget.js` could not read its own
+config from any embedding site. Nothing before phase 4 had called that surface
+cross-origin, so nothing had noticed. See § 7.2 for why the policy allows any
+origin.
+
+Two smaller decisions:
+
+- **The snippet carries only the token.** Baking the launch defaults into it
+  would freeze them on every embedded page (§ 7.3).
+- **The loader holds no credential.** § 7.2's `visitorId` step is gone; the frame
+  owns the server-issued token. A loader with nothing to steal is a loader that
+  can safely be a plain script tag on a page Trackly does not control.
 
 Phase 3 shipped with `scripts/verify-widget-phase3.ps1` — 62 assertions. The
 done-when is taken apart directly: two browsers on one widget, **both claiming

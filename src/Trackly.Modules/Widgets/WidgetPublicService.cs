@@ -111,11 +111,14 @@ public class WidgetPublicService(
             .SingleOrDefaultAsync(b => b.WorkspaceId == widget.WorkspaceId, ct);
         var slug = widget.Workspace.Slug;
 
+        var frontend = (configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173").TrimEnd('/');
+
         return new WidgetPublicConfigDto(
             widget.PublicToken,
             widget.Name,
             widget.Tagline,
             widget.Greeting,
+            $"{frontend}/widget/{widget.PublicToken}",
             widget.Workspace.Name,
             // The widget's colour wins, the workspace's is the default, and the
             // Trackly blue is only ever the last resort (plan § 4.2).

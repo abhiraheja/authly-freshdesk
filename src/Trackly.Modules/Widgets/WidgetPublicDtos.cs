@@ -12,6 +12,20 @@ public record WidgetPublicConfigDto(
     string? Tagline,
     string? Greeting,
 
+    /// <summary>
+    /// Where the panel document lives — the loader's iframe <c>src</c>, and the
+    /// origin it validates every <c>postMessage</c> against.
+    ///
+    /// <para>
+    /// Told to the loader rather than derived from the script's own origin: in
+    /// production the API and the SPA share one, but in development they do not,
+    /// and a loader that guessed would work locally in exactly the way that hides
+    /// the bug until deployment. The server already knows the answer — it is the
+    /// same <c>App:FrontendBaseUrl</c> the generated snippet is built from.
+    /// </para>
+    /// </summary>
+    string FrameUrl,
+
     // Branding: the widget's colour if it has one, else the workspace's
     // (invariant 6, plan § 4.2). Always light — there is no theme here on
     // purpose.

@@ -198,28 +198,40 @@ $legacy = Api Get "/api/admin/widget"
 Check "Legacy singular endpoint still answers" ($null -ne $legacy.snippet)
 Check "  ...with the pre-reshape response shape" `
     ($null -ne $legacy.embedType -and $null -ne $legacy.theme -and $null -ne $legacy.fields)
-Check "Snippet still points at widget.js with data-workspace" `
-    ($legacy.snippet -like "*widget.js*" -and $legacy.snippet -like "*data-workspace=*")
-Check "Snippet already carries the widget token for the phase-4 loader" ($legacy.snippet -like "*data-widget=*")
+# Since phase 4 the generated snippet is the initChatWidget form (plan § 7.1).
+# What has to keep working is the LOADER's back-compatibility, not the generator:
+# an old data-* snippet already pasted into somebody's page still self-initialises.
+Check "Snippet points at widget.js" ($legacy.snippet -like "*widget.js*")
+Check "Snippet is the initChatWidget form" `
+    ($legacy.snippet -like "*initChatWidget(tracklyConfig, 0)*")
+Check "Snippet names the widget by its public token" `
+    ($legacy.snippet -like "*widgetToken:*")
 
 $saved = Api Put "/api/admin/widget" @{ embedType = "inline"; theme = "light"; fields = @{ fields = @("name", "email") } }
 Check "Legacy save still round-trips" ($saved.embedType -eq "inline")
 Api Put "/api/admin/widget" @{ embedType = "floating"; theme = "light"; fields = $saved.fields } | Out-Null
 
-# The slug comes out of the snippet itself - which is also a check that the
-# snippet still names a workspace the public endpoint can resolve.
-if ($legacy.snippet -match 'data-workspace="([^"]+)"') {
-    $slug = $Matches[1]
+# The slug-addressed endpoint is what an old data-workspace snippet resolves
+# through, so it has to keep answering - and now has to name a widget.
+#
+# The slug comes from the link-embed snippet, which is the only place the API
+# hands it to an admin caller. Restored immediately afterwards.
+$link = Api Put "/api/admin/widget" @{ embedType = "link"; theme = "light"; fields = $saved.fields }
+$slug = if ($link.snippet -match 'workspace=([^&\s"]+)') { $Matches[1] } else { $null }
+Api Put "/api/admin/widget" @{ embedType = "floating"; theme = "light"; fields = $saved.fields } | Out-Null
+if ($slug) {
     $pub = Invoke-RestMethod -Uri "$BaseUrl/api/public/workspaces/$slug/widget"
     Check "Public slug-addressed config still resolves" ($null -ne $pub.embedType)
+    Check "  ...and names a widget the loader can switch to" ($null -ne $pub.publicToken)
 }
 else {
-    Check "Snippet names a workspace" $false "no data-workspace in: $($legacy.snippet)"
+    Check "Workspace slug is discoverable" $false "no workspace= in: $($link.snippet)"
 }
 
 $js = Invoke-WebRequest -Uri "$BaseUrl/widget.js" -UseBasicParsing
 Check "widget.js still served (200)" ($js.StatusCode -eq 200)
 Check "  ...and still understands data-workspace" ($js.Content -like "*data-workspace*")
+Check "  ...and data-widget" ($js.Content -like "*data-widget*")
 
 # ---- Summary ----------------------------------------------------------------
 Write-Host "`n----------------------------------------" -ForegroundColor Cyan

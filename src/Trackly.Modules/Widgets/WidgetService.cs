@@ -354,22 +354,38 @@ public class WidgetService(TracklyDbContext db, ISecretProtector protector)
     }
 
     /// <summary>
-    /// The Integration tab's snippet.
+    /// The Integration tab's snippet — the <c>initChatWidget</c> form of
+    /// docs/widget-plan.md § 7.1, since phase 4.
     ///
     /// <para>
-    /// This is still the <c>data-*</c> form, because it is still the form
-    /// <c>widget.js</c> understands — the loader is rewritten in phase 4 and this
-    /// becomes the <c>initChatWidget(tracklyConfig, 0)</c> snippet of
-    /// docs/widget-plan.md § 7.1 in the same change. <c>data-widget</c> is
-    /// already emitted so snippets pasted before that rewrite address the right
-    /// widget after it; the current loader ignores attributes it does not read.
+    /// Only the token is emitted. Every launch default is already the admin's,
+    /// set on the screen the snippet is being copied from, and baking them into
+    /// the markup would freeze them there: an admin who later unticked "hide
+    /// launcher" would find every embedded page still overriding it. The commented
+    /// keys show the host page what it <i>may</i> override, which is a different
+    /// thing from Trackly asserting it.
+    /// </para>
+    /// <para>
+    /// The old <c>data-*</c> form keeps working — the loader still self-initialises
+    /// from <c>data-widget</c> or <c>data-workspace</c> (§ 7.3) — but is no longer
+    /// generated for anyone new.
     /// </para>
     /// </summary>
     public static string BuildSnippet(WidgetConfig w, string slug, WidgetOrigins origins)
         => w.EmbedType == WidgetEmbedType.Link
             ? $"{origins.Frontend}/submit?workspace={slug}"
-            : $"<script src=\"{origins.Api}/widget.js\" data-widget=\"{w.PublicToken}\" " +
-              $"data-workspace=\"{slug}\" data-embed=\"{w.EmbedType}\" data-theme=\"{w.Theme}\"></script>";
+            : $$"""
+                 <script type="text/javascript" src="{{origins.Api}}/widget.js"></script>
+                 <script type="text/javascript">
+                   var tracklyConfig = {
+                     widgetToken: "{{w.PublicToken}}",
+                     // variables: { plan: "pro", account_id: "8842" },
+                     // unique_id: "...", name: "...", mail: "...", number: "...",
+                     // token: "<JWT signed with the widget secret>",
+                   };
+                   initChatWidget(tracklyConfig, 0);
+                 </script>
+                 """;
 
     public static JsonElement ParseFields(string? json)
     {

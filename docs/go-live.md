@@ -635,7 +635,20 @@ Append here as phases land, so nothing is missed later.
     sends — reinforces the **single-instance** guidance until leader election
     exists (§4).
   - No new config keys or secrets.
-- **Widget rework (`docs/widget-plan.md`, phases 1–3 landed):**
+- **Widget rework (`docs/widget-plan.md`, phases 1–4 landed):**
+  - **CORS.** Since phase 4 the API declares one cross-origin policy, applied to
+    `/api/public/widget/*` and `/api/public/workspaces/{slug}/widget` only. It
+    allows **any** origin, because `widget.js` runs on the customer's site and
+    those are the calls it makes; the per-widget `allowed_origins` list is the
+    actual boundary and is checked server-side. Nothing else in Trackly answers
+    another origin. A reverse proxy that strips or rewrites
+    `Access-Control-Allow-Origin` will make every embedded widget silently
+    inert — the launcher simply never appears.
+  - **`App:FrontendBaseUrl` is now load-bearing for the widget.** The public
+    config returns `frameUrl` built from it, and that is the iframe's `src` *and*
+    the origin the loader validates `postMessage` against. Wrong or unset, the
+    panel does not open. Previously it only shaped links inside emails, where a
+    bad value was survivable.
   - **A new family of anonymous endpoints** under `/api/public/widget/{token}/…`
     — config, session, email verification, conversation create, conversation
     list/thread/reply/read-receipt/attachments. All must be reachable over HTTPS

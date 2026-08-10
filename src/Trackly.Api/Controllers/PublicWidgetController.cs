@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Trackly.Api.Widgets;
 using Trackly.Modules.Tickets;
 using Trackly.Modules.Widgets;
 
@@ -20,6 +22,10 @@ namespace Trackly.Api.Controllers;
 /// </summary>
 [ApiController]
 [AllowAnonymous]
+// Read by widget.js from whatever site embeds the widget, so this is the one
+// controller in Trackly that answers another origin. The allowlist that decides
+// *which* sites get an answer is enforced inside the service, per widget.
+[EnableCors(WidgetCors.Policy)]
 [Route("api/public/widget/{token}")]
 public class PublicWidgetController(WidgetPublicService widgets) : ControllerBase
 {

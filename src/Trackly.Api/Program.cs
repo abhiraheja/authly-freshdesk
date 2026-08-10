@@ -102,6 +102,26 @@ builder.Services.AddAuthorization(options =>
     options.AddPolicy("Admin", p => p.RequireRole(TracklyRoles.Admin));
 });
 
+// The embeddable widget is the one surface that is *meant* to be read from
+// somebody else's origin: widget.js runs on the customer's site and calls the
+// public widget API from there. Nothing else in Trackly is cross-origin.
+//
+// Any origin, and deliberately so. CORS is not the boundary here — the widget's
+// own `allowed_origins` list is, checked server-side against the Origin header
+// (plan § 9.2), which is a per-widget decision this policy could not make. What
+// makes "any origin" safe is that the surface carries no ambient authority: the
+// requests are credential-less (the visitor token is a header the caller must
+// already hold, never a cookie), so a hostile page gains nothing it could not
+// get with curl. AllowCredentials is impossible alongside AllowAnyOrigin, and
+// that is the right way round.
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy(WidgetCors.Policy, policy => policy
+        .AllowAnyOrigin()
+        .AllowAnyHeader()
+        .AllowAnyMethod());
+});
+
 // Per-IP limit on the public auth endpoints (send/verify/signup); the
 // per-email 3-per-15-minutes limit is enforced in AuthService against the DB.
 builder.Services.AddRateLimiter(options =>
@@ -153,6 +173,8 @@ if (app.Configuration.GetValue("App:ForwardedHeaders", false))
 }
 
 app.UseRateLimiter();
+// Before auth: a preflight carries no session and must not be asked for one.
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
