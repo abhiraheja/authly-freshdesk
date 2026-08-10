@@ -1,6 +1,10 @@
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
 import { InjectionToken, type EnvironmentProviders, type Provider, makeEnvironmentProviders } from '@angular/core';
-import { apiErrorInterceptor, credentialsInterceptor } from './api/http.interceptors';
+import {
+  apiErrorInterceptor,
+  credentialsInterceptor,
+  widgetVisitorInterceptor,
+} from './api/http.interceptors';
 
 /**
  * Runtime configuration `@trackly/core` needs.
@@ -41,6 +45,8 @@ export function provideTracklyCore(config: TracklyConfig): EnvironmentProviders 
   const providers: Provider[] = [{ provide: TRACKLY_CONFIG, useValue: config }];
   return makeEnvironmentProviders([
     ...providers,
-    provideHttpClient(withInterceptors([credentialsInterceptor, apiErrorInterceptor])),
+    provideHttpClient(
+      withInterceptors([credentialsInterceptor, widgetVisitorInterceptor, apiErrorInterceptor]),
+    ),
   ]);
 }

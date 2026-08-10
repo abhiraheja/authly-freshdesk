@@ -660,9 +660,48 @@ Each is independently shippable and leaves the existing widget working.
 | 2 ✅ | Public config + session endpoints, JWT verification, contact-upsert service, ticket creation with `Channel = widget` and `RequesterId` | A widget ticket appears on the Customer Detail screen's "previous tickets" with no UI change |
 | 3 ✅ | Conversation list + thread + reply + attachments, trust rule, `widget_conversation_reads` + `unreadCount` + read receipt, SignalR per-visitor group with polling fallback | Two browsers with different visitor tokens cannot see each other's conversations — asserted by test |
 | 4 ✅ | `/widget.js` rewritten: `initChatWidget`, open/close/identify, branded launcher, postMessage handshake, back-compat path | The snippet in § 7.1 works on a plain HTML page |
-| 5 | Angular customer surface `/widget/:token` (home, details form, thread, closed section) | Four states each, brand-coloured, light |
+| 5 ✅ | Angular customer surface `/widget/:token` (home, details form, thread, closed section) | Four states each, brand-coloured, light |
 | 6 | Angular admin `/admin/widget` list + Configuration/Branding/Integration tabs with live preview; `/admin/settings/branding` route and nav entry removed (§ 4.2) | React `WidgetPage.tsx` is no longer reachable and branding is editable in exactly one place |
 | 7 | Docs | § 11 |
+
+Phase 5 shipped with `scripts/verify-widget-phase5.ps1` — 19 assertions, and
+nothing in it is stubbed: the loader is the real `widget.js`, the panel is the
+real Angular route, the API is the real API. A visitor's whole first session is
+driven through the DOM — open, fill the details form, type, send — then an agent
+replies over the API and the panel is checked for what came back. Two of the
+assertions are the ones that matter: the panel wears the **widget's** colour and
+is light whatever the visitor prefers (invariant 6), and an internal note posted
+on the same ticket never appears in it (invariant 5).
+
+Three decisions the build forced:
+
+- **The brand is applied as CSS variables, not as style bindings.** The token
+  layer stores colours as RGB channels so `bg-primary/12` can compose
+  `rgb(var(--primary) / 0.12)`; overriding `--primary` on the panel's root
+  re-brands every control inside it with no per-element binding and no
+  interpolated class name. `brandVars()` in `@trackly/core` also **computes**
+  `--primary-foreground` per brand — Trackly's white-on-indigo is unreadable on
+  an amber or lime tenant colour, and an admin should not be able to configure
+  invisible button labels.
+- **The panel does not use `resource()` for its config.** `resource.value()`
+  throws in the error state, so the idiomatic
+  `@if (value(); as x) {} @else if (error()) {}` never reaches the error branch —
+  it throws out of change detection first. On an iframe that failure mode is a
+  blank white box with no way to tell broken from loading, so the config is two
+  plain signals.
+- **Polling, not SignalR — for now.** The hub landed in phase 3 and the panel
+  still uses the documented fallback: the list every 20s (which is what feeds the
+  launcher badge, so it runs even while the panel is shut) and the open thread
+  every 10s. Adding `@microsoft/signalr` is a new runtime dependency in every
+  customer-facing bundle, and it belongs to the change that ports live chat,
+  which needs the client anyway. Until then the badge is at most twenty seconds
+  late, which is the difference the fallback exists to cover.
+
+The visitor token lives in `localStorage` keyed **per widget token**, and rides
+on `X-Trackly-Visitor` through an interceptor scoped to `/api/public/widget/`
+paths. Scoped rather than global because it is a bearer credential for exactly
+one surface, and a token that travels on requests that do not need it has more
+places to leak from.
 
 Phase 4 shipped with `scripts/verify-widget-phase4.ps1` — 43 assertions, and the
 first suite here that runs in a **real browser**. It had to: every claim is about

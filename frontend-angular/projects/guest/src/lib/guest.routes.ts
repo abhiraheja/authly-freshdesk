@@ -1,4 +1,5 @@
 import type { Routes } from '@angular/router';
+import { WidgetBridge } from './widget/widget-bridge';
 
 /**
  * Anonymous, workspace-branded surfaces. Mounted by the host at the app root,
@@ -23,4 +24,23 @@ export const guestRoutes: Routes = [
   { path: 'csat/:ticketId', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.rateSupport', from: 'frontend/src/pages/public/CsatPage.tsx', branded: true } },
   { path: 'tickets/:id', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.yourTicket', from: 'frontend/src/pages/public/GuestTicketPage.tsx', branded: true } },
   { path: 'invite/:token', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.acceptInvitation', from: 'frontend/src/pages/public/InviteAcceptPage.tsx', branded: true } },
+
+  /**
+   * The embeddable widget's panel — the document `widget.js` puts in its iframe
+   * (docs/widget-plan.md § 8.1).
+   *
+   * `token` is the widget's **public** token: it sits in the page source of every
+   * site that embeds the widget, so it identifies a widget and authorises
+   * nothing. What a visitor may read is decided by the trust rule, server-side.
+   *
+   * It provides its own {@link WidgetBridge} rather than taking a root one: the
+   * bridge holds one frame's conversation with one host page, and a root-scoped
+   * instance would outlive the panel and keep a stale parent window.
+   */
+  {
+    path: 'widget/:token',
+    providers: [WidgetBridge],
+    loadComponent: () => import('./widget/widget-panel').then((m) => m.WidgetPanel),
+    data: { titleKey: 'widget.title', branded: true },
+  },
 ];

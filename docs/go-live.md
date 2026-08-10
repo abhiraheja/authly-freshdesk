@@ -635,7 +635,14 @@ Append here as phases land, so nothing is missed later.
     sends — reinforces the **single-instance** guidance until leader election
     exists (§4).
   - No new config keys or secrets.
-- **Widget rework (`docs/widget-plan.md`, phases 1–4 landed):**
+- **Widget rework (`docs/widget-plan.md`, phases 1–5 landed):**
+  - **`/widget/:token` must be served by the SPA** like every other client-side
+    route — it is the document the loader puts in its iframe. A proxy that does
+    not fall back to `index.html` for it produces an embed whose launcher opens
+    an empty box. No new config: the URL is built from `App:FrontendBaseUrl`.
+  - **No new runtime dependency.** The panel polls (list every 20s, open thread
+    every 10s) rather than opening a socket, so the widget adds nothing to the
+    client bundle beyond its own code and needs no WebSocket path of its own.
   - **CORS.** Since phase 4 the API declares one cross-origin policy, applied to
     `/api/public/widget/*` and `/api/public/workspaces/{slug}/widget` only. It
     allows **any** origin, because `widget.js` runs on the customer's site and

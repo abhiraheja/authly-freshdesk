@@ -201,6 +201,19 @@ html:has(tk-shell) body {
   overflow: hidden;
 }
 
+/* The embedded widget panel is a document inside an iframe whose height the
+ * loader sets, so it has to fill that iframe exactly — a panel that sized to its
+ * content would leave a band of blank page under the footer, and one that
+ * overflowed would scroll the whole frame instead of the message list. Same
+ * :has() scoping and the same reason: no other route wants this. */
+html:has(tk-widget-panel),
+html:has(tk-widget-panel) body,
+html:has(tk-widget-panel) tk-root {
+  display: block;
+  height: 100%;
+  overflow: hidden;
+}
+
 body {
   background-color: rgb(var(--background));
   color: rgb(var(--foreground));

@@ -1563,5 +1563,47 @@
       "heading": "No services yet",
       "body": "An admin adds them under Settings → Catalogue. Agents then mark which ones a ticket has broken."
     }
+  },
+  "widget": {
+    "title": "Support",
+    "back": "Back",
+    "close": "Close",
+    "minimise": "Minimise",
+    "expand": "Full screen",
+    "collapse": "Exit full screen",
+    "poweredBy": "Powered by Trackly",
+    "unavailable": "This chat is unavailable",
+    "home": {
+      "continue": "Continue conversations",
+      "closed": "Closed conversations ({{count}})",
+      "newConversation": "Send us a message",
+      "unread": "{{count}} unread",
+      "emptyHeading": "No conversations yet",
+      "emptyBody": "Start one and we will reply here.",
+      "allClosedHeading": "Nothing open",
+      "allClosedBody": "Your recent conversations are below.",
+      "loadFailed": "Could not load your conversations"
+    },
+    "details": {
+      "heading": "Tell us who you are",
+      "body": "So we can reply and keep your conversations together.",
+      "name": "Name",
+      "namePlaceholder": "Your name",
+      "email": "Email",
+      "phone": "Phone",
+      "phoneHint": "Include the country code.",
+      "skip": "Skip",
+      "submit": "Submit"
+    },
+    "thread": {
+      "newHeading": "What can I help with?",
+      "newBody": "Type below and we will pick it up.",
+      "placeholder": "Message us…",
+      "composerLabel": "Your message",
+      "send": "Send",
+      "attach": "Attach a file",
+      "removeFile": "Remove file",
+      "loadFailed": "Could not load this conversation"
+    }
   }
 }

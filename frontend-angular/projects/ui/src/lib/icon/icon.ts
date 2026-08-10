@@ -70,6 +70,9 @@ export type IconName =
   | 'more-horizontal'
   | 'refresh-cw'
   | 'external-link'
+  // The widget panel's full-screen control and its way back.
+  | 'maximize-2'
+  | 'minimize-2'
   | 'arrow-left'
   | 'lock'
   | 'tag'
@@ -208,6 +211,8 @@ export type IconName =
         @case ('more-horizontal') { <circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/> }
         @case ('refresh-cw') { <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/> }
         @case ('external-link') { <path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/> }
+        @case ('maximize-2') { <polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" x2="14" y1="3" y2="10"/><line x1="3" x2="10" y1="21" y2="14"/> }
+        @case ('minimize-2') { <polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" x2="21" y1="10" y2="3"/><line x1="3" x2="10" y1="21" y2="14"/> }
         @case ('arrow-left') { <path d="m12 19-7-7 7-7"/><path d="M19 12H5"/> }
         @case ('lock') { <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/> }
         @case ('tag') { <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5" fill="currentColor"/> }
