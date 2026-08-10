@@ -3,27 +3,69 @@
 # (mitigates the BSODs) and speeds up search. Shell commands (git, dotnet,
 # npm, docker) are unaffected and can still use these paths.
 
+# --- EF Core generated migration code (TRACKED in git, unlike everything
+# else here). Each *.Designer.cs and the model snapshot is a full re-dump of
+# the schema — 30 files, 3.3 MB, larger than docs/trackly-plan.md apiece, and
+# never hand-edited. They swamp any grep for a column or table name.
+# The hand-written Up()/Down() migration bodies stay readable.
+**/Migrations/*.Designer.cs
+**/Migrations/*ModelSnapshot.cs
+
 # --- .NET build output ---
 bin/
 obj/
 .vs/
 artifacts/
 TestResults/
+packages/
 *.binlog
+*.nupkg
+*.user
+*.suo
 
-# --- Node / frontend ---
+# --- Node (both frontend/ and frontend-angular/) ---
 node_modules/
+.pnpm-store/
+.yarn/cache/
+.npm/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# --- Angular build + cache (frontend-angular/) ---
+# .angular/cache is the Angular CLI / Vite build cache — the largest generated
+# tree in the repo and pure churn. out-tsc is `ng test`/tsc emit.
+.angular/
+out-tsc/
+.nx/
+bazel-out/
+*.tsbuildinfo
+.ng-build-cache/
+
+# --- Bundler / test output (shared) ---
 dist/
 dist-ssr/
 build/
 .vite/
 coverage/
+.nyc_output/
+__screenshots__/
+playwright-report/
+test-results/
+
+# --- Stylesheet caches ---
+.sass-cache/
+*.css.map
+*.js.map
 
 # --- Version control internals (use git commands, never read directly) ---
 .git/
 
 # --- IDE / OS cruft ---
 .idea/
+.history/
+*.swp
+*.sublime-workspace
 .DS_Store
 Thumbs.db
 
