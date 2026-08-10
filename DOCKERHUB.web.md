@@ -119,8 +119,8 @@ configured from *inside* the admin UI and does not exist yet.
 
 | Variable | Default | What it is |
 |---|---|---|
-| `TRACKLY_API_URL` | `http://api:8080` | Where nginx forwards `/api`, `/hubs`, `/widget.js`. **No trailing slash** — one turns into a `proxy_pass` URI and rewrites the request path |
-| `TRACKLY_RESOLVER` | `127.0.0.11` | DNS used to re-resolve `TRACKLY_API_URL` per request (Docker's embedded resolver). Re-resolution is what keeps the proxy working after the API container restarts with a new IP. Change it if the API is not a compose service on the same network |
+| `TRACKLY_API_URL` | `http://api:8080` | Where nginx forwards `/api`, `/hubs`, `/widget.js`. **No trailing slash** — one turns into a `proxy_pass` URI and rewrites the request path. On Kubernetes use the **FQDN** (`http://trackly-api.<ns>.svc.cluster.local:8080`): nginx's `resolver` does not apply resolv.conf search domains, so a bare service name never resolves |
+| `TRACKLY_RESOLVER` | from `/etc/resolv.conf` | DNS used to re-resolve `TRACKLY_API_URL` per request — re-resolution is what keeps the proxy working after the API container restarts with a new IP. Auto-detected at start, so it is right under Docker (`127.0.0.11`) and Kubernetes (kube-dns) alike; pin it only if neither is what you want |
 | `TRACKLY_MAX_BODY_SIZE` | `30m` | Upload ceiling at the proxy. Keep it ≥ the API's attachment limit or large uploads fail with a bare `413` before the API sees them |
 
 Nothing about the app is baked in at build time — every API call is a relative

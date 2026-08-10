@@ -96,8 +96,8 @@ The `web` image takes three of its own:
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `TRACKLY_API_URL` | `http://api:8080` | Where nginx forwards `/api`, `/hubs`, `/widget.js`. **No trailing slash** — a trailing slash becomes a `proxy_pass` URI and rewrites the request path |
-| `TRACKLY_RESOLVER` | `127.0.0.11` | DNS for re-resolving `TRACKLY_API_URL` per request (Docker's embedded resolver). Change it if the API is not a compose service on the same network. Re-resolution is what keeps the proxy alive across an API container restart, which changes its IP |
+| `TRACKLY_API_URL` | `http://api:8080` | Where nginx forwards `/api`, `/hubs`, `/widget.js`. **No trailing slash** — a trailing slash becomes a `proxy_pass` URI and rewrites the request path. On Kubernetes this must be the **FQDN** — see §0.6 |
+| `TRACKLY_RESOLVER` | from `/etc/resolv.conf` | DNS for re-resolving `TRACKLY_API_URL` per request; re-resolution is what keeps the proxy alive across an API container restart, which changes its IP. Auto-detected at container start by `10-trackly-resolver.envsh`, so one image is correct under Docker (`127.0.0.11`) and Kubernetes (kube-dns). Pin it only when neither applies |
 | `TRACKLY_MAX_BODY_SIZE` | `30m` | Upload ceiling at the proxy. Keep it **≥** the API's own attachment limit or large uploads fail with a bare `413` from nginx before the API ever sees them |
 
 ### TLS
@@ -116,6 +116,41 @@ works and orchestrators get a real signal:
   runs EF migrations, and a probe that waited on the DB would restart the
   container mid-migration). Use it for liveness, not readiness.
 - Web → `GET /healthz`, served by nginx itself.
+
+---
+
+## 0.6 Deploying on Kubernetes
+
+Compose is the documented path; Kubernetes works from the same two images, and
+these five things are what differ. A reference deployment lives in the
+`saarvix-k8s` repo (`apps/trackly.yaml`, `config/trackly.yaml`,
+`gateway/Ingress-trackly-gateway.yaml`).
+
+1. **`TRACKLY_API_URL` must be the FQDN** —
+   `http://trackly-api.<namespace>.svc.cluster.local:8080`. nginx's `resolver`
+   does not apply the search domains from `/etc/resolv.conf`, so the bare service
+   name that works in Compose never resolves in-cluster. Symptom: the SPA loads
+   and every `/api` call 502s.
+2. **The resolver itself is auto-detected** from `/etc/resolv.conf`, so leave
+   `TRACKLY_RESOLVER` unset — a pinned value would hard-code a cluster IP.
+3. **`fsGroup` on the API pod must match the image's uid (1654).** Mounting a
+   volume over `/app/data` replaces the directory the image created, so without
+   `securityContext.fsGroup: 1654` the mount is root-owned and uploads fail — and
+   nothing surfaces it until someone attaches a file to a ticket.
+4. **Probes need an explicit `Host` header** if `AllowedHosts` is restricted (and
+   §6 says it should be). A kubelet probe sends the pod IP as `Host`, which host
+   filtering answers with `400` — so the pod never goes ready.
+5. **One API replica, `strategy: Recreate`.** Same singleton constraint as §4/§7C
+   (IMAP polling, announcement and SLA workers, in-process SignalR hub, no leader
+   election) — and with a ReadWriteOnce volume a RollingUpdate would deadlock
+   waiting for the old pod to release it. `trackly-web` is stateless and scales
+   freely.
+
+Route the Ingress **only** to `trackly-web`. Splitting `/api` off to the API
+Service at the Ingress would work, but it duplicates proxy rules that already
+live — and are tested — inside the web image, including the `/hubs` WebSocket
+upgrade and `/widget.js` (which the API serves at the site root, not under
+`/api`).
 
 ---
 
@@ -655,3 +690,16 @@ Append here as phases land, so nothing is missed later.
     or its `DockerDeploy` environment. Nothing else in the workflow is sensitive;
     pull requests build both images but never push.
   - Two new persistent volumes to provision and back up (§0.5).
+  - **Migrations were squashed to a single `InitialCreate`** before the first
+    production deploy, while no deployed database existed. Verified by diffing a
+    database built from the old 43-migration chain against one built from the
+    squash — tables, columns, constraints and indexes. Two deliberate deltas:
+    `ix_tickets_sla_sweep` moved from raw migration SQL into the model (it existed
+    in the database but not the model, so the squash dropped it), and 20 columns
+    lost a DB-level `DEFAULT` that only existed because `ADD COLUMN … NOT NULL`
+    requires one. See `docs/dev-setup.md` §7 for why the defaults were not
+    reinstated. **There is no upgrade path from a pre-squash database** — dev
+    boxes must be dropped and recreated.
+  - **Kubernetes:** five deployment-shape requirements that Compose hides — see
+    §0.6. All five fail quietly rather than loudly, so they are worth checking
+    against a running pod rather than assumed from the manifest.
