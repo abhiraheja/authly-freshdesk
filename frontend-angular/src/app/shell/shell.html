@@ -27,22 +27,30 @@
           <button
             type="button"
             class="nav-group-label flex w-full items-center justify-between hover:text-foreground"
-            [attr.aria-expanded]="adminOpen()"
-            (click)="toggleAdmin()"
+            [attr.aria-expanded]="isGroupOpen(group)"
+            (click)="toggleGroup(group)"
           >
-            {{ group.labelKey | transloco }}
+            <span class="flex min-w-0 items-center gap-1.5">
+              <span class="truncate">{{ group.labelKey | transloco }}</span>
+              <!-- The group's total while it is shut, so collapsing it hides the
+                   rows without hiding the fact that something is waiting in
+                   them. A closed group with no number reads as empty. -->
+              @if (!isGroupOpen(group) && groupCount(group); as total) {
+                <span class="count-pill">{{ total }}</span>
+              }
+            </span>
             <tk-icon
               name="chevron-right"
               [size]="14"
               class="transition-transform"
-              [class.rotate-90]="adminOpen()"
+              [class.rotate-90]="isGroupOpen(group)"
             />
           </button>
         } @else {
           <p class="nav-group-label">{{ group.labelKey | transloco }}</p>
         }
 
-        @if (!group.collapsible || adminOpen()) {
+        @if (isGroupOpen(group)) {
           <div class="space-y-0.5">
             @for (item of group.items; track item.labelKey) {
               <a

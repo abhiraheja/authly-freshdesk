@@ -68,8 +68,17 @@ public static class NotificationType
     /// <summary>An SLA deadline has passed. Sent once, never repeated.</summary>
     public const string SlaBreached = "sla_breached";
 
+    /// <summary>
+    /// A ticket that was blocking one of yours has ended, so yours can start.
+    ///
+    /// Sent to the blocked ticket's assignee rather than to its watchers: this is
+    /// a "you can begin now" message, and it is only actionable by the person who
+    /// would do the work. Everybody watching still sees the activity entry.
+    /// </summary>
+    public const string Unblocked = "unblocked";
+
     public static readonly string[] All =
-        [Mention, Watching, Assigned, Reply, SlaWarning, SlaBreached];
+        [Mention, Watching, Assigned, Reply, SlaWarning, SlaBreached, Unblocked];
 }
 
 /// <summary>

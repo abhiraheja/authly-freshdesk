@@ -89,6 +89,28 @@ public static class TicketActivityType
     public const string Unflagged = "unflagged";
 
     /// <summary>
+    /// The status was set because a linked duplicate was resolved, not because
+    /// somebody opened this ticket and decided.
+    ///
+    /// Its own type rather than a plain <see cref="Status"/> row: an agent
+    /// reading the log six months later needs to know that the decision was made
+    /// on another ticket, and which one.
+    /// </summary>
+    public const string StatusSynced = "status_synced";
+
+    /// <summary>Every ticket blocking this one has ended. ToLabel names the last one.</summary>
+    public const string Unblocked = "unblocked";
+
+    /// <summary>
+    /// Resolved with open tasks, a responder who never replied, or an open
+    /// blocker — and the agent went ahead anyway.
+    ///
+    /// The whole point of a soft gate is that the override is *recorded*. A
+    /// confirmation nobody can audit is a click, not accountability.
+    /// </summary>
+    public const string ResolvedWithWarnings = "resolved_with_warnings";
+
+    /// <summary>
     /// The ticket ended. Separate from <see cref="Status"/> even though a status
     /// change is what caused it, because "resolved" is the event people scan the
     /// log for and it carries the resolution note rather than the status name.

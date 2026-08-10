@@ -397,6 +397,25 @@ _These are your properties, not Trackly's: they are stored, shown and searched,
 but no SLA, automation rule or report acts on them. That is the trade for being
 able to invent them._
 
+**Reading the registers.** Admin → Registers is where the two lists are *edited*.
+Agents read them on their own pages, because "is there a spare laptop" and "is
+payments down" are support questions, not configuration ones:
+
+- **Assets** (`/dashboard/assets`) — how many you own, how many are out with
+  somebody, where they are, and who is holding the most. Below that, every asset
+  with its open ticket count and the date it last caused one. Click a row for its
+  full ticket history. Retired assets are hidden until you ask for them: they are
+  kept so old tickets still show a name, not to pad the count of what you own.
+- **Services** (`/dashboard/services`) — a status board, worst first. Every number
+  comes from open tickets, so there is no status field anybody has to remember to
+  set back to green. A service is **Down** only when a ticket says *down*; red is
+  reserved for that on purpose, because on a board where everything is amber
+  nothing is urgent. Click a service to see which tickets are reporting it, with
+  whatever the agent wrote about the impact.
+
+The sidebar count beside **Services** is how many are **down**, not how many
+exist — a total never changes and so is never read.
+
 ### 4.5 Categories
 
 **What it is.** An organising dimension for tickets (e.g. Billing, Technical).
@@ -1364,3 +1383,129 @@ sees, and it does not touch this screen.
 
 _Keep this guide updated when features change — it’s the admin-facing counterpart
 to `docs/trackly-plan.md` (design) and `docs/go-live.md` (deployment)._
+
+---
+
+## 24. Dashboards
+
+**Where:** `/dashboard` — the page everyone lands on.
+
+**One route, two views.** An agent sees themselves; an admin sees the workspace,
+with a **My work** tab one click away. Not a trust decision — they are different
+jobs. An agent needs to know what is on them; you need to know whether the desk is
+keeping up.
+
+### The agent's view
+
+Two rows, and the split matters. **"On you right now"** is actionable — every tile
+links somewhere. **"How you are doing"** is a trailing window and is feedback, not
+a to-do list; it says so under the heading, because a number with no window on it
+invites the wrong reading.
+
+Red only when non-zero. A red zero teaches people to stop reading the colour.
+
+CSAT with no ratings shows *"Not rated yet"*, never `0` — nobody rating you is not
+a rating of zero, and the two would read the same in a table.
+
+### Your view
+
+**Right now** leads with the two numbers that get worse on their own — unassigned
+and overdue — then first-reply, tasks and services down.
+
+**Services affected** is the row to read first, because it carries *how long*. A red
+row says something is wrong; *"down 3d"* says somebody has stopped noticing. The
+age turns red past a day.
+
+**How long the queue has waited** is buckets, not an average. Twenty tickets from
+this morning and one from March average out to something reassuring, and the one
+from March is the only row you need.
+
+**Agents** is one table with both kinds of number, which the hint says out loud:
+*Resolved* is the window, everything else is right now. An agent can be top of the
+table and drowning. SLA turns amber below 95% and red below 80%, so a table sorted
+by volume cannot hide somebody resolving fifty tickets late.
+
+Anybody carrying work stays on the table even having resolved nothing — that is the
+row you most need to see, and it is exactly the row a "has resolved something"
+filter would hide.
+
+**Open by department** names the blank bucket *Not routed* rather than dropping it.
+Tickets nobody has routed are the ones that go quiet.
+
+---
+
+## 25. Rewards
+
+**Where:** Admin → Rewards (`/admin/settings/rewards`).
+
+**Trackly ships no goals, deliberately.** "50 tickets a month" is heroic on a
+two-person IT desk and unambitious on a fifty-agent floor. What counts as good work
+here is your call, so the list starts empty.
+
+**Nothing extra for agents to log.** All five measures come from data Trackly
+already records: tickets resolved, first-response SLA met, resolution SLA met, CSAT,
+tasks completed. A scoreboard that needs feeding stops being true within a
+fortnight.
+
+A goal is: a name, a measure, a target, a period (week / month / quarter / once
+ever), points, and a badge colour.
+
+**Minimum tickets, for the percentage goals.** An agent who answered one ticket
+inside SLA is on 100%. Without a floor they out-rank somebody holding 96% across two
+hundred, and the scoreboard becomes an argument. Below the floor the agent shows no
+figure at all rather than a zero — "not enough has happened to say" is not the same
+as failing.
+
+**Badges are given the moment the target is reached**, not when the period ends —
+checked every 15 minutes. Once given they are permanent: the numbers underneath keep
+moving (a ticket is reopened, a rating arrives late, somebody is reassigned) and a
+badge that could be taken away by yesterday's data is not one anybody would be glad
+to receive. Raising a goal's points later does not rewrite what was already awarded.
+
+**Retire, don't delete.** Delete is only offered while nothing has earned it. After
+that, retiring takes it off the list and keeps every badge — a badge whose goal is
+gone is a trophy with the engraving rubbed off.
+
+Agents see their own progress and badges on their dashboard. You see recent badges
+and each agent's points on yours.
+
+---
+
+## 26. Customers
+
+**Where:** Workspace → Customers (`/dashboard/customers`). Agents and admins.
+
+Every person who raises a ticket, with the counts that make a row worth reading:
+total tickets, how many are open, and when they last signed in.
+
+**The number that earns this screen is "Never signed in".** A customer who has
+raised tickets and never logged in is somebody emailing the desk who does not know
+the portal exists — which is a thing you can fix. Click the tile and the list
+filters down to exactly those people. The summary counts only customers who
+actually have a ticket, because a contact somebody typed in once and never used is
+not a person who failed to sign in.
+
+**Customers are created for you.** The first time somebody emails the desk, submits
+the form, or an agent attaches a ticket to a new address, the record appears. Add
+customer is for the case where you know about somebody before they write in.
+
+Adding is get-or-create by email: adding somebody who already exists opens them
+rather than failing, and never overwrites details a colleague took the time to
+record. **The email is the identity**, which is why it is the one required field
+and why it cannot be edited afterwards — it is the address a sign-in code goes to.
+
+Search covers name, email, phone and company. Not the custom fields: those are
+workspace-defined and unindexed, and searching them would scan the whole table.
+
+Sorting: click **Customer**, **Tickets** or **Last signed in**. "Never signed in"
+sorts last under Last signed in, not first — never having signed in is not the most
+recent thing to have happened.
+
+**Deactivated customers are hidden until you ask for them.** The sidebar count and
+the list both show active customers, so the two always agree; the summary at the top
+counts everybody, because "how many customers do we have" and "who can I pick right
+now" are different questions.
+
+Clicking a row opens their profile, which is where everything about one person is
+edited — details, custom fields, photo, and their full ticket history. Nothing about
+a customer is duplicated on this screen.

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Trackly.Modules.Tickets;
 
 namespace Trackly.Api;
 
@@ -34,6 +35,15 @@ public class ApiExceptionFilter : IExceptionFilter
 
         context.Result = context.Exception switch
         {
+            // 409, not 400: the request was well formed and the answer is "confirm
+            // first". The warnings travel with it so a client that never called the
+            // preview can still put them in front of the agent instead of showing
+            // a bare error.
+            TicketWarningsException e => new ConflictObjectResult(new
+            {
+                error = e.Message,
+                warnings = e.Warnings,
+            }),
             ArgumentException e => new BadRequestObjectResult(new { error = e.Message }),
             UnauthorizedAccessException => new ObjectResult(new { error = "Forbidden." })
             {

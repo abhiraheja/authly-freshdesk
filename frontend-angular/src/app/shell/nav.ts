@@ -20,6 +20,22 @@ export interface NavGroup {
   readonly items: readonly NavItem[];
   /** The whole group collapses behind a toggle when true. */
   readonly collapsible?: boolean;
+  /**
+   * Starts closed. Only meaningful with `collapsible`.
+   *
+   * A group still opens by itself whenever one of its rows is the current route,
+   * so a bookmarked or shared link never lands on a hidden row — see
+   * `Shell.isGroupOpen`.
+   */
+  readonly collapsedByDefault?: boolean;
+  /**
+   * Opens the group for any URL under this prefix, not just an exact row match.
+   *
+   * Admin needs it: `/admin/settings/email/templates` is not the route of any row,
+   * and without the prefix the group would slam shut the moment you navigated one
+   * level deeper than the row you clicked.
+   */
+  readonly routePrefix?: string;
   readonly adminOnly?: boolean;
 }
 
@@ -45,6 +61,11 @@ export const NAV: readonly NavGroup[] = [
     items: [
       { labelKey: 'nav.items.allTickets', icon: 'ticket', route: '/dashboard/tickets', countKey: 'total' },
       { labelKey: 'nav.items.assignedToMe', icon: 'user-check', route: '/dashboard/tickets', params: { view: 'mine' }, countKey: 'assignedToMe' },
+      // Directly under Assigned to me, because it is the same question — "what is
+      // on me?" — answered in the other unit. Tickets are what you owe people;
+      // tasks are the steps you owe on them, and an agent planning their morning
+      // reads the two together.
+      { labelKey: 'nav.items.tasks', icon: 'clipboard-list', route: '/dashboard/tasks', countKey: 'myOpenTasks' },
       // The other two "needs me" views. They sit beside Assigned because they
       // answer the same question from different angles: a ticket can want your
       // attention without being yours.
@@ -58,6 +79,26 @@ export const NAV: readonly NavGroup[] = [
       // to express it — `assigneeId` only matches a specific agent. Adding the
       // row before the API can filter would give a view that silently shows the
       // wrong tickets. It lands with the API change.
+    ],
+  },
+  {
+    // ── By status ──────────────────────────────────────────────────────────
+    // Its own collapsible group rather than five more rows in Tickets above.
+    //
+    // These five are a different KIND of question. Everything in the group above
+    // is "what involves me"; this is "where is the queue", which is a thing an
+    // agent asks a few times a day and a lead asks constantly. Mixing them made
+    // one twelve-row list where the top half was personal and the bottom half was
+    // not, and the eye had to re-read it every time.
+    //
+    // Collapsed by default: an agent lives in Assigned to me, and the five status
+    // counts are a drill-down from the dashboard rather than a daily route. The
+    // shell reopens the group automatically whenever one of them is the current
+    // route, so a bookmarked `?view=pending` never lands on a hidden row.
+    labelKey: 'nav.groups.byStatus',
+    collapsible: true,
+    collapsedByDefault: true,
+    items: [
       { labelKey: 'nav.items.open', tone: 'info', route: '/dashboard/tickets', params: { view: 'open' }, countKey: 'open' },
       { labelKey: 'nav.items.pending', tone: 'warning', route: '/dashboard/tickets', params: { view: 'pending' }, countKey: 'pending' },
       { labelKey: 'nav.items.active', tone: 'primary', route: '/dashboard/tickets', params: { view: 'active' } },
@@ -70,6 +111,18 @@ export const NAV: readonly NavGroup[] = [
     items: [
       { labelKey: 'nav.items.liveChat', icon: 'messages-square', route: '/dashboard/chat' },
       { labelKey: 'nav.items.problems', icon: 'puzzle', route: '/dashboard/problems', countKey: 'openProblems' },
+      // The people, before the things: a support desk is about who is asking long
+      // before it is about what they are asking on.
+      { labelKey: 'nav.items.customers', icon: 'user-round', route: '/dashboard/customers', countKey: 'customers' },
+      // The two registers. Agent-facing, not admin-only: "is there a spare laptop"
+      // and "is payments down" are support questions, and an agent who has to ask
+      // an admin to look them up will simply not look them up.
+      //
+      // Services carries the count of how many are DOWN rather than how many exist
+      // — a total never changes and so is never read, while "2" beside Services is
+      // the one number on this rail that can interrupt somebody's morning.
+      { labelKey: 'nav.items.assets', icon: 'hard-drive', route: '/dashboard/assets', countKey: 'activeAssets' },
+      { labelKey: 'nav.items.services', icon: 'server', route: '/dashboard/services', countKey: 'servicesDown' },
       { labelKey: 'nav.items.knowledgeBase', icon: 'book-open', route: '/dashboard/kb' },
       { labelKey: 'nav.items.cannedResponses', icon: 'zap', route: '/dashboard/canned' },
     ],
@@ -77,11 +130,14 @@ export const NAV: readonly NavGroup[] = [
   {
     labelKey: 'nav.groups.admin',
     collapsible: true,
+    collapsedByDefault: true,
+    routePrefix: '/admin',
     adminOnly: true,
     items: [
       { labelKey: 'nav.items.configuration', icon: 'sliders-horizontal', route: '/admin/settings/configuration' },
       { labelKey: 'nav.items.statuses', icon: 'circle', route: '/admin/settings/statuses' },
       { labelKey: 'nav.items.catalogue', icon: 'clipboard-list', route: '/admin/settings/catalogue' },
+      { labelKey: 'nav.items.rewards', icon: 'trophy', route: '/admin/settings/rewards' },
       { labelKey: 'nav.items.ticketLayout', icon: 'panel-left-close', route: '/admin/settings/ticket-layout' },
       { labelKey: 'nav.items.analytics', icon: 'bar-chart-3', route: '/admin/analytics' },
       { labelKey: 'nav.items.announcements', icon: 'megaphone', route: '/admin/announcements' },

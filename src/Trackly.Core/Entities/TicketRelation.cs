@@ -57,6 +57,46 @@ public static class TicketRelationKind
         [Relates, Duplicates, DuplicatedBy, Blocks, BlockedBy, CausedBy, Causes];
 
     /// <summary>
+    /// The pair is the same report twice, so the two tickets end together.
+    ///
+    /// Both directions, because "A duplicates B" and "B duplicated by A" are one
+    /// fact — resolving either end resolves the other, and a rule that only fired
+    /// from the side the row happened to be written on would depend on which
+    /// agent typed it first.
+    ///
+    /// Nothing here resolves anything on its own: the agent is shown the list and
+    /// ticks what follows (see <c>TicketResolveGuard</c>). Silent propagation
+    /// would send a resolution email to customers nobody chose to answer.
+    /// </summary>
+    public static readonly string[] Duplicate = [Duplicates, DuplicatedBy];
+
+    /// <summary>
+    /// Read on a ticket, means: **this one holds the other up.** Resolving this
+    /// one is what lets the other start, so the other's assignee is told.
+    ///
+    /// <see cref="Causes"/> sits here with <see cref="Blocks"/> because the
+    /// working consequence is identical — the other ticket cannot move until this
+    /// one does. The two words differ in what they say about *why*, which is a
+    /// fact for the agent reading the link, not a second behaviour.
+    /// </summary>
+    public static readonly string[] Blocking = [Blocks, Causes];
+
+    /// <summary>
+    /// Read on a ticket, means: **this one is held up by the other.** The ticket
+    /// carries a banner while the other is open, and resolving it asks first.
+    /// </summary>
+    public static readonly string[] Blocked = [BlockedBy, CausedBy];
+
+    /// <summary>Status moves together — see <see cref="Duplicate"/>.</summary>
+    public static bool SyncsStatus(string kind) => Duplicate.Contains(kind);
+
+    /// <summary>This ticket holds the other up.</summary>
+    public static bool BlocksOther(string kind) => Blocking.Contains(kind);
+
+    /// <summary>This ticket is held up by the other.</summary>
+    public static bool IsBlockedByOther(string kind) => Blocked.Contains(kind);
+
+    /// <summary>
     /// What this relationship is called from the other ticket's point of view.
     ///
     /// This is why only one row is stored: the inverse is a pure function of the

@@ -22,6 +22,7 @@ namespace Trackly.Api.Controllers;
 [Authorize(Policy = "AgentOrAdmin")]
 public class TicketDetailController(
     TicketRelationService relations,
+    TicketResolveGuard guard,
     TicketTaskService tasks,
     AssetService assets,
     TicketFieldService fields) : ControllerBase
@@ -58,6 +59,21 @@ public class TicketDetailController(
     [HttpDelete("relations/{relationId:guid}")]
     public async Task<IActionResult> DeleteRelation(Guid id, Guid relationId, CancellationToken ct)
         => await relations.DeleteAsync(User.GetActor(), id, relationId, ct) ? NoContent() : NotFound();
+
+    /// <summary>
+    /// What resolving this ticket would mean: the duplicates that can end with it,
+    /// and the work still outstanding on it.
+    ///
+    /// Read by the resolve dialog when it opens, so the agent sees the whole
+    /// picture before typing a resolution rather than being told afterwards. The
+    /// same facts are re-checked by <c>PATCH /api/tickets/{id}</c> — this endpoint
+    /// is the courtesy, that one is the rule.
+    /// </summary>
+    [HttpGet("resolve-preview")]
+    public async Task<IActionResult> ResolvePreview(Guid id, CancellationToken ct)
+        => await guard.PreviewAsync(User.GetActor(), id, ct) is { } preview
+            ? Ok(preview)
+            : NotFound();
 
     // ---- Tasks ----------------------------------------------------------------
 

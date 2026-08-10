@@ -1800,6 +1800,201 @@ offered Delete is not a convenience.
 | DELETE | `/api/admin/sso/{id}` | Session | admin — remove one; same refusal |
 | GET    | `/api/problems` | Session | agent, admin |
 | POST   | `/api/announcements` | Session | admin |
+| GET    | `/api/tickets/{id}/resolve-preview` | Session | agent/admin — duplicates that can follow, plus outstanding work |
+| GET    | `/api/tasks` | Session | agent/admin — tasks across every ticket (`assignee=me\|none\|<id>`) |
+| GET    | `/api/assets/summary` | Session | agent/admin — the register in aggregate |
+| GET    | `/api/assets/{id}/tickets` | Session | agent/admin — one asset's ticket history |
+| GET    | `/api/services/{id}/tickets` | Session | agent/admin — open tickets affecting one service |
+
+---
+
+### Ticket relationships that do something
+
+A link between two tickets used to be a label. Two of the seven kinds now carry a
+consequence, and the other five deliberately do not — `relates` exists precisely
+so there is a way to say "a human should know these are connected" without
+signing up for behaviour.
+
+`TicketRelationKind` holds the three sets, and `relationEffect()` in
+`@trackly/core` mirrors them for the UI. The mirror is intentional: the consequence
+has to be explained at the moment somebody picks a kind, which is the only moment
+they are thinking about it, while the server is what enforces it.
+
+**Duplicates end together, but never silently.** `duplicates` / `duplicated_by`
+mean the same report arrived twice. Resolving one offers to resolve the others —
+`PATCH /api/tickets/{id}` takes `alsoResolve: [id…]`, and every id in it is
+re-checked against the ticket's own duplicate links before anything is written.
+The set offered is the **transitive** closure over duplicate links, capped at
+`TicketResolveGuard.MaxCascade` (25) and bounded at six hops so a cycle
+terminates: three customers reporting one outage get linked in a chain, not a
+star, and only offering the direct neighbours leaves the far end open forever.
+
+Each cascaded ticket goes through `UpdateAsync` as a real resolve — its SLA stops,
+its automation runs, its customer is told, its CSAT survey goes out. A shortcut
+that wrote `status` and `resolved_at` would produce tickets that look resolved and
+behave as though they never were, and the difference would surface weeks later in
+the SLA report. The resolution note, link and customer summary are copied; the
+**time is not** — those minutes are the agent's work on the ticket they were
+looking at, and booking them against every duplicate multiplies one afternoon into
+five. Each carries a `status_synced` activity row naming the ticket the decision
+was made on.
+
+**Blocks and causes are an ordering, and the ticket says so.** Read on a ticket,
+`blocks` / `causes` mean it holds another up; `blocked_by` / `caused_by` mean it is
+held up. The blocked ticket carries a banner while its blocker is open, resolving
+it goes through the gate below, and the blocker ending writes an `unblocked`
+activity row on everything that was waiting plus a bell notification to each
+assignee — the assignee only, because "you can begin now" is a message just one
+person can act on.
+
+`causes` sits with `blocks` because the working consequence is identical. The two
+words differ in what they say about *why*, which is a fact for the agent reading
+the link rather than a second behaviour to implement.
+
+**A ticket number is a search term.** `GET /api/tickets?search=` accepts
+`#019fea6e` — a leading `#` is read as "this is a number" and matches ids only,
+while a bare hex string of four or more digits matches ids *as well as* subjects.
+The match is a uuid **range**, not `id::text LIKE`, so it uses the primary-key
+index instead of scanning the workspace: `TicketNumber.ToIdRange` builds the pair
+of bounds, and it is sound because PostgreSQL compares `uuid` byte-by-byte and the
+canonical hex form is those bytes in order. (.NET's own `Guid.CompareTo` is *not*
+that order — nothing depends on it, the comparison happens in the database.)
+
+### The resolve gate — accountability, not obstruction
+
+`TicketResolveGuard` answers "is this ticket actually finished?" with three facts:
+open tasks, responders who never wrote anything, and blockers still open. Any of
+them and `PATCH /api/tickets/{id}` refuses with **409** and the list unless the
+caller sends `acknowledgeWarnings: true` — at which point the override is written
+to the activity log as `resolved_with_warnings` with the agent's name and what was
+bypassed.
+
+Soft, on purpose. A hard refusal is worse than nothing: the escape from "this
+ticket cannot be closed because of a checklist item somebody added in March" is to
+delete the checklist item, which destroys the record the gate existed to keep. A
+recorded override keeps it.
+
+"Responded" means **any** comment that responder wrote on the ticket, an internal
+note included. Somebody pulled in to look at a router and reporting back
+internally has done the thing they were added for; demanding a public reply would
+demand they write to the customer, which is the assignee's job. It is read off
+`comments` rather than a flag, so there is no second place that can disagree.
+
+`GET /api/tickets/{id}/resolve-preview` returns the same facts plus the
+duplicates, so the dialog shows everything before the agent types a resolution
+rather than after. That endpoint is the courtesy; the 409 is the rule.
+
+### Tasks, assets and services as their own destinations
+
+Three things existed only inside a ticket and were therefore invisible.
+
+**`/dashboard/tasks`** — every task assigned to you, across every ticket, with
+`?assignee=me|all|none` and `?done=1` in the URL. `assignee=me` resolves to the
+caller server-side, so it cannot be pointed at somebody else by editing the query
+string; a real agent id or `all` shows the team, which is a legitimate question
+here in a way "whose mentions?" never is — a task is work the workspace assigned,
+not a private bookmark. Ticking a box calls the ticket's own task endpoint, so a
+task completed here is indistinguishable from one completed on the ticket, which
+is the only way the resolve gate can be trusted. Tasks on resolved tickets are
+hidden by default: they are history.
+
+**`/dashboard/assets`** — the register plus what it has cost. The summary is an
+audit answer (how many, how many are out, where, who holds the most); the table is
+a diagnosis (which machine keeps coming back). Admin's Catalogue screen still owns
+*editing*; this is agent-facing because "is there a spare laptop" and "has this
+printer done this before" are support questions, and an agent who must ask an admin
+will not ask.
+
+**`/dashboard/services`** — a status board ordered worst-first, not the admin's
+sort order. Every number is derived from open tickets, so there is no separate
+"service status" anybody has to remember to set back to green.
+`BusinessServiceDto.WorstLevel` is the **worst** impact any open ticket reports,
+compared through a rank rather than as text (`degraded` sorts before `down`
+alphabetically, so `MIN` on the string answers the wrong question). Danger is
+reserved for `down`: on a board where everything is amber, nothing is urgent.
+
+The ticket detail carries the counts for all of this — `relations`, `assetCount`,
+`impactedServiceCount`, `downServiceCount`, `openTaskCount`,
+`pendingResponderCount` — so the tab badges and the blocked-by banner are right on
+first paint. A count that arrives a round trip later is a badge nobody was looking
+at when it mattered. All of it is null or zero for a non-agent caller
+(invariant 5).
+
+**No migration.** Everything above is DTOs, queries and endpoints over the
+existing schema; `ticket_relations`, `ticket_tasks`, `ticket_responders`,
+`ticket_assets` and `ticket_impacted_services` already had the columns and the
+indexes these queries need.
+
+### Two dashboards behind one route
+
+`/dashboard` serves an admin the workspace and an agent themselves. Not because an
+agent is not trusted with the numbers — because they are different jobs. An agent
+needs to know what is on them; a lead needs to know whether the desk is keeping up.
+One screen serving both is neither, and a second sidebar row for "the other
+dashboard" is a row most people never click.
+
+An admin is also an agent who works tickets, so they get **tabs** (Workspace ·
+My work) rather than a choice made for them. The panels are separate components
+inside `@trackly/dashboard` and are rendered through `@switch`, not toggled with
+`hidden`: both call the analytics API, and paying for the workspace aggregate to
+render a tab nobody opened is the kind of cost that only shows up once the
+workspace is large.
+
+**The permission split is why there are two endpoints.**
+`GET /api/dashboard/analytics` is admin-only — it carries every colleague's
+response times and CSAT, which is management information.
+`GET /api/dashboard/me` returns one agent's own figures; `agent=` on it is honoured
+for an **admin only**, checked in the controller because it is a question about the
+caller's role. Without that check it would be a way for any agent to read a
+colleague's numbers by editing a query string.
+
+**Both halves of the picture on one screen.** `AnalyticsOverview` carries a
+trailing window *and* the state of the desk right now, because those are the two
+questions an admin has and separating them means nobody reads them together. The
+"right now" half is its own query on purpose: the window filter excludes anything
+old and still open, and a ticket raised four months ago and never answered is the
+most important row on the screen and appears in no trailing window.
+
+Queue age is reported as **buckets**, not an average. Twenty tickets from this
+morning and one from March average out to something reassuring, and the one from
+March is the only row anybody needs to know about.
+
+### Reward goals — configurable, derived, recorded
+
+`reward_goals` + `agent_reward_awards`. **Trackly ships no goals**: "50 tickets a
+month" is heroic on a two-person desk and unambitious on a fifty-agent floor, so a
+built-in set would be shipping somebody else's opinion of the team's job.
+
+Five metrics, and the constraint that picked them is that every one is **already
+recorded for another reason** — resolved counts, the SLA stamps, CSAT ratings,
+completed tasks. The moment a metric needs its own bookkeeping the scoreboard starts
+disagreeing with the tickets, and then nobody trusts either.
+
+**Progress is computed; awards are recorded.** The current period is measured live
+on every read, so an agent watching their dashboard sees the counter move. Once a
+target is met the award is *written* and never recomputed: the data underneath keeps
+shifting — a ticket is reopened, a rating arrives a week late, an agent is
+reassigned — and a badge that yesterday's data could take away is not one anybody
+would be glad to receive. `points` is snapshotted onto the award, so raising a
+goal's value later does not rewrite what somebody was given last quarter.
+
+`RewardWorker` sweeps every fifteen minutes. **The unique index on
+(goal, agent, period_key) is the idempotency**: the sweep recomputes the whole
+current period each time, and without it August's gold would be handed out four
+times an hour forever. That also makes it safe on every API instance — unlike the
+IMAP poller, this needs no single-instance constraint. A missed tick is picked up by
+the next one because the same period is still being measured, and an award is
+written the moment the target is reached rather than when the month ends, which is
+the only version of this that feels like anything.
+
+Rate metrics carry a **minimum sample**, and it is what stops the scoreboard being
+nonsense: an agent who answered one ticket inside SLA is on 100% attainment, and
+without a floor they would out-rank somebody holding 96% across two hundred. Below
+the floor the value is **null, not zero** — "not enough has happened to say" and
+"failing" are different facts and would otherwise read the same.
+
+Deleting a goal that has awarded anything is refused with 409 and "retire it
+instead": a badge whose goal is gone is a trophy with the engraving rubbed off.
 
 ---
 

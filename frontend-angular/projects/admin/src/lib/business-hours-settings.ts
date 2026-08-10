@@ -118,7 +118,7 @@ interface DayRow {
                     tkInput
                     inset
                     inputSize="sm"
-                    class="w-24"
+                    class="input-time"
                     [attr.aria-label]="startLabel(row.day)"
                     [ngModel]="row.start"
                     (ngModelChange)="setTime(row.day, 'start', $event)"
@@ -128,7 +128,7 @@ interface DayRow {
                     tkInput
                     inset
                     inputSize="sm"
-                    class="w-24"
+                    class="input-time"
                     [attr.aria-label]="endLabel(row.day)"
                     [ngModel]="row.end"
                     (ngModelChange)="setTime(row.day, 'end', $event)"

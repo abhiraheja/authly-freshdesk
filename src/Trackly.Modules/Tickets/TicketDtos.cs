@@ -114,7 +114,35 @@ public record TicketDetailDto(
     UserSummaryDto? ResolvedBy,
     DateTime? ResolvedAt,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+
+    // ── What else is attached, for the agent opening the ticket ───────────────
+    // All agent-facing, and all on the detail rather than behind their own
+    // endpoints for one reason: they decide what the screen looks like before the
+    // agent has clicked anything. A count that arrives a round trip later is a tab
+    // label and a banner that appear a moment late, which reads as the page
+    // finishing badly rather than as information.
+    //
+    // Appended rather than slotted in beside the fields they relate to, because
+    // this record is built positionally: inserting in the middle silently shifts
+    // every argument after it past its parameter.
+    //
+    /// <summary>
+    /// Links to other tickets, and which of them are holding this one up. Null on
+    /// customer surfaces: which other tickets this resembles is internal, and the
+    /// subjects usually belong to other customers (invariant 5).
+    /// </summary>
+    TicketRelationSummaryDto? Relations,
+    /// <summary>Machines this ticket is about — the number on the Assets tab.</summary>
+    int AssetCount,
+    /// <summary>Services this ticket has broken.</summary>
+    int ImpactedServiceCount,
+    /// <summary>How many of those are fully down rather than degraded — the urgent number.</summary>
+    int DownServiceCount,
+    /// <summary>Checklist items still open. Shown on the tab, and warned about on resolve.</summary>
+    int OpenTaskCount,
+    /// <summary>Responders who have not written anything on this ticket yet.</summary>
+    int PendingResponderCount);
 
 /// <summary>Work elsewhere that this ticket is about. Agent-facing.</summary>
 public record TicketLinkDto(
@@ -230,7 +258,29 @@ public record UpdateTicketRequest(
     string? ResolutionSummary = null,
     // Logged in the same request as the resolution rather than by a second call,
     // so a ticket can never end up resolved with its time entry lost in between.
-    int? TimeSpentMinutes = null);
+    int? TimeSpentMinutes = null,
+
+    /// <summary>
+    /// Linked duplicates to resolve alongside this one — the boxes the agent
+    /// ticked in the resolve dialog.
+    ///
+    /// Opt-in, never automatic. Each id is another customer who receives a
+    /// resolution email, so the decision to send it belongs to a person. Every id
+    /// is re-checked server-side against the duplicate links of this ticket:
+    /// pointing this at an arbitrary ticket must not close it.
+    /// </summary>
+    IReadOnlyList<Guid>? AlsoResolve = null,
+
+    /// <summary>
+    /// The caller has seen the open tasks, the responders who never replied and
+    /// any open blocker, and is going ahead regardless.
+    ///
+    /// Without it a resolve that would leave work outstanding is refused with 409
+    /// and the list. With it, the override is recorded in the activity log — that
+    /// record is the entire point of the gate, so this must never be defaulted to
+    /// true anywhere.
+    /// </summary>
+    bool AcknowledgeWarnings = false);
 
 /// <param name="BodyFormat">
 /// "html" for the rich composer, anything else (including absent) for plain

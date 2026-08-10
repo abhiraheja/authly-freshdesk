@@ -31,6 +31,8 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<TicketField> TicketFields => Set<TicketField>();
     public DbSet<TicketFieldValue> TicketFieldValues => Set<TicketFieldValue>();
     public DbSet<TicketPin> TicketPins => Set<TicketPin>();
+    public DbSet<RewardGoal> RewardGoals => Set<RewardGoal>();
+    public DbSet<AgentRewardAward> AgentRewardAwards => Set<AgentRewardAward>();
     public DbSet<BusinessHours> BusinessHours => Set<BusinessHours>();
     public DbSet<BusinessHourDay> BusinessHourDays => Set<BusinessHourDay>();
     public DbSet<BusinessHoliday> BusinessHolidays => Set<BusinessHoliday>();
@@ -317,6 +319,46 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             // Cascade: a pin is one person's bookmark and means nothing without
             // them. Unlike a time entry it is not a record of work.
             e.HasOne(p => p.Agent).WithMany().HasForeignKey(p => p.AgentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<RewardGoal>(e =>
+        {
+            e.ToTable("reward_goals");
+            // The admin's own order, then name — the same shape as every other
+            // workspace-configured list.
+            e.HasIndex(g => new { g.WorkspaceId, g.SortOrder });
+            e.Property(g => g.Name).HasMaxLength(120);
+            e.Property(g => g.Description).HasMaxLength(500);
+            e.Property(g => g.Metric).HasMaxLength(40);
+            e.Property(g => g.Period).HasMaxLength(20);
+            e.Property(g => g.Tier).HasMaxLength(20);
+            e.HasOne(g => g.Workspace).WithMany().HasForeignKey(g => g.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AgentRewardAward>(e =>
+        {
+            e.ToTable("agent_reward_awards");
+            // **This index is the idempotency.** The evaluation sweep runs on a
+            // timer and recomputes the whole current period every time; without a
+            // unique constraint on the triple it would hand out August's gold once
+            // an hour, forever.
+            e.HasIndex(a => new { a.GoalId, a.AgentId, a.PeriodKey }).IsUnique();
+            // "What has this agent earned", newest first — the badge row on a
+            // dashboard, and the only query that does not start from a goal.
+            e.HasIndex(a => new { a.AgentId, a.AwardedAt });
+            e.Property(a => a.PeriodKey).HasMaxLength(20);
+            e.HasOne(a => a.Workspace).WithMany().HasForeignKey(a => a.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Cascade from the goal: deleting a goal retracts its badges, which is
+            // the honest outcome — a badge for a target nobody can look up is a
+            // trophy with the engraving rubbed off. Retiring the goal (IsActive
+            // false) is the move that keeps the history, and the admin screen
+            // steers there.
+            e.HasOne(a => a.Goal).WithMany().HasForeignKey(a => a.GoalId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(a => a.Agent).WithMany().HasForeignKey(a => a.AgentId)
                 .OnDelete(DeleteBehavior.Cascade);
         });
 

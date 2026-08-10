@@ -127,6 +127,53 @@ export interface CustomerDetail extends Customer {
   openTickets: number;
 }
 
+/**
+ * One row of the Customers list.
+ *
+ * `lastLoginAt` null is the interesting case, not a missing value: a customer with
+ * tickets who has never signed in is somebody emailing the desk who does not know
+ * the portal exists.
+ */
+export interface CustomerRow {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  company: string | null;
+  location: string | null;
+  isActive: boolean;
+  createdAt: string;
+  /** Null means they have never signed in. */
+  lastLoginAt: string | null;
+  avatarUrl: string | null;
+  totalTickets: number;
+  openTickets: number;
+  /** Null when they have never raised one. */
+  lastTicketAt: string | null;
+}
+
+export interface CustomerListParams {
+  search?: string;
+  /** `yes` · `no` · omitted for both. */
+  signedIn?: string;
+  includeInactive?: boolean;
+  /** `newest` (default) · `name` · `tickets` · `lastSeen`. */
+  sort?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** Counted over every customer, active or not. */
+export interface CustomerSummary {
+  total: number;
+  active: number;
+  signedIn: number;
+  /** Never signed in AND has at least one ticket — the number worth acting on. */
+  neverSignedInWithTickets: number;
+  withOpenTickets: number;
+  newThisMonth: number;
+}
+
 export interface CustomerBody {
   email?: string;
   name?: string;
@@ -267,6 +314,25 @@ export interface TicketDetail extends Omit<TicketSummary, 'commentCount'> {
   resolutionSummary: string | null;
   resolvedBy: UserSummary | null;
   resolvedAt: string | null;
+
+  /**
+   * What else is attached, so the screen can be right on first paint.
+   *
+   * All agent-facing, and all sent with the ticket rather than fetched per tab:
+   * these decide the tab counts and whether the "blocked by" banner shows, which
+   * are things the agent should see before they click, not after.
+   *
+   * `relations` is null on a customer surface — which other tickets this resembles
+   * is internal, and their subjects usually belong to other customers.
+   */
+  relations: TicketRelationSummary | null;
+  assetCount: number;
+  impactedServiceCount: number;
+  /** How many of those services are fully down rather than degraded. */
+  downServiceCount: number;
+  openTaskCount: number;
+  /** Responders who have not written anything on this ticket yet. */
+  pendingResponderCount: number;
 }
 
 /**
@@ -293,19 +359,95 @@ export const RELATION_KINDS: readonly RelationKind[] = [
   'causes',
 ];
 
+/**
+ * What a kind actually *does*, as three sets rather than seven cases.
+ *
+ * Mirrors `TicketRelationKind` on the server, and the mirror is deliberate: the
+ * UI has to explain the consequence at the moment somebody picks a kind — that is
+ * the only moment they are thinking about it — while the server is what enforces
+ * it. Neither can be derived from the other at runtime, so they are kept side by
+ * side and both named after the same three ideas.
+ *
+ * `relates` is in none of them. It is the kind for "a human should know these are
+ * connected", and giving it behaviour would make the vague, safe choice the
+ * dangerous one.
+ */
+export const RELATION_SYNCS_STATUS: readonly string[] = ['duplicates', 'duplicated_by'];
+/** Read on a ticket: this one holds the other up. */
+export const RELATION_BLOCKS_OTHER: readonly string[] = ['blocks', 'causes'];
+/** Read on a ticket: this one is held up by the other. */
+export const RELATION_BLOCKED_BY_OTHER: readonly string[] = ['blocked_by', 'caused_by'];
+
+/**
+ * Which of the three consequences a kind carries — for the one-line hint under
+ * the picker, and the icon on each row.
+ *
+ * A single string rather than three booleans because a kind has exactly one
+ * effect, and a shape that can express "syncs and blocks" would invite a UI that
+ * has to decide what that looks like.
+ */
+export type RelationEffect = 'sync' | 'blocks' | 'blocked' | 'none';
+
+export function relationEffect(kind: string): RelationEffect {
+  if (RELATION_SYNCS_STATUS.includes(kind)) return 'sync';
+  if (RELATION_BLOCKS_OTHER.includes(kind)) return 'blocks';
+  if (RELATION_BLOCKED_BY_OTHER.includes(kind)) return 'blocked';
+  return 'none';
+}
+
 export interface TicketRelation {
   id: string;
   kind: string;
   /** The OTHER ticket — never the one you are looking at. */
   ticketId: string;
   subject: string;
+  /** The workspace status VALUE. Never switch on it — see statusCategory. */
   status: string;
+  /** What the workspace calls that status. Render this. */
+  statusName: string;
   statusCategory: string;
   priority: string;
   createdBy: UserSummary | null;
   createdAt: string;
   /** True when the row was written on the other ticket and read backwards here. */
   mirrored: boolean;
+}
+
+/**
+ * Another ticket, described just far enough to decide something about it — a
+ * banner row, a warning, a checkbox in the resolve dialog.
+ *
+ * Not a `TicketSummary`: none of the tags, SLA stamps or pins on one mean
+ * anything in a list of "these three are the same issue".
+ */
+export interface LinkedTicket {
+  id: string;
+  subject: string;
+  status: string;
+  statusName: string;
+  statusCategory: string;
+  priority: string;
+  assignee: UserSummary | null;
+  createdAt: string;
+}
+
+/**
+ * The links on a ticket, as the detail screen needs them before the agent has
+ * clicked anything: how many there are, and which are holding it up.
+ *
+ * Arrives with the ticket rather than from its own endpoint so the banner and the
+ * tab count are there on first paint. A count that lands a round trip later reads
+ * as the page finishing badly.
+ */
+export interface TicketRelationSummary {
+  /** Every link, whatever the kind — the number on the Related tab. */
+  total: number;
+  /** How many of them say "same issue". */
+  duplicateCount: number;
+  /** Open tickets holding this one up. Non-empty means the banner shows. */
+  blockers: LinkedTicket[];
+  /** Open tickets this one is holding up — who starts moving when it ends. */
+  blocking: LinkedTicket[];
 }
 
 /** A group of tickets with one underlying cause. Agent-facing. */
@@ -349,7 +491,56 @@ export interface Asset {
   assignedTo: UserSummary | null;
   notes: string | null;
   isActive: boolean;
+  /** Every ticket ever raised about it — its history. */
   ticketCount: number;
+  /** Tickets about it that are still going — its state today. */
+  openTicketCount: number;
+  /** When it was last the subject of one. Null means never, which is good news. */
+  lastTicketAt: string | null;
+}
+
+/**
+ * The register in aggregate — what the workspace owns, what is out with somebody,
+ * and where it all is.
+ *
+ * An audit answer, not a list: "what have we handed out and to whom" cannot be
+ * read off two hundred rows by scrolling them.
+ */
+export interface AssetSummary {
+  total: number;
+  assigned: number;
+  /** On the shelf — the number that answers "what can I give somebody". */
+  unassigned: number;
+  /** Distinct assets named on an unfinished ticket right now. */
+  inTrouble: number;
+  byKind: AssetBucket[];
+  byLocation: AssetBucket[];
+  /** Who is holding the most, largest first. */
+  topHolders: AssetHolder[];
+}
+
+/** `value` null or empty means that column was never filled in. */
+export interface AssetBucket {
+  value: string | null;
+  count: number;
+}
+
+export interface AssetHolder {
+  id: string;
+  name: string;
+  count: number;
+}
+
+/** One ticket in an asset's history. Deliberately thin — this is a drill-down. */
+export interface AssetTicket {
+  id: string;
+  subject: string;
+  status: string;
+  statusName: string;
+  statusCategory: string;
+  priority: string;
+  assignee: UserSummary | null;
+  createdAt: string;
 }
 
 export interface TicketAsset {
@@ -374,6 +565,30 @@ export interface BusinessService {
   isActive: boolean;
   sortOrder: number;
   openTicketCount: number;
+  /**
+   * The worst impact any open ticket reports, or null when nothing is wrong.
+   *
+   * The WORST rather than the newest: a service with four "degraded" reports and
+   * one "down" is down. Colour the row by this; `openTicketCount` is how many
+   * people are saying it.
+   */
+  worstLevel: string | null;
+}
+
+/** One open ticket saying a service is affected — the drill-down from the board. */
+export interface ServiceTicket {
+  id: string;
+  subject: string;
+  status: string;
+  statusName: string;
+  statusCategory: string;
+  priority: string;
+  assignee: UserSummary | null;
+  /** How badly THIS ticket says the service is affected. */
+  level: string;
+  /** The agent's own words, if they wrote any. */
+  impact: string | null;
+  addedAt: string;
 }
 
 export type ImpactLevel = 'down' | 'degraded' | 'minor';
@@ -576,6 +791,20 @@ export interface DashboardStats {
   mentioningMe: number;
   /** Tickets the signed-in agent watches. */
   watchedByMe: number;
+  /**
+   * The caller's open tasks, on tickets that are still going. The third "needs
+   * me" number, and the only one that is work rather than reading.
+   */
+  myOpenTasks: number;
+  /** Active customers — the sidebar count beside Customers. */
+  customers: number;
+  /** Assets on the register that are still in service. */
+  activeAssets: number;
+  /**
+   * Services with at least one open ticket saying they are fully down. Distinct
+   * services, not reports — five tickets about one outage is one service down.
+   */
+  servicesDown: number;
 }
 
 /** What the list can be sorted by. `updated` is the default. */
@@ -695,6 +924,102 @@ export interface UpdateTicketBody {
   resolutionSummary?: string;
   /** Logged against the ticket in the same request as the resolution. */
   timeSpentMinutes?: number;
+
+  /**
+   * Linked duplicates to resolve alongside this one — the boxes the agent ticked.
+   *
+   * Never sent automatically. Each id is another customer who receives a
+   * resolution email, so somebody has to have chosen it. The server re-checks
+   * every id against this ticket's duplicate links.
+   */
+  alsoResolve?: string[];
+
+  /**
+   * The agent has seen the open tasks, the responders who never replied and any
+   * open blocker, and is going ahead.
+   *
+   * Without it the API answers 409 and returns the warnings. Never set it blind —
+   * the whole point is that the override is a decision somebody made, and it is
+   * written into the activity log with their name on it.
+   */
+  acknowledgeWarnings?: boolean;
+}
+
+/**
+ * What resolving a ticket would mean, read when the dialog opens.
+ *
+ * One round trip for both halves, because they are one decision: "is this
+ * actually finished, and does anything else finish with it".
+ */
+export interface ResolvePreview {
+  /** Open tickets that say "same issue" — offered as ticked boxes. */
+  duplicates: LinkedTicket[];
+  /** True when there are more duplicates than one resolve will carry. */
+  moreDuplicates: boolean;
+  warnings: ResolveWarnings;
+}
+
+/**
+ * Why a resolve should pause. All three empty means nothing is outstanding, and
+ * the dialog must then show no warning at all — silence is the common case.
+ */
+export interface ResolveWarnings {
+  openTasks: OpenTask[];
+  /** Responders who have not written anything on the ticket. */
+  pendingResponders: PendingResponder[];
+  /** Tickets still holding this one up. */
+  openBlockers: LinkedTicket[];
+}
+
+export interface OpenTask {
+  id: string;
+  title: string;
+  assignee: UserSummary | null;
+  dueAt: string | null;
+}
+
+export interface PendingResponder {
+  agent: UserSummary;
+  /** What they were added to do, if whoever added them said. */
+  role: string | null;
+}
+
+/** True when there is anything at all to confirm. */
+export function hasWarnings(warnings: ResolveWarnings | null | undefined): boolean {
+  if (!warnings) return false;
+  return (
+    warnings.openTasks.length > 0 ||
+    warnings.pendingResponders.length > 0 ||
+    warnings.openBlockers.length > 0
+  );
+}
+
+/**
+ * A task seen from the Tasks screen rather than from inside a ticket, so it
+ * carries enough of its ticket to be actionable without opening it.
+ */
+export interface AgentTask {
+  id: string;
+  title: string;
+  assignee: UserSummary | null;
+  dueAt: string | null;
+  completedAt: string | null;
+  completedBy: UserSummary | null;
+  createdAt: string;
+  ticketId: string;
+  ticketSubject: string;
+  ticketStatus: string;
+  ticketStatusName: string;
+  ticketStatusCategory: string;
+  ticketPriority: string;
+}
+
+export interface TaskListParams {
+  /** An agent id, `me`, `none` for unassigned, or omitted for the whole team. */
+  assignee?: string;
+  includeDone?: boolean;
+  /** Tasks left behind on resolved tickets. Off by default — they are history. */
+  includeFinishedTickets?: boolean;
 }
 
 @Injectable({ providedIn: 'root' })
@@ -801,6 +1126,22 @@ export class TicketsApi {
   /** Workspace members, for the requester picker. */
   users(role?: string): Promise<UserSummary[]> {
     return this.api.get<UserSummary[]>('/api/users', role ? { role } : {});
+  }
+
+  /**
+   * A page of customers, with ticket counts — the Customers screen.
+   *
+   * Deliberately not `users('customer')`: that one fills a picker (five columns,
+   * active only, no paging, no counts) and cannot answer "how many are there" or
+   * "which of them ever signed in" without pulling the whole table to the client.
+   */
+  customers(params: CustomerListParams = {}): Promise<Paged<CustomerRow>> {
+    return this.api.get<Paged<CustomerRow>>('/api/customers', params as QueryParams);
+  }
+
+  /** Counted over EVERY customer, active or not — unlike the list, which hides inactive. */
+  customerSummary(): Promise<CustomerSummary> {
+    return this.api.get<CustomerSummary>('/api/customers/summary');
   }
 
   /**
@@ -1030,6 +1371,30 @@ export class TicketsApi {
     return this.api.delete<void>(`/api/tickets/${ticketId}/relations/${relationId}`);
   }
 
+  /**
+   * What resolving this ticket would mean — the duplicates that can end with it,
+   * and the work still outstanding.
+   *
+   * Read when the resolve dialog opens. `PATCH /api/tickets/{id}` re-checks the
+   * same facts and answers 409 if they were not acknowledged, so skipping this
+   * call degrades to a worse experience rather than to a bypassed rule.
+   */
+  resolvePreview(ticketId: string): Promise<ResolvePreview> {
+    return this.api.get<ResolvePreview>(`/api/tickets/${ticketId}/resolve-preview`);
+  }
+
+  // ── Tasks across every ticket ─────────────────────────────────────────────
+
+  /**
+   * One agent's whole checklist, or the team's.
+   *
+   * The per-ticket `ticketTasks` answers "what is left on this one"; this answers
+   * "what is left for me", which is the question somebody starting their day has.
+   */
+  tasks(params: TaskListParams = {}): Promise<AgentTask[]> {
+    return this.api.get<AgentTask[]>('/api/tasks', params as QueryParams);
+  }
+
   // ── Tasks ─────────────────────────────────────────────────────────────────
 
   ticketTasks(ticketId: string): Promise<TicketTask[]> {
@@ -1159,8 +1524,28 @@ export class TicketsApi {
     return this.api.delete<void>(`/api/assets/${id}`);
   }
 
+  /** The register in aggregate: how many, how many are out, and where. */
+  assetSummary(): Promise<AssetSummary> {
+    return this.api.get<AssetSummary>('/api/assets/summary');
+  }
+
+  /** Every ticket ever raised about one asset — the drill-down behind its count. */
+  assetTickets(id: string): Promise<AssetTicket[]> {
+    return this.api.get<AssetTicket[]>(`/api/assets/${id}/tickets`);
+  }
+
   services(includeInactive = false): Promise<BusinessService[]> {
     return this.api.get<BusinessService[]>('/api/services', { includeInactive });
+  }
+
+  /**
+   * Open tickets saying a service is affected, worst impact first.
+   *
+   * `includeFinished` turns it into the service's incident history — the view for
+   * "how often does this break" rather than "is it broken now".
+   */
+  serviceTickets(id: string, includeFinished = false): Promise<ServiceTicket[]> {
+    return this.api.get<ServiceTicket[]>(`/api/services/${id}/tickets`, { includeFinished });
   }
 
   createService(body: { name: string; description?: string | null; ownerTeamId?: string | null }) {

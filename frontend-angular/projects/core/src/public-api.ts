@@ -18,6 +18,7 @@ export * from './lib/api/http.interceptors';
 
 // Typed endpoints
 export * from './lib/api/admin.api';
+export * from './lib/api/analytics.api';
 export * from './lib/api/email.api';
 export * from './lib/api/notifications.api';
 export * from './lib/api/public.api';

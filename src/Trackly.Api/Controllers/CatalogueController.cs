@@ -44,6 +44,22 @@ public class CatalogueController(AssetService assets, TicketFieldService fields)
         [FromQuery] string? search, [FromQuery] bool includeInactive, CancellationToken ct)
         => Ok(await assets.ListAssetsAsync(User.GetActor(), search, includeInactive, ct));
 
+    /// <summary>
+    /// The register in aggregate — how many, how many are out with somebody, and
+    /// where. Agent-readable: "have we got a spare laptop" is a support question,
+    /// not a configuration one.
+    /// </summary>
+    [HttpGet("assets/summary")]
+    public async Task<IActionResult> AssetSummary(CancellationToken ct)
+        => Ok(await assets.AssetSummaryAsync(User.GetActor(), ct));
+
+    /// <summary>Every ticket ever raised about one asset — the drill-down behind its count.</summary>
+    [HttpGet("assets/{assetId:guid}/tickets")]
+    public async Task<IActionResult> AssetTickets(Guid assetId, CancellationToken ct)
+        => await assets.AssetTicketsAsync(User.GetActor(), assetId, ct) is { } list
+            ? Ok(list)
+            : NotFound();
+
     [HttpPost("assets")]
     [Authorize(Policy = "Admin")]
     public async Task<IActionResult> CreateAsset([FromBody] SaveAssetRequest request, CancellationToken ct)
@@ -83,6 +99,19 @@ public class CatalogueController(AssetService assets, TicketFieldService fields)
     [HttpGet("services")]
     public async Task<IActionResult> Services([FromQuery] bool includeInactive, CancellationToken ct)
         => Ok(await assets.ListServicesAsync(User.GetActor(), includeInactive, ct));
+
+    /// <summary>
+    /// Open tickets saying a service is affected, worst impact first.
+    ///
+    /// <c>includeFinished</c> turns it into the service's incident history, which
+    /// is the view for "how often does this break" rather than "is it broken now".
+    /// </summary>
+    [HttpGet("services/{serviceId:guid}/tickets")]
+    public async Task<IActionResult> ServiceTickets(
+        Guid serviceId, [FromQuery] bool includeFinished, CancellationToken ct)
+        => await assets.ServiceTicketsAsync(User.GetActor(), serviceId, includeFinished, ct) is { } list
+            ? Ok(list)
+            : NotFound();
 
     [HttpPost("services")]
     [Authorize(Policy = "Admin")]

@@ -57,6 +57,7 @@ import { TicketDetailPanel } from './ticket-detail-panel';
 import { ResolveDialog, type ResolvePayload } from './resolve-dialog';
 import { TicketActivityFeed } from './ticket-activity';
 import { TicketRelations } from './ticket-relations';
+import { TicketRelationBanner } from './ticket-relation-banner';
 import { TicketTasks } from './ticket-tasks';
 import { TicketAssets } from './ticket-assets';
 
@@ -123,6 +124,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
     ResolveDialog,
     TicketActivityFeed,
     TicketRelations,
+    TicketRelationBanner,
     TicketTasks,
     TicketAssets,
     TicketDetailPanel,
@@ -145,6 +147,13 @@ const CHANNEL_ICON: Record<string, IconName> = {
     @if (ticket.value(); as data) {
       <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div class="min-w-0 space-y-4">
+          <!-- Above the header, because it changes whether the header's Resolve
+               button is the right next move. Renders nothing when the ticket
+               stands alone, which is most of them. -->
+          <tk-ticket-relation-banner
+            [summary]="data.relations"
+            (openRelated)="threadTab.set('related')"
+          />
           <!-- Header: identity chips first, then the subject. The chips answer
                "what am I looking at" in one glance; the subject answers "about
                what", and it is the longer read. -->
@@ -164,6 +173,25 @@ const CHANNEL_ICON: Record<string, IconName> = {
                 <p class="mt-1 text-meta text-muted-foreground">
                   {{ 'tickets.detail.openedBy' | transloco: { name: requesterName(), time: opened() } }}
                 </p>
+
+                <!-- What the ticket is about besides the conversation. The tab
+                     counts say how many; these say which kind, and one of them —
+                     a service that is DOWN — is a severity no count can carry. -->
+                @if (attachedChips().length) {
+                  <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                    @for (chip of attachedChips(); track chip.key) {
+                      <button
+                        type="button"
+                        class="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-meta font-semibold"
+                        [class]="chipClass(chip.tone)"
+                        (click)="threadTab.set(chip.key === 'responders' ? 'tasks' : 'assets')"
+                      >
+                        <tk-icon [name]="chip.icon" [size]="13" />
+                        {{ chip.labelKey | transloco: { count: chip.count } }}
+                      </button>
+                    }
+                  </div>
+                }
               </div>
 
               <div class="flex shrink-0 items-center gap-2">
@@ -378,7 +406,13 @@ const CHANNEL_ICON: Record<string, IconName> = {
             </div>
           </tk-card>
 
-          <!-- Composer -->
+          <!-- Composer. Only on the two tabs it can write to: Conversation and
+               Notes are the thread, and everything the composer produces lands
+               there. On Attachments, Activity, Related, Tasks or Assets a reply
+               box is an invitation to type into a panel that has nothing to do
+               with it — the message would appear on a tab the agent is not
+               looking at, which reads as the send having failed. -->
+          @if (canCompose()) {
           <tk-card>
             <!-- Three modes, not two. "Private note" used to mean "every agent
                  sees it, the customer does not", which is a shared scratchpad —
@@ -475,6 +509,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
               </button>
             </div>
           </tk-card>
+          }
         </div>
 
         <!-- The whole rail is one component now, because the workspace decides
@@ -501,6 +536,8 @@ const CHANNEL_ICON: Record<string, IconName> = {
         [status]="resolveCategory()"
         [saving]="resolveSaving()"
         [error]="resolveError()"
+        [preview]="preview.value() ?? null"
+        [previewLoading]="preview.isLoading()"
         (confirmed)="applyResolution($event)"
       />
     } @else if (ticket.error()) {
@@ -547,6 +584,18 @@ export class TicketDetail {
   private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
 
   protected readonly threadTab = signal<'conversation' | 'notes' | 'attachments' | 'activity' | 'related' | 'tasks' | 'assets'>('conversation');
+  /**
+   * Whether the composer belongs on the tab that is open.
+   *
+   * Conversation and Notes are the two views of the thread, and every mode of
+   * the composer writes into it. The other five tabs are side panels with their
+   * own inputs — a reply box under them would post somewhere the agent cannot
+   * see from where they are standing.
+   */
+  protected readonly canCompose = computed(
+    () => this.threadTab() === 'conversation' || this.threadTab() === 'notes',
+  );
+
   protected readonly mode = signal<'public' | 'internal' | 'private'>('public');
   protected readonly body = signal('');
   protected readonly files = signal<File[]>([]);
@@ -601,6 +650,23 @@ export class TicketDetail {
   protected readonly statusValue = signal('');
 
   protected readonly resolveOpen = signal(false);
+
+  /**
+   * What resolving this ticket would carry with it, and what is still outstanding.
+   *
+   * Keyed on the dialog being open, so a ticket nobody is resolving costs nothing.
+   * It does mean the dialog appears a beat before its warnings do — hence
+   * `previewLoading`, which says "still checking" rather than letting the dialog
+   * imply for a moment that everything is clear.
+   *
+   * The API re-checks all of it on the PATCH and answers 409 if it was not
+   * acknowledged, so a failed or skipped preview cannot let anything through.
+   */
+  protected readonly preview = resource({
+    params: () => ({ id: this.id(), open: this.resolveOpen() }),
+    loader: ({ params }) =>
+      params.open ? this.api.resolvePreview(params.id) : Promise.resolve(undefined),
+  });
   /**
    * The status the Resolve button moves to: the first reachable one in the
    * resolved category.
@@ -654,6 +720,7 @@ export class TicketDetail {
   protected readonly threadTabs = computed<TabItem[]>(() => {
     this.lang();
     const notes = (this.comments.value() ?? []).filter((comment) => comment.isInternal).length;
+    const ticket = this.ticket.value();
     return [
       { id: 'conversation', label: this.transloco.translate('tickets.detail.tabConversation') },
       { id: 'notes', label: this.transloco.translate('tickets.detail.tabNotes'), count: notes || undefined },
@@ -665,11 +732,103 @@ export class TicketDetail {
       // No count: the activity feed only grows, so the number would be a
       // permanent badge that never means "there is something new for you".
       { id: 'activity', label: this.transloco.translate('tickets.detail.tabActivity'), icon: 'clock' },
-      { id: 'related', label: this.transloco.translate('tickets.detail.tabRelated'), icon: 'link' },
-      { id: 'tasks', label: this.transloco.translate('tickets.detail.tabTasks'), icon: 'clipboard-list' },
-      { id: 'assets', label: this.transloco.translate('tickets.detail.tabAssets'), icon: 'rocket' },
+      // Counts come off the ticket rather than from each panel's own fetch, so
+      // they are correct on first paint. A tab that gains a number a second after
+      // the page settles is a tab nobody was looking at when it mattered.
+      //
+      // Each is `|| undefined` because zero is not a count worth drawing — an
+      // empty badge on every tab is noise, and noise is what a badge competes with.
+      {
+        id: 'related',
+        label: this.transloco.translate('tickets.detail.tabRelated'),
+        icon: 'link',
+        count: ticket?.relations?.total || undefined,
+      },
+      {
+        id: 'tasks',
+        label: this.transloco.translate('tickets.detail.tabTasks'),
+        icon: 'clipboard-list',
+        // OPEN tasks, not all of them: a checklist is read to find what is left,
+        // and "8" on a ticket where all eight are ticked is a false alarm.
+        count: ticket?.openTaskCount || undefined,
+      },
+      {
+        id: 'assets',
+        label: this.transloco.translate('tickets.detail.tabAssets'),
+        icon: 'rocket',
+        // Assets and impacted services together, because they are one tab.
+        count: (ticket?.assetCount ?? 0) + (ticket?.impactedServiceCount ?? 0) || undefined,
+      },
     ];
   });
+
+  /**
+   * Chips under the subject: what this ticket is *about* besides the conversation.
+   *
+   * The counts are already on the tabs, so this exists for the one thing a count
+   * cannot say — that a service is **down**. That is not a quantity, it is a
+   * severity, and it is the difference between a ticket somebody picks up today
+   * and one that interrupts a standup.
+   */
+  protected readonly attachedChips = computed(() => {
+    const ticket = this.ticket.value();
+    if (!ticket) return [];
+
+    const chips: { key: string; icon: IconName; labelKey: string; count: number; tone: string }[] = [];
+    if (ticket.downServiceCount > 0)
+      chips.push({
+        key: 'down',
+        icon: 'octagon-alert',
+        labelKey: 'tickets.detail.chips.servicesDown',
+        count: ticket.downServiceCount,
+        tone: 'danger',
+      });
+    // Only the ones that are not down, so a single service is never counted twice.
+    const degraded = ticket.impactedServiceCount - ticket.downServiceCount;
+    if (degraded > 0)
+      chips.push({
+        key: 'affected',
+        icon: 'activity',
+        labelKey: 'tickets.detail.chips.servicesAffected',
+        count: degraded,
+        tone: 'warning',
+      });
+    if (ticket.assetCount > 0)
+      chips.push({
+        key: 'assets',
+        icon: 'hard-drive',
+        labelKey: 'tickets.detail.chips.assets',
+        count: ticket.assetCount,
+        tone: 'neutral',
+      });
+    if (ticket.pendingResponderCount > 0)
+      chips.push({
+        key: 'responders',
+        icon: 'user-plus',
+        labelKey: 'tickets.detail.chips.respondersPending',
+        count: ticket.pendingResponderCount,
+        tone: 'info',
+      });
+    return chips;
+  });
+
+  /**
+   * Chip tone → classes. A static lookup, because `bg-${tone}/10` emits no CSS at
+   * all under Tailwind v4 and fails silently — the most common bug in this
+   * codebase.
+   */
+  protected chipClass(tone: string): string {
+    switch (tone) {
+      case 'danger':
+        return 'bg-danger/10 text-danger hover:bg-danger/15';
+      case 'warning':
+        return 'bg-warning/15 text-warning-ink hover:bg-warning/25';
+      case 'info':
+        return 'bg-info/10 text-info hover:bg-info/15';
+      default:
+        return 'bg-muted text-muted-foreground hover:bg-accent';
+    }
+  }
 
   /** Only files hung off the ticket itself; a comment renders its own. */
   protected readonly ticketAttachments = computed(() =>
@@ -1041,7 +1200,24 @@ export class TicketDetail {
         resolutionLink: payload.link,
         resolutionSummary: payload.summary,
         timeSpentMinutes: payload.minutes,
+        // The duplicates the agent ticked, and the fact they saw the warnings.
+        // Both come from the dialog rather than being decided here: they are the
+        // agent's answers, and this method's job is to carry them, not to guess.
+        alsoResolve: payload.alsoResolve.length ? payload.alsoResolve : undefined,
+        acknowledgeWarnings: payload.acknowledgeWarnings || undefined,
       });
+
+      // How many other tickets went with it, so the outcome is visible — a
+      // cascade that only shows up when somebody opens the other ticket is
+      // indistinguishable from one that silently did nothing.
+      if (payload.alsoResolve.length) {
+        this.toast.success(
+          this.transloco.translate('tickets.resolveDialog.duplicates.done', {
+            count: payload.alsoResolve.length,
+          }),
+        );
+      }
+
       this.resolveOpen.set(false);
       this.ticket.reload();
       this.activityVersion.update((v) => v + 1);
@@ -1053,6 +1229,11 @@ export class TicketDetail {
       // Stays open with what they typed still in it — retyping a paragraph
       // because a link was malformed is how people stop writing the note at all.
       this.resolveError.set(errorMessage(error));
+      // A 409 means the outstanding work changed between the dialog opening and
+      // this click — somebody added a task, or a blocker was reopened. Re-read it
+      // so the agent is confirming what is true now rather than what was true
+      // when they started typing.
+      this.preview.reload();
     } finally {
       this.resolveSaving.set(false);
     }

@@ -64,10 +64,35 @@ export const routes: Routes = [
         canActivate: [roleGuard('agent', 'admin')],
         loadChildren: () => import('@trackly/tickets').then((m) => m.ticketsRoutes),
       },
+      // The list before the detail. Different paths, so the order is for the reader
+      // rather than for the matcher.
+      {
+        path: 'dashboard/customers',
+        canActivate: [roleGuard('agent', 'admin')],
+        loadComponent: () => import('@trackly/tickets').then((m) => m.CustomerList),
+      },
       {
         path: 'dashboard/customers/:id',
         canActivate: [roleGuard('agent', 'admin')],
         loadComponent: () => import('@trackly/tickets').then((m) => m.CustomerDetail),
+      },
+      // Ticket-derived views that are not scoped to one ticket. Mounted here
+      // rather than under `dashboard/tickets` because their URLs are not about a
+      // ticket — `/dashboard/tickets/tasks` would collide with the `:id` route.
+      {
+        path: 'dashboard/tasks',
+        canActivate: [roleGuard('agent', 'admin')],
+        loadComponent: () => import('@trackly/tickets').then((m) => m.MyTasks),
+      },
+      {
+        path: 'dashboard/assets',
+        canActivate: [roleGuard('agent', 'admin')],
+        loadComponent: () => import('@trackly/tickets').then((m) => m.AssetRegister),
+      },
+      {
+        path: 'dashboard/services',
+        canActivate: [roleGuard('agent', 'admin')],
+        loadComponent: () => import('@trackly/tickets').then((m) => m.ServiceBoard),
       },
       {
         path: 'dashboard/chat',

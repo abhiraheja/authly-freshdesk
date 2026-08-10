@@ -950,6 +950,28 @@ h4,
   min-width: 9rem;
 }
 
+/* ---- Fixed-width controls ----
+   For a field whose content has a known size: a clock time, an hour count, a
+   two-digit minute. These exist for the same reason as `.input-auto` and it is
+   worth stating again, because it has now been got wrong three times.
+
+   A Tailwind `w-24` on a `tkInput` does NOTHING. styles.scss is unlayered and
+   loads after Tailwind, whose utilities sit in `@layer utilities` — unlayered CSS
+   beats layered CSS outright, so `.input { width: 100% }` wins and the field
+   stretches to fill its row. In a `flex-wrap` row (the business-hours day list,
+   the hours/minutes pair in the resolve dialog) a 100%-wide field then wraps onto
+   its own line, and the row falls apart one field per line.
+
+   The alternative that also works is a fixed-width wrapper element with the input
+   at 100% inside it — `catalogue-settings` does that. Either is fine; guessing
+   that a width utility will apply is not. */
+.input-time {
+  width: 6.25rem;
+}
+.input-duration {
+  width: 4.75rem;
+}
+
 /* Textareas grow with content instead of reserving empty rows and showing an
    inner scrollbar, so a settings page keeps a single (page) scroll. */
 textarea.input,

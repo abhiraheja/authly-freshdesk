@@ -37,7 +37,8 @@
       "tickets": "Tickets",
       "workspace": "Workspace",
       "admin": "Admin",
-      "support": "Support"
+      "support": "Support",
+      "byStatus": "By status"
     },
     "items": {
       "dashboard": "Dashboard",
@@ -75,7 +76,12 @@
       "catalogue": "Registers",
       "pinned": "Pinned",
       "flagged": "Flagged",
-      "login": "Login methods"
+      "login": "Login methods",
+      "tasks": "My tasks",
+      "assets": "Assets",
+      "services": "Services",
+      "rewards": "Rewards",
+      "customers": "Customers"
     }
   },
   "palette": {
@@ -142,6 +148,101 @@
       "assignedToYou": "Assigned to you",
       "unassigned": "Unassigned",
       "waiting": "Waiting on a reply"
+    },
+    "subtitleAdmin": "The whole desk: what is on fire now, and whether the team is keeping up.",
+    "tabs": {
+      "workspace": "Workspace",
+      "mine": "My work"
+    },
+    "agent": {
+      "onMe": "On you right now",
+      "openTickets": "Open tickets",
+      "overdue": "Overdue",
+      "awaitingReply": "Awaiting first reply",
+      "openTasks": "Open tasks",
+      "mentions": "Mentioning you",
+      "overdueTasks": "{{count}} of your tasks is past its due date.",
+      "performance": "How you are doing",
+      "performanceWindow": "Last {{days}} days. Feedback, not a to-do list.",
+      "resolvedPerDay": "Resolved per day",
+      "resolvedTotal": "{{count}} in total",
+      "nothingResolved": "Nothing resolved in this window yet.",
+      "quality": "Quality",
+      "firstResponse": "Avg. first response",
+      "resolutionTime": "Avg. resolution",
+      "responseSla": "Response SLA met",
+      "resolutionSla": "Resolution SLA met",
+      "csat": "CSAT",
+      "csatCount": "{{count}} rating",
+      "noRatings": "Not rated yet",
+      "byPriority": "Your open tickets",
+      "queueEmpty": "Nothing open on you.",
+      "goals": "Your goals",
+      "points": "{{points}} points",
+      "earned": "Earned",
+      "badges": "Badges",
+      "openMyQueue": "Open my queue"
+    },
+    "admin": {
+      "rightNow": "Right now",
+      "open": "Open",
+      "unassigned": "Unassigned",
+      "overdue": "Overdue",
+      "awaitingReply": "Awaiting first reply",
+      "openTasks": "Open tasks",
+      "servicesDown": "Services down",
+      "servicesInTrouble": "Services affected",
+      "viewBoard": "Service board",
+      "reportedBy": "{{count}} ticket",
+      "since": "since {{age}}",
+      "trend": "Trend",
+      "window": "Window",
+      "days7": "Last 7 days",
+      "days30": "Last 30 days",
+      "days90": "Last 90 days",
+      "created": "Created",
+      "resolved": "Resolved",
+      "firstResponse": "Avg. first response",
+      "resolutionTime": "Avg. resolution",
+      "slaAttainment": "Resolution SLA",
+      "csat": "CSAT",
+      "volume": "Tickets created",
+      "noVolume": "No tickets were created in this window.",
+      "aging": "How long the queue has waited",
+      "oldest": "oldest {{days}}d",
+      "ageBuckets": {
+        "today": "Today",
+        "1-3d": "1–3 days",
+        "4-7d": "4–7 days",
+        "8-30d": "8–30 days",
+        "30d+": "Over 30 days"
+      },
+      "agents": "Agents",
+      "agentsHint": "Resolved is the window; everything else is right now.",
+      "badgeCount": "{{count}} badge",
+      "noAgents": "No agent has any tickets or tasks yet.",
+      "columns": {
+        "agent": "Agent",
+        "resolved": "Resolved",
+        "open": "Open",
+        "overdue": "Overdue",
+        "tasks": "Tasks",
+        "firstResponse": "1st reply",
+        "sla": "SLA",
+        "csat": "CSAT",
+        "points": "Points"
+      },
+      "byPriority": "Open by priority",
+      "byTeam": "Open by department",
+      "byChannel": "Created by channel",
+      "byStatus": "Created by status",
+      "noTeam": "Not routed",
+      "nothingOpen": "Nothing open.",
+      "noneInWindow": "Nothing in this window.",
+      "recentBadges": "Recent badges",
+      "manageGoals": "Manage goals",
+      "pointsEarned": "{{points}} points",
+      "noBadges": "No badges yet. Set up reward goals to start recognising good work."
     }
   },
   "tickets": {
@@ -182,7 +283,21 @@
       "summary": "What should the customer be told?",
       "summaryHint": "Optional, and the only part of this the customer ever sees. Plain words — no root cause, no ticket numbers.",
       "summaryPlaceholder": "We restarted the payments service. Your invoice has been emailed and should arrive within a few minutes.",
-      "bulkWarning": "This note will be recorded on all {{count}} selected tickets, and each customer will be told the ticket is resolved."
+      "bulkWarning": "This note will be recorded on all {{count}} selected tickets, and each customer will be told the ticket is resolved.",
+      "checking": "Checking what else this affects…",
+      "duplicates": {
+        "heading": "{{count}} duplicate will be resolved too",
+        "hint": "Each one is a customer who gets your resolution. Untick any that turned out to be different.",
+        "capped": "Only the first {{max}} are shown. Resolve these, then reopen this dialog for the rest.",
+        "done": "Resolved {{count}} linked duplicate as well."
+      },
+      "warnings": {
+        "heading": "This ticket still has work outstanding",
+        "blockers": "Still blocked by",
+        "tasks": "{{count}} task not done",
+        "responders": "Added but never replied",
+        "acknowledge": "Resolve anyway — recorded in the ticket history with my name"
+      }
     },
     "resolution": {
       "heading": "Resolution",
@@ -324,7 +439,13 @@
       "slaMissed": "Resolved after target",
       "tabRelated": "Related",
       "tabTasks": "Tasks",
-      "tabAssets": "Assets & services"
+      "tabAssets": "Assets & services",
+      "chips": {
+        "servicesDown": "{{count}} service down",
+        "servicesAffected": "{{count}} service affected",
+        "assets": "{{count}} asset",
+        "respondersPending": "{{count}} awaiting reply"
+      }
     },
     "noCustomer": "No customer",
     "links": {
@@ -366,7 +487,10 @@
         "resolved": "resolved this ticket",
         "reopened": "reopened this ticket",
         "flagged": "flagged this ticket",
-        "unflagged": "cleared the flag"
+        "unflagged": "cleared the flag",
+        "status_synced": "synced the status from a duplicate",
+        "unblocked": "unblocked this ticket",
+        "resolved_with_warnings": "resolved this with work outstanding"
       }
     },
     "filters": {
@@ -392,6 +516,22 @@
         "blocked_by": "Blocked by",
         "caused_by": "Caused by",
         "causes": "Causes"
+      },
+      "searchHint": "Search by subject, or paste a ticket number like #a1b2c3d4.",
+      "noMatches": "No ticket matches “{{query}}”.",
+      "effects": {
+        "sync": "Same issue — resolving one offers to resolve the other.",
+        "blocks": "This ticket holds the other up. Resolving this one frees it.",
+        "blocked": "The other ticket holds this one up. You will be warned before resolving.",
+        "none": "Connected for context. Nothing happens automatically."
+      },
+      "banner": {
+        "view": "View links",
+        "blockedBy": "Waiting on",
+        "blocking": "{{count}} ticket waiting on this one:",
+        "headlineBlocked": "Blocked by {{blockers}} open ticket",
+        "headlineDuplicates": "{{duplicates}} other ticket reports the same issue",
+        "headlineLinked": "Linked to {{count}} other ticket"
       }
     },
     "tasks": {
@@ -1129,6 +1269,54 @@
       "requiredHint": "Required — this template cannot be saved without it",
       "requiredNote": "Required: {{names}}. A save that drops one is refused: on a self-hosted install an email that cannot do its job is a permanent lockout.",
       "escapingNote": "Double braces escape the value; triple braces insert it as HTML. Scripts, iframes and event handlers are removed when you save."
+    },
+    "rewards": {
+      "title": "Rewards",
+      "subtitle": "Targets your workspace counts as good work. Every one is measured from data Trackly already records — nothing extra for agents to log.",
+      "loadFailed": "Couldn't load the reward goals",
+      "goals": "Goals",
+      "empty": "No goals yet. Add one below and agents start earning it from their next resolved ticket.",
+      "name": "Name",
+      "namePlaceholder": "Gold resolver",
+      "description": "Description (optional)",
+      "metric": "Measure",
+      "targetCount": "Target",
+      "targetPercent": "Target %",
+      "period": "Period",
+      "points": "Points",
+      "tier": "Badge",
+      "minimumSample": "Min. tickets",
+      "minimumSampleHint": "A rate needs a floor: one ticket answered inside SLA is 100%, and without a minimum it would out-rank 96% across two hundred.",
+      "minimumSampleShort": "min {{count}}",
+      "add": "Add goal",
+      "pointsShort": "{{points}} pts",
+      "awarded": "{{count}} earned",
+      "retired": "Retired",
+      "retire": "Retire",
+      "restore": "Restore",
+      "sweepHint": "Goals are checked every 15 minutes. A badge is given the moment its target is reached, not when the period ends.",
+      "confirmDelete": {
+        "heading": "Delete this goal?",
+        "message": "Nobody has earned \"{{name}}\", so nothing is lost. Retire it instead if you may want it back."
+      },
+      "metrics": {
+        "tickets_resolved": "Tickets resolved",
+        "first_response_sla": "First-response SLA met",
+        "resolution_sla": "Resolution SLA met",
+        "csat_score": "CSAT score",
+        "tasks_completed": "Tasks completed"
+      },
+      "periods": {
+        "week": "Each week",
+        "month": "Each month",
+        "quarter": "Each quarter",
+        "all_time": "Once, ever"
+      },
+      "tiers": {
+        "bronze": "Bronze",
+        "silver": "Silver",
+        "gold": "Gold"
+      }
     }
   },
   "customers": {
@@ -1156,7 +1344,42 @@
     "noTickets": "No tickets from this customer yet.",
     "fields": "Customer fields",
     "fieldsHelp": "Suggested field names for customer details. Agents can still add their own.",
-    "fieldsAdd": "New field name"
+    "fieldsAdd": "New field name",
+    "title": "Customers",
+    "subtitle": "Everyone who raises tickets — and who has found the portal.",
+    "add": "Add customer",
+    "added": "Added {{name}}.",
+    "unnamed": "Unnamed",
+    "inactive": "Inactive",
+    "showInactive": "Include inactive",
+    "neverSignedIn": "Never signed in",
+    "searchPlaceholder": "Search by name, email, phone or company…",
+    "stats": {
+      "total": "Customers",
+      "signedIn": "Have signed in",
+      "neverSignedIn": "Never signed in",
+      "withOpen": "With open tickets"
+    },
+    "filters": {
+      "all": "Everyone",
+      "signedIn": "Signed in",
+      "neverSignedIn": "Never signed in"
+    },
+    "columns": {
+      "customer": "Customer",
+      "company": "Company",
+      "contact": "Contact",
+      "tickets": "Tickets",
+      "open": "Open",
+      "signedIn": "Last signed in",
+      "added": "Added"
+    },
+    "empty": {
+      "heading": "No customers yet",
+      "body": "They are created the first time somebody emails the desk or submits the form — or add one here.",
+      "filteredHeading": "No customers match",
+      "filteredBody": "Try a different search, or clear the sign-in filter."
+    }
   },
   "editor": {
     "toolbar": "Formatting",
@@ -1196,7 +1419,8 @@
       "assigned": "{{actor}} assigned a ticket to you",
       "reply": "{{actor}} replied",
       "sla_warning": "An SLA is about to run out",
-      "sla_breached": "An SLA has been missed"
+      "sla_breached": "An SLA has been missed",
+      "unblocked": "unblocked a ticket you are on"
     }
   },
   "setup": {
@@ -1240,5 +1464,104 @@
     "customer": "Customer",
     "agent": "Agent",
     "admin": "Admin"
+  },
+  "impact": {
+    "down": "Down",
+    "degraded": "Degraded",
+    "minor": "Minor"
+  },
+  "tasks": {
+    "title": "My tasks",
+    "subtitleMine": "Every open step assigned to {{name}}, across all tickets.",
+    "subtitleAll": "Every open step on the team, across all tickets.",
+    "loadFailed": "Couldn't load your tasks",
+    "stats": {
+      "open": "Open",
+      "overdue": "Overdue",
+      "dueToday": "Due today"
+    },
+    "filters": {
+      "assignee": "Whose tasks",
+      "mine": "Assigned to me",
+      "everyone": "Everyone",
+      "unassigned": "Nobody",
+      "state": "Which tasks",
+      "openOnly": "Open only",
+      "includeDone": "Include done",
+      "hint": "Tasks on resolved tickets are hidden."
+    },
+    "columns": {
+      "done": "Done",
+      "task": "Task",
+      "ticket": "Ticket",
+      "assignee": "Assignee",
+      "due": "Due"
+    },
+    "empty": {
+      "heading": "Nothing on your list",
+      "body": "Tasks you add to a ticket, or that a colleague assigns you, show up here.",
+      "filteredHeading": "No tasks match",
+      "filteredBody": "Try a different owner, or include finished tasks."
+    }
+  },
+  "assets": {
+    "title": "Assets",
+    "subtitle": "What the workspace owns, who has it, and what it has cost in tickets.",
+    "loadFailed": "Couldn't load the register",
+    "stats": {
+      "total": "In service",
+      "assigned": "With someone",
+      "unassigned": "On the shelf",
+      "inTrouble": "In trouble"
+    },
+    "byKind": "By kind",
+    "byLocation": "By location",
+    "topHolders": "Who has the most",
+    "noBuckets": "Nothing recorded yet.",
+    "noHolders": "Nothing is assigned to anybody.",
+    "searchPlaceholder": "Search by name or asset tag…",
+    "showRetired": "Include retired",
+    "columns": {
+      "asset": "Asset",
+      "kind": "Kind",
+      "tag": "Tag",
+      "location": "Location",
+      "holder": "With",
+      "openTickets": "Open",
+      "allTickets": "All time",
+      "lastSeen": "Last ticket"
+    },
+    "retired": "Retired",
+    "onTheShelf": "On the shelf",
+    "never": "Never",
+    "history": "Ticket history",
+    "noHistory": "No ticket has ever been raised about this asset.",
+    "empty": {
+      "heading": "No assets yet",
+      "body": "An admin adds them under Settings → Catalogue. Then agents can attach one to a ticket.",
+      "filteredHeading": "No assets match",
+      "filteredBody": "Try a different name or asset tag."
+    }
+  },
+  "services": {
+    "title": "Services",
+    "subtitle": "What customers depend on, and what is broken right now.",
+    "loadFailed": "Couldn't load the service board",
+    "stats": {
+      "down": "Down",
+      "degraded": "Affected",
+      "healthy": "Operational",
+      "total": "In catalogue"
+    },
+    "operational": "Operational",
+    "openTickets": "{{count}} open ticket",
+    "noOpenTickets": "Nothing open",
+    "ownedBy": "Owned by {{team}}",
+    "reportedBy": "Reported by",
+    "noReports": "No open ticket says this service is affected.",
+    "empty": {
+      "heading": "No services yet",
+      "body": "An admin adds them under Settings → Catalogue. Agents then mark which ones a ticket has broken."
+    }
   }
 }

@@ -47,6 +47,20 @@ export const PRIORITY_TONE: Record<string, ToneLabel> = {
   urgent: { tone: 'danger', labelKey: 'priority.urgent' },
 };
 
+/**
+ * How badly a service is affected.
+ *
+ * Danger is reserved for **down**, and that reservation is the point: on a status
+ * board where everything amber and red looks equally alarming, nothing does. A
+ * degraded service is a problem; a service that is off is an incident, and only
+ * one of them should stop somebody mid-scroll.
+ */
+export const IMPACT_TONE: Record<string, ToneLabel> = {
+  down: { tone: 'danger', labelKey: 'impact.down' },
+  degraded: { tone: 'warning', labelKey: 'impact.degraded' },
+  minor: { tone: 'info', labelKey: 'impact.minor' },
+};
+
 export const ROLE_TONE: Record<string, ToneLabel> = {
   admin: { tone: 'primary', labelKey: 'role.admin' },
   agent: { tone: 'info', labelKey: 'role.agent' },

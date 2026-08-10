@@ -703,3 +703,48 @@ Append here as phases land, so nothing is missed later.
   - **Kubernetes:** five deployment-shape requirements that Compose hides — see
     §0.6. All five fail quietly rather than loudly, so they are worth checking
     against a running pod rather than assumed from the manifest.
+- **Ticket relationships, the resolve gate and the registers:** **no new env keys,
+  no new secrets, no migration** — DTOs, queries and endpoints over the existing
+  schema. Three prod-only things to know:
+  - **Resolving a ticket can now email several customers at once.** Ticking the
+    duplicates in the resolve dialog resolves each linked ticket as a real
+    resolve, so each one sends its own resolution email and issues its own CSAT
+    survey. On an install whose sending provider has a low rate limit, one click
+    can therefore queue up to 25 messages (`TicketResolveGuard.MaxCascade`). Worth
+    checking against your provider's per-minute cap before an outage produces a
+    genuinely long duplicate chain.
+  - **`GET /api/tickets?search=#019fea6e` matches on the primary-key index**, via
+    a uuid range rather than `id::text LIKE`. Nothing to configure, but if you ever
+    replace the id strategy the range maths in `TicketNumber` assumes the canonical
+    hex form orders the same way PostgreSQL orders `uuid` — true for any uuid, and
+    the thing that would break silently if ids stopped being uuids.
+  - **No new indexes were needed.** The relation, task, responder, asset and
+    impacted-service queries all run on indexes that already existed
+    (`ix_ticket_relations_related_ticket_id`, `ix_ticket_tasks_assignee_id_completed_at`,
+    `ix_ticket_assets_asset_id`, `ix_ticket_impacted_services_service_id`). Worth
+    re-checking with `EXPLAIN` on a workspace with a large ticket table before
+    assuming it holds at your scale.
+- **Dashboards and reward goals:** **no new env keys and no new secrets.** One
+  migration (`AddRewardGoals` — `reward_goals`, `agent_reward_awards`) and one new
+  background worker. What to know per environment:
+  - **`RewardWorker` runs on every instance, and that is safe.** Awarding is made
+    idempotent by the unique index on `(goal_id, agent_id, period_key)`, so two API
+    replicas cannot double-award. Unlike `EmailPollingWorker` it needs **no**
+    single-instance constraint — see §0.6 for the ones that do.
+  - It sweeps every 15 minutes, after a 30-second start-up delay, and measures every
+    active agent against every active goal. Cost scales with agents × goals and is
+    capped at `RewardService.MaxAgentsPerSweep` (200). A workspace larger than that
+    has outgrown a per-tick full recompute; the cap means it degrades to "the first
+    200 agents" rather than to a slow sweep, so raise it deliberately rather than
+    discovering it.
+  - **`GET /api/dashboard/analytics` is admin-only and unbounded by page.** It pulls
+    every ticket created or resolved in the window plus every unfinished ticket, and
+    reduces in memory so the duration maths stays provider-agnostic. Fine at the
+    scale this ships at; worth an `EXPLAIN` and a think about a materialised summary
+    before a workspace with hundreds of thousands of tickets.
+  - **`GET /api/dashboard/me` is agent-readable and `agent=` is honoured for admins
+    only.** That check is in `DashboardController`, not the service. If you ever add
+    another caller, re-apply it — without it, any agent can read a colleague's
+    response times and CSAT by editing a query string.
+  - Nothing is seeded. An install with no reward goals shows no scoreboard anywhere,
+    which is the correct empty state rather than a configuration gap.

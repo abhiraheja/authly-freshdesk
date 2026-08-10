@@ -54,6 +54,7 @@ builder.Services.AddScoped<TicketOptionService>();
 builder.Services.AddScoped<TicketStatusService>();
 builder.Services.AddScoped<ActivityLog>();
 builder.Services.AddScoped<TicketRelationService>();
+builder.Services.AddScoped<TicketResolveGuard>();
 builder.Services.AddScoped<TicketTaskService>();
 builder.Services.AddScoped<AssetService>();
 builder.Services.AddScoped<TicketFieldService>();
@@ -72,6 +73,7 @@ builder.Services.AddScoped<ProblemService>();
 builder.Services.AddScoped<AnnouncementService>();
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<AnalyticsService>();
+builder.Services.AddScoped<RewardService>();
 builder.Services.AddScoped<AiService>();
 builder.Services.AddScoped<CsatService>();
 builder.Services.AddScoped<ChannelInboundService>();
@@ -80,6 +82,9 @@ builder.Services.AddSignalR();
 builder.Services.AddHostedService<AnnouncementWorker>();
 builder.Services.AddHostedService<SlaBreachWorker>();
 builder.Services.AddHostedService<EmailPollingWorker>();
+// Safe on every instance: awarding is idempotent through a unique index, so this
+// one needs no single-instance constraint (unlike the IMAP poller).
+builder.Services.AddHostedService<RewardWorker>();
 
 builder.Services.AddAuthentication(TracklySession.Scheme)
     .AddScheme<AuthenticationSchemeOptions, TracklySessionHandler>(TracklySession.Scheme, _ => { });

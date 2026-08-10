@@ -131,10 +131,10 @@ import {
             <label tkLabel for="time-hours">{{ 'tickets.time.spent' | transloco }}</label>
             <div class="flex items-center gap-2">
               <input tkInput inset inputSize="sm" id="time-hours" name="hours" type="number" min="0" max="24"
-                     class="w-16" [(ngModel)]="hours" />
+                     class="input-duration" [(ngModel)]="hours" />
               <span class="text-meta text-muted-foreground">{{ 'tickets.resolveDialog.hours' | transloco }}</span>
               <input tkInput inset inputSize="sm" name="minutes" type="number" min="0" max="59"
-                     class="w-16" [(ngModel)]="minutes" />
+                     class="input-duration" [(ngModel)]="minutes" />
               <span class="text-meta text-muted-foreground">{{ 'tickets.resolveDialog.minutes' | transloco }}</span>
             </div>
           </div>

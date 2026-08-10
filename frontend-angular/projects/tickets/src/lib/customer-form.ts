@@ -164,6 +164,19 @@ export class CustomerForm {
   }
 
   /**
+   * Whether this is enough to create somebody.
+   *
+   * An email and nothing else: it is the customer's identity — the column the API
+   * gets-or-creates on, and the address a magic link goes to. A name without one is
+   * a row nobody can ever sign in as or send anything to.
+   *
+   * A shape check, not a validity check. Whether the address exists is a question
+   * only sending to it answers, and refusing `a@b` here would refuse plenty of real
+   * internal addresses.
+   */
+  readonly valid = computed(() => /^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(this.email().trim()));
+
+  /**
    * The body to send. Blank rows are dropped rather than saved as empty
    * strings — an agent who added a row and changed their mind should not leave
    * a nameless field on the customer forever.

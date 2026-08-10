@@ -42,8 +42,159 @@ public class AssetService(TracklyDbContext db, ActivityLog activity)
             .Select(a => new AssetDto(
                 a.Id, a.Name, a.Kind, a.Tag, a.Location,
                 UserSummaryDto.From(a.AssignedTo), a.Notes, a.IsActive,
-                db.TicketAssets.Count(x => x.AssetId == a.Id)))
+                db.TicketAssets.Count(x => x.AssetId == a.Id),
+                // Tickets about it right now. The lifetime count says "this
+                // machine has a history"; this one says "this machine is a problem
+                // today", and they are different questions with different answers.
+                db.TicketAssets.Count(x =>
+                    x.AssetId == a.Id
+                    && x.Ticket!.StatusCategory != TicketStatusCategory.Resolved
+                    && x.Ticket.StatusCategory != TicketStatusCategory.Closed),
+                // When it was last in trouble. Null for an asset nobody has ever
+                // raised a ticket about — which is the best thing an asset can be.
+                db.TicketAssets
+                    .Where(x => x.AssetId == a.Id)
+                    .Max(x => (DateTime?)x.AddedAt)))
             .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// The register in aggregate: how many there are, how many are out with
+    /// somebody, and where they are.
+    ///
+    /// The question behind it is an audit one — "what have we handed out, and to
+    /// whom" — which nobody can answer by scrolling a list of two hundred rows.
+    /// Grouped in the database; the client only draws it.
+    ///
+    /// Retired assets are excluded from every number here. They are kept so old
+    /// tickets still render, not so they inflate a count of what the workspace owns.
+    /// </summary>
+    public async Task<AssetSummaryDto> AssetSummaryAsync(Actor actor, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin) throw new UnauthorizedAccessException();
+
+        var assets = db.Assets.Where(a => a.WorkspaceId == actor.WorkspaceId && a.IsActive);
+
+        // Two plain counts rather than one grouped projection. A `GroupBy(_ => 1)`
+        // with conditional aggregates inside it is the shape EF translates
+        // inconsistently, and this endpoint runs once per page view — the round
+        // trip it would save is not worth a query that fails on a version bump.
+        var total = await assets.CountAsync(ct);
+        var assigned = await assets.CountAsync(a => a.AssignedToId != null, ct);
+
+        return new AssetSummaryDto(
+            total,
+            assigned,
+            total - assigned,
+            // Assets currently named on an unfinished ticket. Distinct, because one
+            // laptop with three open tickets is one machine in trouble.
+            await db.TicketAssets
+                .Where(x => x.Asset!.WorkspaceId == actor.WorkspaceId
+                            && x.Asset.IsActive
+                            && x.Ticket!.StatusCategory != TicketStatusCategory.Resolved
+                            && x.Ticket.StatusCategory != TicketStatusCategory.Closed)
+                .Select(x => x.AssetId)
+                .Distinct()
+                .CountAsync(ct),
+            await BucketsAsync(assets, a => a.Kind, ct),
+            await BucketsAsync(assets, a => a.Location, ct),
+            await TopHoldersAsync(assets, ct));
+    }
+
+    /// <summary>
+    /// Who is holding what, most first — so the row that needs explaining (one
+    /// person with eleven laptops) is the first one read.
+    ///
+    /// Anonymous-type projection for the same reason as <see cref="BucketsAsync"/>:
+    /// a grouping projected directly into a record constructor is a query EF
+    /// accepts at compile time and refuses at run time.
+    /// </summary>
+    private static async Task<IReadOnlyList<AssetHolderDto>> TopHoldersAsync(
+        IQueryable<Asset> assets, CancellationToken ct)
+    {
+        var rows = await assets
+            .Where(a => a.AssignedToId != null)
+            .GroupBy(a => new { a.AssignedToId, a.AssignedTo!.Name, a.AssignedTo.Email })
+            .Select(g => new
+            {
+                Id = g.Key.AssignedToId,
+                g.Key.Name,
+                g.Key.Email,
+                Count = g.Count(),
+            })
+            .OrderByDescending(g => g.Count)
+            .Take(50)
+            .ToListAsync(ct);
+
+        // The fallback happens here rather than in the projection: `Name ?? Email`
+        // inside the grouping key is a coalesce EF has to translate for no reason,
+        // and Name is null for a member who was invited but has never signed in.
+        return rows
+            .Select(r => new AssetHolderDto(r.Id!.Value, r.Name ?? r.Email ?? "", r.Count))
+            .ToList();
+    }
+
+    /// <summary>
+    /// Every ticket ever raised about one asset, newest first.
+    ///
+    /// The drill-down behind the count. Without it the register says "this machine
+    /// has had nine tickets" and gives no way to read them, which is exactly the
+    /// moment somebody needs to.
+    /// </summary>
+    public async Task<IReadOnlyList<AssetTicketDto>?> AssetTicketsAsync(
+        Actor actor, Guid assetId, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin) throw new UnauthorizedAccessException();
+        if (!await db.Assets.AnyAsync(
+                a => a.Id == assetId && a.WorkspaceId == actor.WorkspaceId, ct))
+            return null;
+
+        return await db.TicketAssets
+            .Where(x => x.AssetId == assetId)
+            .OrderByDescending(x => x.Ticket!.CreatedAt)
+            .Take(100)
+            .Select(x => new AssetTicketDto(
+                x.TicketId,
+                x.Ticket!.Subject,
+                x.Ticket.Status,
+                db.TicketStatuses
+                    .Where(s => s.WorkspaceId == x.Ticket!.WorkspaceId && s.Value == x.Ticket.Status)
+                    .Select(s => s.Name)
+                    .FirstOrDefault() ?? x.Ticket.Status,
+                x.Ticket.StatusCategory,
+                x.Ticket.Priority,
+                UserSummaryDto.From(x.Ticket.Assignee),
+                x.Ticket.CreatedAt))
+            .ToListAsync(ct);
+    }
+
+    /// <summary>
+    /// Counts by one nullable text column, with the blanks folded into one bucket.
+    ///
+    /// Null and empty are the same thing to a reader — "nobody filled this in" — and
+    /// two buckets that both mean that is a table nobody trusts.
+    ///
+    /// **The projection is an anonymous type, not the DTO.** EF cannot translate a
+    /// grouping projected straight into a record constructor: it rewrites
+    /// <c>g.Count()</c> as <c>g.AsQueryable().Count()</c> and then gives up, at
+    /// runtime, on the first request. Grouping into an anonymous type translates,
+    /// and the DTO is built from the rows afterwards.
+    /// </summary>
+    private static async Task<IReadOnlyList<AssetBucketDto>> BucketsAsync(
+        IQueryable<Asset> assets,
+        System.Linq.Expressions.Expression<Func<Asset, string?>> column,
+        CancellationToken ct)
+    {
+        var rows = await assets
+            .GroupBy(column)
+            .Select(g => new { Value = g.Key, Count = g.Count() })
+            // Ordered and capped in SQL, so a workspace with a thousand distinct
+            // locations still sends fifty rows over the wire.
+            .OrderByDescending(g => g.Count)
+            .Take(50)
+            .ToListAsync(ct);
+
+        return rows.Select(r => new AssetBucketDto(r.Value, r.Count)).ToList();
     }
 
     public async Task<AssetDto> CreateAssetAsync(
@@ -185,18 +336,100 @@ public class AssetService(TracklyDbContext db, ActivityLog activity)
         var query = db.BusinessServices.Where(s => s.WorkspaceId == actor.WorkspaceId);
         if (!includeInactive) query = query.Where(s => s.IsActive);
 
-        return await query
+        var rows = await query
             .OrderBy(s => s.SortOrder).ThenBy(s => s.Name)
-            .Select(s => new BusinessServiceDto(
+            .Select(s => new
+            {
                 s.Id, s.Name, s.Description, s.OwnerTeamId,
-                s.OwnerTeam != null ? s.OwnerTeam.Name : null,
+                OwnerTeamName = s.OwnerTeam != null ? s.OwnerTeam.Name : null,
                 s.IsActive, s.SortOrder,
                 // Open tickets currently hitting it — the number that makes the
                 // catalogue an incident board rather than a list of nouns.
-                db.TicketImpactedServices.Count(x =>
+                OpenTickets = db.TicketImpactedServices.Count(x =>
                     x.ServiceId == s.Id
                     && x.Ticket!.StatusCategory != TicketStatusCategory.Resolved
-                    && x.Ticket.StatusCategory != TicketStatusCategory.Closed)))
+                    && x.Ticket.StatusCategory != TicketStatusCategory.Closed),
+                // How badly, at worst, across those tickets.
+                //
+                // The WORST rather than the newest or the most common: a service
+                // with four "degraded" reports and one "down" is down. Averaging or
+                // taking the latest would let the one report that matters be
+                // outvoted by the four that do not, which is exactly backwards for
+                // deciding what to work on first.
+                //
+                // Compared as a rank, not as text — "degraded" sorts before "down"
+                // alphabetically, so Min() on the raw string would confidently
+                // answer the wrong question. Nullable because MIN over no rows is
+                // NULL, and no rows is the healthy case rather than an error.
+                WorstRank = db.TicketImpactedServices
+                    .Where(x => x.ServiceId == s.Id
+                                && x.Ticket!.StatusCategory != TicketStatusCategory.Resolved
+                                && x.Ticket.StatusCategory != TicketStatusCategory.Closed)
+                    .Min(x => (int?)(x.Level == ServiceImpactLevel.Down ? 0
+                                   : x.Level == ServiceImpactLevel.Degraded ? 1
+                                   : 2)),
+            })
+            .ToListAsync(ct);
+
+        // The rank is a SQL ordering trick and stops at the edge of this method.
+        // Handing a client 0, 1, 2 would make it re-derive the meaning, and the
+        // first thing to drift would be which end of the scale is worse.
+        return rows
+            .Select(s => new BusinessServiceDto(
+                s.Id, s.Name, s.Description, s.OwnerTeamId, s.OwnerTeamName,
+                s.IsActive, s.SortOrder, s.OpenTickets, LevelOf(s.WorstRank)))
+            .ToList();
+    }
+
+    /// <summary>Rank back to the level it stood for. Null means nothing is wrong.</summary>
+    private static string? LevelOf(int? rank) => rank switch
+    {
+        0 => ServiceImpactLevel.Down,
+        1 => ServiceImpactLevel.Degraded,
+        2 => ServiceImpactLevel.Minor,
+        _ => null,
+    };
+
+    /// <summary>
+    /// Every open ticket saying a service is in trouble, worst first.
+    ///
+    /// The drill-down from the status board: "payments is down" is only useful once
+    /// somebody can see which five tickets say so and who is on them.
+    /// </summary>
+    public async Task<IReadOnlyList<ServiceTicketDto>?> ServiceTicketsAsync(
+        Actor actor, Guid serviceId, bool includeFinished, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin) throw new UnauthorizedAccessException();
+        if (!await db.BusinessServices.AnyAsync(
+                s => s.Id == serviceId && s.WorkspaceId == actor.WorkspaceId, ct))
+            return null;
+
+        var query = db.TicketImpactedServices.Where(x => x.ServiceId == serviceId);
+        if (!includeFinished)
+            query = query.Where(x =>
+                x.Ticket!.StatusCategory != TicketStatusCategory.Resolved
+                && x.Ticket.StatusCategory != TicketStatusCategory.Closed);
+
+        return await query
+            .OrderBy(x => x.Level == ServiceImpactLevel.Down ? 0
+                        : x.Level == ServiceImpactLevel.Degraded ? 1
+                        : 2)
+            .ThenByDescending(x => x.AddedAt)
+            .Take(100)
+            .Select(x => new ServiceTicketDto(
+                x.TicketId,
+                x.Ticket!.Subject,
+                x.Ticket.Status,
+                db.TicketStatuses
+                    .Where(s => s.WorkspaceId == x.Ticket!.WorkspaceId && s.Value == x.Ticket.Status)
+                    .Select(s => s.Name)
+                    .FirstOrDefault() ?? x.Ticket.Status,
+                x.Ticket.StatusCategory,
+                x.Ticket.Priority,
+                UserSummaryDto.From(x.Ticket.Assignee),
+                x.Level,
+                x.Impact,
+                x.AddedAt))
             .ToListAsync(ct);
     }
 
@@ -223,8 +456,9 @@ public class AssetService(TracklyDbContext db, ActivityLog activity)
         };
         db.BusinessServices.Add(service);
         await db.SaveChangesAsync(ct);
+        // A service that did not exist a moment ago cannot be broken yet.
         return new BusinessServiceDto(service.Id, service.Name, service.Description,
-            service.OwnerTeamId, null, service.IsActive, service.SortOrder, 0);
+            service.OwnerTeamId, null, service.IsActive, service.SortOrder, 0, null);
     }
 
     public async Task<BusinessServiceDto?> UpdateServiceAsync(
@@ -246,12 +480,20 @@ public class AssetService(TracklyDbContext db, ActivityLog activity)
         service.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
-        var open = await db.TicketImpactedServices.CountAsync(x =>
+        // Recomputed rather than carried over: renaming a service does not change
+        // whether it is down, and the row the caller renders has to say so.
+        var live = db.TicketImpactedServices.Where(x =>
             x.ServiceId == id
             && x.Ticket!.StatusCategory != TicketStatusCategory.Resolved
-            && x.Ticket.StatusCategory != TicketStatusCategory.Closed, ct);
+            && x.Ticket.StatusCategory != TicketStatusCategory.Closed);
+        var open = await live.CountAsync(ct);
+        var worst = await live.MinAsync(x => (int?)(
+            x.Level == ServiceImpactLevel.Down ? 0
+            : x.Level == ServiceImpactLevel.Degraded ? 1
+            : 2), ct);
         return new BusinessServiceDto(service.Id, service.Name, service.Description,
-            service.OwnerTeamId, service.OwnerTeam?.Name, service.IsActive, service.SortOrder, open);
+            service.OwnerTeamId, service.OwnerTeam?.Name, service.IsActive, service.SortOrder,
+            open, LevelOf(worst));
     }
 
     public async Task<AssetDeleteResult> DeleteServiceAsync(Actor actor, Guid id, CancellationToken ct)
@@ -365,25 +607,73 @@ public class AssetService(TracklyDbContext db, ActivityLog activity)
         return trimmed.Length <= max ? trimmed : trimmed[..max];
     }
 
+    /// <summary>
+    /// For the two write paths, which know the lifetime count and nothing else.
+    ///
+    /// An asset that was just created or edited is not being reported on — the
+    /// caller is a form waiting for its row back. The open count and the last-seen
+    /// date are register questions, and asking two more of the database on every
+    /// keystroke of an admin screen would buy nothing anybody looks at.
+    /// </summary>
     private static AssetDto Shape(Asset a, int ticketCount) =>
         new(a.Id, a.Name, a.Kind, a.Tag, a.Location,
-            UserSummaryDto.From(a.AssignedTo), a.Notes, a.IsActive, ticketCount);
+            UserSummaryDto.From(a.AssignedTo), a.Notes, a.IsActive, ticketCount, 0, null);
 }
 
 public enum AssetDeleteResult { Deleted, NotFound, InUse }
 
+/// <param name="TicketCount">Every ticket ever raised about it — its history.</param>
+/// <param name="OpenTicketCount">Tickets about it that are still going — its state today.</param>
+/// <param name="LastTicketAt">When it was last the subject of one. Null means never, which is good news.</param>
 public record AssetDto(
     Guid Id, string Name, string? Kind, string? Tag, string? Location,
-    UserSummaryDto? AssignedTo, string? Notes, bool IsActive, int TicketCount);
+    UserSummaryDto? AssignedTo, string? Notes, bool IsActive,
+    int TicketCount, int OpenTicketCount, DateTime? LastTicketAt);
+
+/// <param name="Unassigned">On the shelf — the number that answers "what can I give somebody".</param>
+/// <param name="InTrouble">Distinct assets named on an unfinished ticket right now.</param>
+/// <param name="ByKind">Laptops, phones, printers — however the workspace labels them.</param>
+/// <param name="ByLocation">Where they are. The blank bucket is assets nobody recorded a place for.</param>
+/// <param name="TopHolders">Who is holding the most, largest first.</param>
+public record AssetSummaryDto(
+    int Total,
+    int Assigned,
+    int Unassigned,
+    int InTrouble,
+    IReadOnlyList<AssetBucketDto> ByKind,
+    IReadOnlyList<AssetBucketDto> ByLocation,
+    IReadOnlyList<AssetHolderDto> TopHolders);
+
+/// <param name="Value">Null or empty means the column was never filled in.</param>
+public record AssetBucketDto(string? Value, int Count);
+
+public record AssetHolderDto(Guid Id, string Name, int Count);
+
+/// <summary>One ticket in an asset's history. Deliberately thin — this is a drill-down list.</summary>
+public record AssetTicketDto(
+    Guid Id, string Subject, string Status, string StatusName, string StatusCategory,
+    string Priority, UserSummaryDto? Assignee, DateTime CreatedAt);
 
 /// <param name="OtherTicketCount">Other tickets about the same asset — the number that turns a register into a diagnosis.</param>
 public record TicketAssetDto(
     Guid Id, string Name, string? Kind, string? Tag, string? Location,
     UserSummaryDto? AssignedTo, DateTime AddedAt, int OtherTicketCount);
 
+/// <param name="WorstLevel">
+/// The worst impact reported by any open ticket — one of
+/// <see cref="ServiceImpactLevel"/>, or null when nothing is wrong. This is the
+/// field the status board colours by; <paramref name="OpenTicketCount"/> is how
+/// many people are saying it.
+/// </param>
 public record BusinessServiceDto(
     Guid Id, string Name, string? Description, Guid? OwnerTeamId, string? OwnerTeamName,
-    bool IsActive, int SortOrder, int OpenTicketCount);
+    bool IsActive, int SortOrder, int OpenTicketCount, string? WorstLevel);
+
+/// <param name="Level">How badly this particular ticket says the service is affected.</param>
+/// <param name="Impact">The agent's own words, if they wrote any.</param>
+public record ServiceTicketDto(
+    Guid Id, string Subject, string Status, string StatusName, string StatusCategory,
+    string Priority, UserSummaryDto? Assignee, string Level, string? Impact, DateTime AddedAt);
 
 public record TicketImpactedServiceDto(
     Guid Id, string Name, string? Impact, string Level, string? OwnerTeamName, DateTime AddedAt);

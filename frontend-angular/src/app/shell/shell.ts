@@ -68,14 +68,14 @@ export class Shell {
   protected readonly photoError = signal<string | undefined>(undefined);
 
   /**
-   * Admin is collapsed by default — thirteen rows would otherwise dominate the
-   * rail — but opens automatically while an /admin route is active, so you can
-   * see where you are.
+   * Which collapsible groups the user has opened or closed by hand, keyed by the
+   * group's label key. Absent means "nobody has said" — see `isGroupOpen`.
+   *
+   * Per-group rather than the single `adminToggled` flag this replaced: Admin used
+   * to be the only collapsible group, and hardcoding one boolean meant the second
+   * one to arrive silently shared Admin's state.
    */
-  private readonly adminToggled = signal<boolean | null>(null);
-  protected readonly adminOpen = computed(
-    () => this.adminToggled() ?? this.url().startsWith('/admin'),
-  );
+  private readonly groupToggled = signal<Readonly<Record<string, boolean>>>({});
 
   /**
    * Live counts for the saved-view rows.
@@ -129,6 +129,27 @@ export class Shell {
   }
 
   /**
+   * The rows' counts added up, for the badge on a collapsed group's header.
+   *
+   * Null when it comes to zero, so the pill disappears rather than showing "0" —
+   * and null when no row in the group has a count at all, which is why this cannot
+   * just be a sum starting from 0.
+   *
+   * The double-counting is deliberate and correct here: **By status** has one row
+   * per category, so its total is every ticket in the workspace, which is exactly
+   * what "the queue" means. It would be wrong for a group whose rows overlap, and
+   * there is no such collapsible group.
+   */
+  protected groupCount(group: NavGroup): number | null {
+    let total: number | null = null;
+    for (const item of group.items) {
+      const value = this.count(item);
+      if (value !== null) total = (total ?? 0) + value;
+    }
+    return total || null;
+  }
+
+  /**
    * Status-dot colour for a saved view. Static strings, because Tailwind v4 only
    * emits classes it can find literally in the source — an interpolated
    * `bg-${tone}` compiles to nothing.
@@ -150,8 +171,31 @@ export class Shell {
     }
   }
 
-  protected toggleAdmin(): void {
-    this.adminToggled.set(!this.adminOpen());
+  /**
+   * Whether a collapsible group is showing its rows.
+   *
+   * Three answers in priority order:
+   *  1. what the user last did to it by hand — always wins, so a group they shut
+   *     stays shut while they work;
+   *  2. otherwise, open if the current route is inside it, so a bookmarked or
+   *     shared link never lands on a row that is hidden;
+   *  3. otherwise, the group's own default.
+   */
+  protected isGroupOpen(group: NavGroup): boolean {
+    if (!group.collapsible) return true;
+
+    const manual = this.groupToggled()[group.labelKey];
+    if (manual !== undefined) return manual;
+
+    if (group.routePrefix && this.url().startsWith(group.routePrefix)) return true;
+    if (group.items.some((item) => this.isActive(item))) return true;
+
+    return !group.collapsedByDefault;
+  }
+
+  protected toggleGroup(group: NavGroup): void {
+    const open = this.isGroupOpen(group);
+    this.groupToggled.update((state) => ({ ...state, [group.labelKey]: !open }));
   }
 
   protected closeMobile(): void {

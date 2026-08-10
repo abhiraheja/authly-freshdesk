@@ -11,7 +11,8 @@ namespace Trackly.Modules.Tickets;
 public class TicketService(
     TracklyDbContext db, NotificationService notifications, SlaService sla, AutomationService automation,
     CsatService csat, TagService tags, TicketOptionService options, NotificationFeed feed,
-    TicketStatusService statuses, ActivityLog activity)
+    TicketStatusService statuses, ActivityLog activity,
+    TicketRelationService relations, TicketResolveGuard guard)
 {
     // ---- Queries ------------------------------------------------------------
 
@@ -90,12 +91,43 @@ public class TicketService(
 
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
-            var term = $"%{query.Search.Trim()}%";
-            // Subject and description. Not the comments: a full-text search of
-            // every reply is a different feature with different indexing, and
-            // doing it with ILIKE would be a sequential scan of the workspace.
-            tickets = tickets.Where(t =>
-                EF.Functions.ILike(t.Subject, term) || EF.Functions.ILike(t.Description, term));
+            var raw = query.Search.Trim();
+
+            // A leading # is the agent saying "this is a ticket number" — the form
+            // the UI prints everywhere. Honour it literally: `#019fea6e` must not
+            // also drag in every ticket whose description happens to contain that
+            // string, or the one row they were reaching for arrives ranked among
+            // fifty others.
+            var byNumber = raw.StartsWith('#');
+            var idRange = TicketNumber.ToIdRange(raw);
+
+            if (byNumber)
+            {
+                // An unparseable number matches nothing rather than falling back to
+                // a text search. "#zzz" is a typo, and answering it with results is
+                // how a typo goes unnoticed.
+                tickets = idRange is { } explicitRange
+                    ? tickets.Where(t => t.Id >= explicitRange.Low && t.Id <= explicitRange.High)
+                    : tickets.Where(_ => false);
+            }
+            else
+            {
+                var term = $"%{raw}%";
+                // Subject and description. Not the comments: a full-text search of
+                // every reply is a different feature with different indexing, and
+                // doing it with ILIKE would be a sequential scan of the workspace.
+                //
+                // Plus the id, when what was typed could be one. Agents copy the
+                // number off a chat message without the #, and a search that
+                // silently ignores it looks like the ticket is gone.
+                tickets = idRange is { } range
+                    ? tickets.Where(t =>
+                        EF.Functions.ILike(t.Subject, term)
+                        || EF.Functions.ILike(t.Description, term)
+                        || (t.Id >= range.Low && t.Id <= range.High))
+                    : tickets.Where(t =>
+                        EF.Functions.ILike(t.Subject, term) || EF.Functions.ILike(t.Description, term));
+            }
         }
 
         return tickets;
@@ -396,8 +428,52 @@ public class TicketService(
             && await db.TicketPins.AnyAsync(
                 p => p.TicketId == ticketId && p.AgentId == actor.UserId, ct);
 
-        return ToDetail(ticket, status?.Name ?? ticket.Status, actor.IsAgentOrAdmin, isPinned);
+        // Everything hanging off the ticket, in one query plus (only when there is
+        // something to describe) the relation lists. A customer surface asks for
+        // none of it — every one of these is internal.
+        var attached = actor.IsAgentOrAdmin ? await AttachedAsync(actor.WorkspaceId, ticketId, ct) : null;
+
+        return ToDetail(ticket, status?.Name ?? ticket.Status, actor.IsAgentOrAdmin, isPinned, attached);
     }
+
+    /// <summary>
+    /// The counts the ticket screen renders before the agent touches anything:
+    /// links, assets, broken services, open tasks, silent responders.
+    ///
+    /// Five scalar sub-queries in one round trip. They are counts rather than
+    /// lists on purpose — the tab that owns each one fetches its own rows when it
+    /// is opened, so nothing here grows with the size of what it is counting.
+    /// </summary>
+    private async Task<AttachedCounts> AttachedAsync(
+        Guid workspaceId, Guid ticketId, CancellationToken ct)
+    {
+        var counts = await db.Tickets
+            .Where(t => t.Id == ticketId && t.WorkspaceId == workspaceId)
+            .Select(t => new
+            {
+                Assets = db.TicketAssets.Count(x => x.TicketId == t.Id),
+                Services = db.TicketImpactedServices.Count(x => x.TicketId == t.Id),
+                Down = db.TicketImpactedServices.Count(
+                    x => x.TicketId == t.Id && x.Level == ServiceImpactLevel.Down),
+                OpenTasks = db.TicketTasks.Count(x => x.TicketId == t.Id && x.CompletedAt == null),
+                // Same rule as the resolve gate: any comment they wrote counts.
+                // Read from comments rather than a flag, so the two can never
+                // disagree about whether somebody replied.
+                PendingResponders = db.TicketResponders.Count(r =>
+                    r.TicketId == t.Id
+                    && !db.Comments.Any(c => c.TicketId == t.Id && c.AuthorId == r.AgentId)),
+            })
+            .SingleAsync(ct);
+
+        return new AttachedCounts(
+            await relations.SummaryAsync(workspaceId, ticketId, ct),
+            counts.Assets, counts.Services, counts.Down,
+            counts.OpenTasks, counts.PendingResponders);
+    }
+
+    private record AttachedCounts(
+        TicketRelationSummaryDto Relations,
+        int Assets, int Services, int DownServices, int OpenTasks, int PendingResponders);
 
     // ---- Create + round-robin assignment ------------------------------------
 
@@ -595,8 +671,18 @@ public class TicketService(
 
     // ---- Update (agent/admin) ------------------------------------------------
 
-    public async Task<TicketDetailDto?> UpdateAsync(
+    public Task<TicketDetailDto?> UpdateAsync(
         Actor actor, Guid ticketId, UpdateTicketRequest request, CancellationToken ct)
+        => UpdateAsync(actor, ticketId, request, syncedFrom: null, ct);
+
+    /// <param name="syncedFrom">
+    /// Set only when this save is a duplicate following another ticket. It changes
+    /// nothing about the update itself — it is what makes the activity entry say
+    /// "synced from #ab12" instead of implying somebody opened this ticket and
+    /// decided. Also the recursion stop: a synced save never cascades again.
+    /// </param>
+    private async Task<TicketDetailDto?> UpdateAsync(
+        Actor actor, Guid ticketId, UpdateTicketRequest request, Guid? syncedFrom, CancellationToken ct)
     {
         if (!actor.IsAgentOrAdmin)
             throw new UnauthorizedAccessException();
@@ -632,6 +718,12 @@ public class TicketService(
             activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
                 TicketActivityType.Subject, wasSubject, ticket.Subject);
         }
+
+        // Filled in only on an open→terminal move, and read after the save: the
+        // override has to be recorded, and the duplicates have to follow, but
+        // neither can happen until this ticket's own change has actually landed.
+        ResolveWarningsDto? bypassed = null;
+        CascadeTargets? cascade = null;
 
         if (request.Status is not null)
         {
@@ -677,6 +769,32 @@ public class TicketService(
                     throw new ArgumentException(
                         $"Keep the customer summary under {MaxResolutionNoteLength} characters.");
                 ticket.ResolutionSummary = string.IsNullOrWhiteSpace(summary) ? null : summary;
+
+                // ── Accountability gate ──────────────────────────────────────
+                // Open tasks, a responder who never replied, an open blocker. Any
+                // of them and the caller has to say it knows; the fact that it
+                // went ahead is then written into the log with the agent's name.
+                //
+                // Skipped for a synced duplicate. It was acknowledged once, on the
+                // ticket the agent was actually looking at, and stopping to ask
+                // about a checklist on a ticket they never opened would turn one
+                // confirmation into five.
+                if (syncedFrom is null)
+                {
+                    var warnings = await guard.WarningsAsync(actor.WorkspaceId, ticket.Id, ct);
+                    if (warnings.Any)
+                    {
+                        if (!request.AcknowledgeWarnings) throw new TicketWarningsException(warnings);
+                        bypassed = warnings;
+                    }
+
+                    // Which duplicates follow. Resolved here, before anything is
+                    // written, so an id that does not qualify is refused rather
+                    // than discovered halfway through a cascade.
+                    if (request.AlsoResolve is { Count: > 0 } wanted)
+                        cascade = await guard.ResolveCascadeAsync(
+                            actor.WorkspaceId, ticket.Id, wanted, ct);
+                }
             }
 
             // Set together, always — the category is what every rule reads, and
@@ -705,14 +823,30 @@ public class TicketService(
                 activity.Changed(actor.WorkspaceId, ticket.Id, actor.UserId,
                     TicketActivityType.Status, previousName, target.Name);
 
+                // Where the decision was actually made. Without this the log on a
+                // synced duplicate reads as though somebody opened it and resolved
+                // it, and the question it has to answer — "who decided this, and
+                // on what?" — has no answer on this ticket at all.
+                if (syncedFrom is { } source)
+                    activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
+                        TicketActivityType.StatusSynced, TicketNumber.Hash(source));
+
                 // Plus a second entry for crossing the line into or out of
                 // "finished". Two rows for one change is deliberate: "resolved"
                 // and "reopened" are the events a manager scans for, and making
                 // them findable would otherwise mean knowing which of the
                 // workspace's status names happen to be terminal ones.
                 if (wasOpen && isEnding)
+                {
                     activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
                         TicketActivityType.Resolved, ticket.ResolutionNote);
+
+                    // The override, in the same breath as the resolve it qualifies.
+                    // A soft gate whose bypass leaves no trace is just a dialog.
+                    if (bypassed is not null)
+                        activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
+                            TicketActivityType.ResolvedWithWarnings, bypassed.Describe());
+                }
                 else if (!wasOpen && !isEnding)
                     activity.Happened(actor.WorkspaceId, ticket.Id, actor.UserId,
                         TicketActivityType.Reopened, target.Name);
@@ -1009,7 +1143,103 @@ public class TicketService(
         if (ticket.AssigneeId is { } newAssignee && newAssignee != previousAssignee)
             await notifications.OnAssignmentAsync(ticket.Id, newAssignee, reassigned: previousAssignee is not null, ct);
 
+        // ── Consequences of the link, after the change has landed ──────────────
+        // Both of these read the ticket's committed state and write to OTHER
+        // tickets, so they run after the save rather than inside it: a cascade
+        // that rolled back would leave the agent looking at a resolved ticket
+        // whose duplicates silently did not follow.
+        if (ticket.Status != previousStatus
+            && TicketStatusCategory.IsOpen(previousCategory)
+            && TicketStatusCategory.IsTerminal(ticket.StatusCategory))
+        {
+            await AnnounceUnblockedAsync(actor, ticket, ct);
+            if (cascade is not null)
+                await CascadeDuplicatesAsync(actor, ticket, cascade, request, ct);
+        }
+
         return await GetAsync(actor, ticketId, ct);
+    }
+
+    /// <summary>
+    /// Tells whoever was waiting that they can start.
+    ///
+    /// The assignee gets the bell row — it is a "you can begin now" message and
+    /// only they can act on it. Everybody watching the blocked ticket still learns
+    /// it from the activity entry, which is where a fact about a ticket belongs.
+    /// </summary>
+    private async Task AnnounceUnblockedAsync(Actor actor, Ticket ticket, CancellationToken ct)
+    {
+        var waiting = await relations.BlockedByThisAsync(actor.WorkspaceId, ticket.Id, ct);
+        if (waiting.Count == 0) return;
+
+        foreach (var blocked in waiting)
+        {
+            activity.Happened(actor.WorkspaceId, blocked.Id, actor.UserId,
+                TicketActivityType.Unblocked, $"{TicketNumber.Hash(ticket.Id)} {ticket.Subject}");
+
+            if (blocked.Assignee is { } assignee)
+                feed.Queue(actor.WorkspaceId, [assignee.Id], NotificationType.Unblocked,
+                    actor.UserId, blocked.Id,
+                    preview: $"{TicketNumber.Hash(ticket.Id)} {ticket.Subject}");
+        }
+
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Resolves the duplicates the agent ticked, each as a real resolve.
+    ///
+    /// **Through <see cref="UpdateAsync"/>, not by patching columns.** A duplicate
+    /// that ends is a ticket that ends: its SLA has to stop, its automation has to
+    /// run, its customer has to be told and its own CSAT survey has to go out. A
+    /// shortcut that only wrote `status` and `resolved_at` would produce tickets
+    /// that look resolved and behave as though they never were — and the
+    /// difference would surface weeks later in the SLA report.
+    ///
+    /// Recursion is bounded by construction: the nested call passes
+    /// <c>AlsoResolve: null</c>, so a cascade can never start another one.
+    ///
+    /// One failure does not sink the rest, and does not sink the resolve the agent
+    /// actually asked for — that one is already committed. Each failure is recorded
+    /// on the source ticket, so "why is #cd34 still open?" is answerable from the
+    /// log rather than from a toast nobody screenshotted.
+    /// </summary>
+    private async Task CascadeDuplicatesAsync(
+        Actor actor, Ticket source, CascadeTargets cascade, UpdateTicketRequest request, CancellationToken ct)
+    {
+        foreach (var target in cascade.Targets)
+        {
+            try
+            {
+                await UpdateAsync(actor, target.Id, new UpdateTicketRequest(
+                    Subject: null,
+                    Status: source.Status,
+                    Priority: null,
+                    CategoryId: null,
+                    // The same words, because it is the same fix. Copying the
+                    // customer summary matters most: each of these tickets is a
+                    // person who asked, and they all deserve the sentence the
+                    // agent took the trouble to write.
+                    ResolutionNote: request.ResolutionNote,
+                    ResolutionLink: request.ResolutionLink,
+                    ResolutionSummary: request.ResolutionSummary,
+                    // Not the time. The minutes are the agent's work on the ticket
+                    // they were looking at; booking them again against every
+                    // duplicate would multiply one afternoon into five.
+                    TimeSpentMinutes: null,
+                    AlsoResolve: null,
+                    AcknowledgeWarnings: true), syncedFrom: source.Id, ct);
+            }
+            catch (Exception e) when (e is ArgumentException or TicketWarningsException)
+            {
+                // The usual cause is a workflow that will not allow this ticket's
+                // current status to jump straight to the target one.
+                activity.Happened(actor.WorkspaceId, source.Id, actor.UserId,
+                    TicketActivityType.StatusSynced,
+                    $"{TicketNumber.Hash(target.Id)} could not follow: {e.Message}");
+                await db.SaveChangesAsync(ct);
+            }
+        }
     }
 
     // ---- Time spent -----------------------------------------------------------
@@ -1645,7 +1875,8 @@ public class TicketService(
     // ---- Mapping -----------------------------------------------------------------
 
     private static TicketDetailDto ToDetail(
-        Ticket t, string statusName, bool isAgentOrAdmin, bool isPinned) => new(
+        Ticket t, string statusName, bool isAgentOrAdmin, bool isPinned,
+        AttachedCounts? attached) => new(
         t.Id, t.Subject, t.Description, t.Status, t.StatusCategory, statusName,
         t.Priority, t.Channel,
         CategoryDto.From(t.Category),
@@ -1682,7 +1913,16 @@ public class TicketService(
         t.ResolutionSummary,
         isAgentOrAdmin ? UserSummaryDto.From(t.ResolvedBy) : null,
         isAgentOrAdmin ? t.ResolvedAt : null,
-        t.CreatedAt, t.UpdatedAt);
+        t.CreatedAt, t.UpdatedAt,
+        // Null for a customer, and zeroes rather than a guess: the caller only
+        // computes these for an agent, so there is nothing honest to put here
+        // otherwise. Every one of them is internal (invariant 5).
+        attached?.Relations,
+        attached?.Assets ?? 0,
+        attached?.Services ?? 0,
+        attached?.DownServices ?? 0,
+        attached?.OpenTasks ?? 0,
+        attached?.PendingResponders ?? 0);
 
     private const int MaxResolutionNoteLength = 4000;
 

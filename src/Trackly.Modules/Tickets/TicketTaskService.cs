@@ -19,6 +19,16 @@ public class TicketTaskService(TracklyDbContext db, ActivityLog activity)
 {
     private const int MaxTitleLength = 300;
 
+    /// <summary>
+    /// Ceiling on the cross-ticket list.
+    ///
+    /// A checklist is worked through, not paged: an agent with 500 open tasks does
+    /// not need page 3, they need a conversation with their lead. High enough that
+    /// nobody real hits it, low enough that a workspace with a runaway automation
+    /// rule cannot ask the server for a hundred thousand rows.
+    /// </summary>
+    private const int MaxAcrossWorkspace = 500;
+
     // ---- Tasks ---------------------------------------------------------------
 
     public async Task<IReadOnlyList<TicketTaskDto>?> ListAsync(
@@ -131,6 +141,80 @@ public class TicketTaskService(TracklyDbContext db, ActivityLog activity)
         await db.SaveChangesAsync(ct);
         return true;
     }
+
+    // ---- Tasks across the workspace ------------------------------------------
+
+    /// <summary>
+    /// An agent's whole checklist, from every ticket at once.
+    ///
+    /// The per-ticket list answers "what is left on this one". This answers "what
+    /// is left for me", which is the question somebody starting their day has —
+    /// and until this existed the only way to answer it was to open every ticket
+    /// they were on and read the Tasks tab of each.
+    ///
+    /// **Open first, oldest first, and overdue is not a separate list.** A due date
+    /// that has passed is rendered differently, not filed somewhere else: a second
+    /// list is a second place to forget to look.
+    ///
+    /// <paramref name="assigneeId"/> null means every agent's tasks — a lead
+    /// looking at the team. It is a real id and not a "mine" flag because that is
+    /// a legitimate question here, unlike mentions or pins where asking about
+    /// somebody else would be reading their inbox: a task is work the workspace
+    /// assigned, not a private bookmark.
+    /// </summary>
+    public async Task<IReadOnlyList<AgentTaskDto>> MineAsync(
+        Actor actor, Guid? assigneeId, bool unassigned, bool includeDone,
+        bool openTicketsOnly, CancellationToken ct)
+    {
+        if (!actor.IsAgentOrAdmin) throw new UnauthorizedAccessException();
+
+        var query = db.TicketTasks.Where(t => t.WorkspaceId == actor.WorkspaceId);
+
+        if (unassigned) query = query.Where(t => t.AssigneeId == null);
+        else if (assigneeId is { } who) query = query.Where(t => t.AssigneeId == who);
+
+        if (!includeDone) query = query.Where(t => t.CompletedAt == null);
+
+        // Tasks on a resolved ticket are history: the work they described either
+        // happened or was consciously skipped when the ticket was closed, and
+        // either way nobody is going to do them now. Off by default so the list is
+        // a to-do list rather than an archive.
+        if (openTicketsOnly)
+            query = query.Where(t =>
+                t.Ticket!.StatusCategory != TicketStatusCategory.Resolved
+                && t.Ticket.StatusCategory != TicketStatusCategory.Closed);
+
+        return await query
+            // Open before done; then by due date with the undated last, because a
+            // task with a deadline is the one that can go wrong; then oldest first.
+            .OrderBy(t => t.CompletedAt != null)
+            .ThenBy(t => t.DueAt == null)
+            .ThenBy(t => t.DueAt)
+            .ThenBy(t => t.CreatedAt)
+            .Take(MaxAcrossWorkspace)
+            .Select(t => new AgentTaskDto(
+                t.Id, t.Title, UserSummaryDto.From(t.Assignee), t.DueAt,
+                t.CompletedAt, UserSummaryDto.From(t.CompletedBy), t.CreatedAt,
+                t.TicketId,
+                t.Ticket!.Subject,
+                t.Ticket.Status,
+                db.TicketStatuses
+                    .Where(s => s.WorkspaceId == t.WorkspaceId && s.Value == t.Ticket!.Status)
+                    .Select(s => s.Name)
+                    .FirstOrDefault() ?? t.Ticket.Status,
+                t.Ticket.StatusCategory,
+                t.Ticket.Priority))
+            .ToListAsync(ct);
+    }
+
+    /// <summary>How many open tasks are on this agent, for the sidebar count.</summary>
+    public Task<int> MyOpenCountAsync(Actor actor, CancellationToken ct) =>
+        db.TicketTasks.CountAsync(t =>
+            t.WorkspaceId == actor.WorkspaceId
+            && t.AssigneeId == actor.UserId
+            && t.CompletedAt == null
+            && t.Ticket!.StatusCategory != TicketStatusCategory.Resolved
+            && t.Ticket.StatusCategory != TicketStatusCategory.Closed, ct);
 
     // ---- Responders ----------------------------------------------------------
 
@@ -260,3 +344,27 @@ public record TicketTaskDto(
     DateTime CreatedAt);
 
 public record TicketResponderDto(UserSummaryDto Agent, string? Role, DateTime AddedAt);
+
+/// <summary>
+/// A task seen from the Tasks screen rather than from inside a ticket, so it
+/// carries enough of its ticket to be actionable without opening it.
+///
+/// Separate from <see cref="TicketTaskDto"/> instead of adding nullable ticket
+/// fields to it: on the ticket screen those fields would be six columns of the
+/// thing you are already looking at, and a shape whose meaning depends on where it
+/// came from is the kind that gets rendered wrong.
+/// </summary>
+public record AgentTaskDto(
+    Guid Id,
+    string Title,
+    UserSummaryDto? Assignee,
+    DateTime? DueAt,
+    DateTime? CompletedAt,
+    UserSummaryDto? CompletedBy,
+    DateTime CreatedAt,
+    Guid TicketId,
+    string TicketSubject,
+    string TicketStatus,
+    string TicketStatusName,
+    string TicketStatusCategory,
+    string TicketPriority);
