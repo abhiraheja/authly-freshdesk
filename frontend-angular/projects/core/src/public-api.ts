@@ -36,4 +36,5 @@ export * from './lib/theme/theme.service';
 export * from './lib/ui-prefs.store';
 export * from './lib/format';
 export * from './lib/resource-utils';
+export * from './lib/route-params';
 export * from './lib/upload/file-rules';

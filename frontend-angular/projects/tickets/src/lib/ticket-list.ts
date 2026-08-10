@@ -19,6 +19,7 @@ import {
   SessionStore,
   TicketsApi,
   errorMessage,
+  fromQuery,
   isTerminalCategory,
   slaState,
   timeAgo,
@@ -61,11 +62,6 @@ import {
 } from './ticket-facets';
 
 const PAGE_SIZE = 20;
-
-/** Absent query params arrive as `undefined`; every filter wants `''`. */
-function fromQuery(value: string | undefined): string {
-  return value ?? '';
-}
 
 /** Channel → icon, so the source is readable at a glance in the list. */
 const CHANNEL_ICON: Record<string, IconName> = {

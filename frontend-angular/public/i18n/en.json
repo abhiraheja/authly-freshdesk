@@ -1349,6 +1349,7 @@
     "subtitle": "Everyone who raises tickets — and who has found the portal.",
     "add": "Add customer",
     "added": "Added {{name}}.",
+    "alreadyExists": "Already on the list — {{name}} was there, so nothing was added.",
     "unnamed": "Unnamed",
     "inactive": "Inactive",
     "showInactive": "Include inactive",

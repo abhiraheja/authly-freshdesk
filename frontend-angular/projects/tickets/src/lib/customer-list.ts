@@ -7,6 +7,7 @@ import {
   TicketsApi,
   errorMessage,
   formatDate,
+  fromQuery,
   timeAgo,
   type CustomerRow,
 } from '@trackly/core';
@@ -287,12 +288,17 @@ export class CustomerList {
   private readonly transloco = inject(TranslocoService);
   private readonly session = inject(SessionStore);
 
-  /** URL-bound by `withComponentInputBinding()`. */
-  readonly q = input('');
-  readonly signedIn = input('');
-  readonly inactive = input('');
-  readonly sort = input('');
-  readonly page = input('');
+  /**
+   * URL-bound by `withComponentInputBinding()`.
+   *
+   * `fromQuery` on every one of them: clearing a filter removes the param, and
+   * the router then writes `undefined` rather than restoring the `''` default.
+   */
+  readonly q = input('', { transform: fromQuery });
+  readonly signedIn = input('', { transform: fromQuery });
+  readonly inactive = input('', { transform: fromQuery });
+  readonly sort = input('', { transform: fromQuery });
+  readonly page = input('', { transform: fromQuery });
 
   protected readonly pageSize = 25;
   protected readonly skeletonRows = [0, 1, 2, 3, 4, 5];
@@ -387,18 +393,34 @@ export class CustomerList {
     if (!form.valid() || this.saving()) return;
     this.saving.set(true);
     try {
-      const customer = await this.api.createCustomer(form.body());
+      const { body: customer, created } = await this.api.createCustomerChecked(form.body());
       this.addOpen.set(false);
-      this.toast.success(
-        this.transloco.translate('customers.added', {
-          name: customer.name || customer.email || '',
-        }),
-      );
-      // Both, because the summary counts what the list shows and a stale headline
-      // beside a fresh row is worse than a slow one.
-      this.customers.reload();
-      this.summary.reload();
-      void this.router.navigate(['/dashboard/customers', customer.id]);
+      form.reset();
+      const name = customer.name || customer.email || '';
+
+      // Two different outcomes behind one button, so two different endings.
+      //
+      // **Created** — stay put. The modal already collects every field the profile
+      // page edits, so there is nothing left to fill in there, and navigating away
+      // would throw out the search, filter and page the agent was in. Watching the
+      // row appear and the count tick up IS the confirmation this screen exists to
+      // give, and it leaves the agent able to add the next person.
+      //
+      // **Already existed** — open them, and say so. The endpoint is get-or-create,
+      // so nothing was written and nothing will appear; a success toast beside an
+      // unchanged list would tell the agent they had recorded somebody when they
+      // had not. Their profile is also the answer to the question the agent was
+      // really asking, which is what we already know about this person.
+      if (created) {
+        this.toast.success(this.transloco.translate('customers.added', { name }));
+        // Both, because the summary counts what the list shows and a stale headline
+        // beside a fresh row is worse than a slow one.
+        this.customers.reload();
+        this.summary.reload();
+      } else {
+        this.toast.info(this.transloco.translate('customers.alreadyExists', { name }));
+        void this.router.navigate(['/dashboard/customers', customer.id]);
+      }
     } catch (error) {
       this.toast.error(errorMessage(error));
     } finally {

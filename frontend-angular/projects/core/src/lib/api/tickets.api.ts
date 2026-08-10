@@ -1111,6 +1111,18 @@ export class TicketsApi {
     return this.api.post<Customer>('/api/users', body);
   }
 
+  /**
+   * As `createCustomer`, but says whether the customer was actually created.
+   *
+   * The endpoint is get-or-create on email: it answers 201 with a new record, or
+   * 200 with the one that was already there — never an error, and never
+   * overwriting details a colleague recorded. `created: false` means the agent
+   * typed in somebody who already exists, which is worth telling them.
+   */
+  createCustomerChecked(body: CustomerBody): Promise<{ body: Customer; created: boolean }> {
+    return this.api.postStatus<Customer>('/api/users', body);
+  }
+
   customer(id: string): Promise<CustomerDetail> {
     return this.api.get<CustomerDetail>(`/api/users/${id}`);
   }

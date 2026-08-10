@@ -1489,10 +1489,17 @@ not a person who failed to sign in.
 the form, or an agent attaches a ticket to a new address, the record appears. Add
 customer is for the case where you know about somebody before they write in.
 
-Adding is get-or-create by email: adding somebody who already exists opens them
-rather than failing, and never overwrites details a colleague took the time to
-record. **The email is the identity**, which is why it is the one required field
-and why it cannot be edited afterwards — it is the address a sign-in code goes to.
+Adding is get-or-create by email, and the two outcomes end differently on purpose.
+A **new** customer appears in the list behind the closed dialog with the counts
+updated, leaving you where you were and ready to add the next person. Somebody who
+**already existed** opens instead, and the message says so — nothing was written,
+so a list that did not change would otherwise look like a save that silently failed,
+and what you actually want at that moment is to see what is already recorded about
+them. Either way an existing record is never overwritten with the details you just
+typed, so this cannot be used to clobber what a colleague took the time to record.
+
+**The email is the identity**, which is why it is the one required field and why it
+cannot be edited afterwards — it is the address a sign-in code goes to.
 
 Search covers name, email, phone and company. Not the custom fields: those are
 workspace-defined and unindexed, and searching them would scan the whole table.

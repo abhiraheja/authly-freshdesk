@@ -1349,6 +1349,7 @@
     "subtitle": "जो भी टिकट बनाते हैं — और किन्हें पोर्टल मिल चुका है।",
     "add": "ग्राहक जोड़ें",
     "added": "{{name}} जोड़ दिया।",
+    "alreadyExists": "{{name}} pehle se list mein hain — kuch naya add nahi hua.",
     "unnamed": "बिना नाम",
     "inactive": "निष्क्रिय",
     "showInactive": "निष्क्रिय भी दिखाएँ",

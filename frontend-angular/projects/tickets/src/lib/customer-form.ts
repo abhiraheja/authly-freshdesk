@@ -147,6 +147,25 @@ export class CustomerForm {
     this.rows.set(Object.entries(fields ?? {}).map(([key, value]) => ({ key, value })));
   }
 
+  /**
+   * Empties every field. Called by an "add" host after a successful create.
+   *
+   * Needed because this form outlives the modal it sits in: `tk-modal` gates its
+   * `<ng-content>` on `open()`, but projected content belongs to the *declaring*
+   * view, so closing the modal hides these inputs without destroying them.
+   * Without this, adding a second customer starts with the first one's details
+   * already typed in — including their email, which is the one field that
+   * decides who the record is.
+   */
+  reset(): void {
+    this.email.set('');
+    this.name.set('');
+    this.phone.set('');
+    this.company.set('');
+    this.location.set('');
+    this.rows.set([]);
+  }
+
   protected addRow(): void {
     this.rows.update((rows) => [...rows, { key: '', value: '' }]);
   }

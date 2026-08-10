@@ -8,6 +8,7 @@ import {
   TicketsApi,
   errorMessage,
   formatDate,
+  fromQuery,
   toneFor,
   type Asset,
 } from '@trackly/core';
@@ -341,9 +342,14 @@ export class AssetRegister {
   private readonly api = inject(TicketsApi);
   private readonly router = inject(Router);
 
-  /** URL-bound. `q` is the search term, `retired` includes retired assets. */
-  readonly q = input('');
-  readonly retired = input('');
+  /**
+   * URL-bound. `q` is the search term, `retired` includes retired assets.
+   *
+   * `fromQuery` because clearing the search removes the param, and the router
+   * then writes `undefined` rather than restoring the `''` default.
+   */
+  readonly q = input('', { transform: fromQuery });
+  readonly retired = input('', { transform: fromQuery });
 
   protected readonly skeletonRows = [0, 1, 2, 3, 4];
 

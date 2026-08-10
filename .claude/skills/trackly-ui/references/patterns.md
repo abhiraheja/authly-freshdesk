@@ -101,8 +101,8 @@ One `<tk-card dense>` holding a `flex flex-wrap gap-2` row. Search grows
 `input()`s by `withComponentInputBinding()`:
 
 ```ts
-readonly view = input('');
-readonly q = input('');
+readonly view = input('', { transform: fromQuery });     // ← never a bare input('')
+readonly q = input('', { transform: fromQuery });
 
 protected readonly tickets = resource({
   params: () => ({ view: this.view(), search: this.q() }),
@@ -113,7 +113,23 @@ protected readonly tickets = resource({
 Three things fall out for free: shareable links, working browser Back, and the
 resource params doubling as the cache key.
 
-Two details that are easy to get wrong:
+Three details that are easy to get wrong:
+
+- **`fromQuery` on every URL-bound input** — `@trackly/core`. The router's
+  `unmatchedInputBehavior` defaults to `alwaysUndefined`, so it calls
+  `setInput(name, undefined)` for every input a routed component declares,
+  overwriting the declared default *on the first navigation*. `readonly q =
+  input('')` is therefore `undefined`, not `''`, and `this.q().trim()` throws.
+  Use `fromQueryOr('me')` where absence means something other than "no filter".
+
+  This is worth knowing by name because of how it presents. The throw happens
+  inside a `computed()` read from a template, so it aborts the update pass
+  partway: the view renders its structure with none of its text — an empty state
+  showing a bare icon circle and no words. A `computed` caches thrown errors, and
+  the dependency never changes, so it rethrows on every pass and the tab hangs.
+  Nothing about that looks like "an input was undefined", and it has cost this
+  codebase four screens. Fix it at the boundary; do not scatter `?? ''` at the
+  read sites.
 - **Debounce the search box** and write it with `replaceUrl: true`, or every
   keystroke becomes a history entry.
 - **Reset `page` on any other filter change.** Page 3 of the old filter is

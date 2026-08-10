@@ -1,7 +1,13 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, resource, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TicketsApi, errorMessage, valueOr, type TicketOption } from '@trackly/core';
+import {
+  TicketsApi,
+  errorMessage,
+  fromQueryOr,
+  valueOr,
+  type TicketOption,
+} from '@trackly/core';
 import { Tabs, ToastService, type TabItem } from '@trackly/ui';
 import { ConfigList, type ConfigRow } from './config-list';
 
@@ -144,10 +150,10 @@ export class AdminConfiguration {
 
   /**
    * Bound from `?tab=`. An absent param arrives as undefined, not as the
-   * declared default, so the transform normalises it — the same trap the ticket
-   * list hit.
+   * declared default, so the transform normalises it — see `fromQueryOr`, which
+   * exists because this trap has now caught four screens.
    */
-  readonly tabParam = input('department', { transform: (value?: string) => value || 'department' });
+  readonly tabParam = input('department', { transform: fromQueryOr('department') });
 
   /** Local mirror, so the tab rail can write to it and an effect syncs the URL. */
   protected readonly tab = signal('department');

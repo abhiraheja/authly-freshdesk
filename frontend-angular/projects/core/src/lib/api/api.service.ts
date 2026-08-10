@@ -50,6 +50,26 @@ export class ApiService {
     return firstValueFrom(this.http.post<T>(this.url(path), body ?? {}));
   }
 
+  /**
+   * A POST whose **status code carries meaning**, alongside the body.
+   *
+   * Only for get-or-create endpoints, which answer 201 when they made the record
+   * and 200 when one already existed. The body is identical either way, so a
+   * caller reading only the body cannot tell "created" from "found" — and
+   * reporting "added" for a record that already existed tells the user something
+   * untrue about their own data.
+   *
+   * Everything else should use `post`: a status code is not a place to put
+   * information a caller needs, and this exists because two endpoints already
+   * did it.
+   */
+  async postStatus<T>(path: string, body?: unknown): Promise<{ body: T; created: boolean }> {
+    const response = await firstValueFrom(
+      this.http.post<T>(this.url(path), body ?? {}, { observe: 'response' }),
+    );
+    return { body: response.body as T, created: response.status === 201 };
+  }
+
   patch<T>(path: string, body?: unknown): Promise<T> {
     return firstValueFrom(this.http.patch<T>(this.url(path), body ?? {}));
   }

@@ -9,6 +9,8 @@ import {
   TicketsApi,
   errorMessage,
   formatDate,
+  fromQuery,
+  fromQueryOr,
   toneFor,
   type AgentTask,
 } from '@trackly/core';
@@ -248,15 +250,22 @@ export class MyTasks {
   private readonly session = inject(SessionStore);
   private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
 
-  /** URL-bound by `withComponentInputBinding()`. Defaults to the caller's own. */
-  readonly assignee = input('me');
-  readonly done = input('');
+  /**
+   * URL-bound by `withComponentInputBinding()`. Defaults to the caller's own.
+   *
+   * `fromQueryOr('me')` rather than a bare default: the router writes `undefined`
+   * when the param leaves the URL, which does not throw here but reads as
+   * "everybody" — so the page would show your tasks under the all-tasks heading
+   * with no filter highlighted.
+   */
+  readonly assignee = input('me', { transform: fromQueryOr('me') });
+  readonly done = input('', { transform: fromQuery });
 
   protected readonly busy = signal(false);
   protected readonly skeletonRows = [0, 1, 2, 3, 4];
 
   protected readonly tasks = resource({
-    params: () => ({ assignee: this.assignee() || 'me', done: this.done() }),
+    params: () => ({ assignee: this.assignee(), done: this.done() }),
     loader: ({ params }) =>
       this.api.tasks({
         // `all` is the absence of the filter, and the API reads a missing
