@@ -24,7 +24,7 @@ A standalone, **self-hosted** ticket management app — submit, track, and resol
 | `docs/admin-guide.md` | **Admin handbook** — every feature with setup + usage |
 | `docs/go-live.md` | Living deployment checklist (config, secrets, infra) |
 | `docs/mockups/` | Approved HTML design mockups — open `index.html` in a browser |
-| `DOCKERHUB.md` | Docker Hub description — the image-first quick start and every environment variable |
+| `DOCKERHUB.web.md` / `DOCKERHUB.api.md` | Docker Hub repo overviews — paste into the matching image's description field |
 | `Dockerfile.api` | API image (build from the repo root) |
 | `frontend-angular/Dockerfile` | SPA image — the Angular bundle plus the nginx that fronts the API |
 | `docker-compose.self-host.yml` | The whole stack from published images: Postgres + API + SPA |
@@ -62,7 +62,7 @@ Only the `web` container publishes a port; the API is reached through it at
 `/api`, `/hubs` and `/widget.js`. That is required, not tidy — the session cookie
 is `SameSite=Strict`, so a split origin would drop it on every request.
 
-See **[`DOCKERHUB.md`](DOCKERHUB.md)** for every environment variable and
+See **[`DOCKERHUB.web.md`](DOCKERHUB.web.md)** / **[`DOCKERHUB.api.md`](DOCKERHUB.api.md)** for every environment variable and
 **[`docs/go-live.md` §0.5](docs/go-live.md)** for volumes, TLS and production
 notes. Images are built and pushed by
 [`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml) on

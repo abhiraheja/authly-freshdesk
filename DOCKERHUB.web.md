@@ -9,13 +9,18 @@ Two images make up a deployment:
 
 | Image | Role |
 |---|---|
-| `abhiraheja/trackly-web` | Angular SPA behind nginx — **the only port you publish**. Also reverse-proxies `/api`, `/hubs` and `/widget.js` to the API |
-| `abhiraheja/trackly-api` | ASP.NET Core API, SignalR live-chat hub, background workers |
+| **`abhiraheja/trackly-web`** ← you are here | Angular SPA behind nginx — **the only port you publish**. Also reverse-proxies `/api`, `/hubs` and `/widget.js` to the API |
+| [`abhiraheja/trackly-api`](https://hub.docker.com/r/abhiraheja/trackly-api) | ASP.NET Core API, SignalR live-chat hub, background workers |
 
 They are two images but **one origin**. The session is an `HttpOnly;
 SameSite=Strict` cookie, so the browser must see the SPA and the API on the same
 host — publishing the API separately does not work, and nothing in the UI will
 tell you why.
+
+**Start here.** This image is the front door: it serves the compiled Angular
+bundle on port **8080** and proxies everything under `/api`, `/hubs` (WebSocket
+upgrade included, for live chat) and `/widget.js` to the API container. It holds
+no state and needs no volume.
 
 ## Features
 
@@ -110,16 +115,31 @@ configured from *inside* the admin UI and does not exist yet.
 
 ## Configuration
 
-Every key maps to an environment variable with `__` in place of `:`.
+### This image (`trackly-web`)
 
-### Required
+| Variable | Default | What it is |
+|---|---|---|
+| `TRACKLY_API_URL` | `http://api:8080` | Where nginx forwards `/api`, `/hubs`, `/widget.js`. **No trailing slash** — one turns into a `proxy_pass` URI and rewrites the request path |
+| `TRACKLY_RESOLVER` | `127.0.0.11` | DNS used to re-resolve `TRACKLY_API_URL` per request (Docker's embedded resolver). Re-resolution is what keeps the proxy working after the API container restarts with a new IP. Change it if the API is not a compose service on the same network |
+| `TRACKLY_MAX_BODY_SIZE` | `30m` | Upload ceiling at the proxy. Keep it ≥ the API's attachment limit or large uploads fail with a bare `413` before the API sees them |
+
+Nothing about the app is baked in at build time — every API call is a relative
+path, so the same image works in every environment.
+
+### The API container (`trackly-api`)
+
+Every key maps to an environment variable with `__` in place of `:`. Full detail
+lives on [that image's page](https://hub.docker.com/r/abhiraheja/trackly-api);
+repeated here so the compose file above is readable on its own.
+
+#### Required
 
 | Variable | What it is |
 |---|---|
 | `ConnectionStrings__Trackly` | PostgreSQL connection string (Npgsql format) |
 | `Security__MasterKey` | Base64 **32-byte** AES-256-GCM key encrypting every stored secret — SMTP/IMAP passwords, SSO client secrets, OAuth tokens, connector signing keys. **Generate once, back it up.** If it is lost or changed, none of those values can ever be decrypted again |
 
-### Strongly recommended
+#### Strongly recommended
 
 | Variable | Default | What it is |
 |---|---|---|
@@ -128,7 +148,7 @@ Every key maps to an environment variable with `__` in place of `:`.
 | `App__ForwardedHeaders` | `false` | Trust `X-Forwarded-For` / `X-Forwarded-Proto`. **Set `true` behind a proxy** (including the `web` image). Leave `false` if the API is directly internet-reachable — these headers are client-spoofable and this flag is the trust boundary |
 | `AllowedHosts` | `*` | Host header allow-list. Set your real hostname in production |
 
-### Optional
+#### Optional
 
 | Variable | Default | What it is |
 |---|---|---|
@@ -137,14 +157,6 @@ Every key maps to an environment variable with `__` in place of `:`.
 | `Ai__ApiKey` | — | Anthropic API key. Empty ⇒ the AI copilot stays off everywhere |
 | `Ai__Model` | `claude-opus-5` | Claude model id for the copilot |
 | `Email__Smtp__Host` / `Port` / `Username` / `Password` / `FromEmail` / `FromName` | — | Deployment-level SMTP relay. Empty host ⇒ outbound mail is written to the log instead of sent. Per-workspace SMTP configured in the admin UI is the normal path; this is the shared fallback that carries sign-in mail before one exists |
-
-### `trackly-web` variables
-
-| Variable | Default | What it is |
-|---|---|---|
-| `TRACKLY_API_URL` | `http://api:8080` | Where nginx forwards `/api`, `/hubs`, `/widget.js`. **No trailing slash** — one turns into a `proxy_pass` URI and rewrites the request path |
-| `TRACKLY_RESOLVER` | `127.0.0.11` | DNS used to re-resolve `TRACKLY_API_URL` per request (Docker's embedded resolver). Re-resolution is what keeps the proxy working after the API container restarts with a new IP |
-| `TRACKLY_MAX_BODY_SIZE` | `30m` | Upload ceiling at the proxy. Keep it ≥ the API's attachment limit or large uploads fail with a bare `413` before the API sees them |
 
 ## Persistence
 
@@ -187,6 +199,11 @@ works out of the box.
 
 ASP.NET Core 10 · EF Core · PostgreSQL 16 · SignalR · MailKit · Angular 22 ·
 Tailwind v4 · nginx · Anthropic SDK
+
+---
+
+Source, issues and the full deployment guide:
+**[github.com/abhiraheja/authly-freshdesk](https://github.com/abhiraheja/authly-freshdesk)**
 
 **Tags:** helpdesk, ticketing, support, freshdesk-alternative, zendesk-alternative,
 customer-support, self-hosted, service-desk, itsm, live-chat, knowledge-base

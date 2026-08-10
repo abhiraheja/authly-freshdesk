@@ -271,6 +271,45 @@ under **Admin ▾ → Workflow → AI copilot**:
 
 Both the key **and** the workspace toggle are required, or all AI actions stay off.
 
+### Building the Docker images locally
+
+CI publishes both images on every push to `main`
+(`.github/workflows/docker-image.yml`), so you rarely need this — reach for it
+when you've changed a `Dockerfile`, the nginx template, or anything that only
+misbehaves in a production build.
+
+```bash
+# From the repo root. The API image's context IS the repo root; the SPA's is frontend-angular/.
+docker build -f Dockerfile.api -t trackly-api:dev .
+docker build -t trackly-web:dev frontend-angular
+```
+
+To run the whole packaged stack the way a self-hoster would, tag them as the
+published names and use the self-host compose file — it pulls
+`abhiraheja/trackly-{api,web}:latest`, and a local tag of that name wins:
+
+```bash
+docker tag trackly-api:dev abhiraheja/trackly-api:latest
+docker tag trackly-web:dev abhiraheja/trackly-web:latest
+cp .env.example .env    # fill POSTGRES_PASSWORD + TRACKLY_MASTER_KEY
+docker compose -f docker-compose.self-host.yml up -d      # → http://localhost:8080
+docker compose -f docker-compose.self-host.yml down -v    # -v also drops the data
+```
+
+Note this is a **different stack** from the `docker compose up -d` in §3a, which
+only runs Postgres for local development. Both bind `5432` by default, so stop
+one before starting the other.
+
+Two things behave differently here than under `ng serve` / `dotnet run`, and both
+are worth knowing when something works in dev and not in the image:
+
+- nginx — not the Angular dev-server proxy — fronts `/api`, `/hubs` and
+  `/widget.js` (`frontend-angular/nginx/default.conf.template`). `/widget.js` is
+  served by the API at the **site root**, not under `/api`, so it is easy to miss.
+- The API trusts `X-Forwarded-*` (`App__ForwardedHeaders=true` in the compose
+  file) so the per-IP rate limiter and the cookie's `Secure` flag see the real
+  client. That flag is **off** by default in `dotnet run`.
+
 ---
 
 ## 8. Troubleshooting
@@ -290,6 +329,8 @@ Both the key **and** the workspace toggle are required, or all AI actions stay o
 | Angular page doesn't repaint after an update | The app is **zoneless**. State that a template reads must be a signal; mutating a plain field or array in place won't trigger anything. |
 | Git warns `LF will be replaced by CRLF` | Harmless line-ending normalization on Windows. |
 | `dotnet ef` not found | `dotnet tool install --global dotnet-ef`. |
+| Container stack: uploads fail with a permission error | `/app/data` is a **bind** mount. The API runs as uid 1654; `chown -R 1654:1654` the host directory. A *named* volume inherits the right ownership from the image and needs nothing. |
+| Container stack: `web` starts then 502s every `/api` call | The API isn't healthy yet, or `TRACKLY_API_URL` has a trailing slash — a trailing slash becomes a `proxy_pass` URI and rewrites the path. `docker compose -f docker-compose.self-host.yml logs api`. |
 | Restore fails `NU1301 … 401 (Unauthorized)` on a private feed | A machine- or user-level `NuGet.Config` (`%AppData%\NuGet\NuGet.Config`) adds a private feed with expired credentials; NuGet queries **every** configured source on restore, even though Trackly uses only nuget.org. The repo-root `nuget.config` `<clear />`s inherited sources — make sure you're restoring from the repo root and that file is present. |
 
 ---
