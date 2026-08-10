@@ -62,6 +62,7 @@
       "messaging": "मैसेजिंग",
       "widget": "विजेट",
       "email": "ईमेल",
+      "emailTemplates": "ईमेल टेम्पलेट",
       "storage": "स्टोरेज",
       "branding": "ब्रांडिंग",
       "sso": "SSO",
@@ -1212,9 +1213,7 @@
         "errSecret": "secret key डालें।",
         "errClientSecret": "client secret डालें।",
         "errConnectOrPassword": "या तो अकाउंट जोड़ें, या भेजने की जानकारी ऐप पासवर्ड के साथ भरें।"
-      },
-      "templatesHint": "हर मैसेज में क्या लिखा जाता है, और वह साझा लेआउट जिसमें सब रेंडर होते हैं।",
-      "editTemplates": "टेम्पलेट संपादित करें"
+      }
     },
     "templates": {
       "title": "ईमेल टेम्पलेट",

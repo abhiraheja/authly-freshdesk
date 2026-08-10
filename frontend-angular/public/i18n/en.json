@@ -62,6 +62,7 @@
       "messaging": "Messaging",
       "widget": "Widget",
       "email": "Email",
+      "emailTemplates": "Email templates",
       "storage": "Storage",
       "branding": "Branding",
       "sso": "SSO",
@@ -1212,9 +1213,7 @@
         "errSecret": "Enter the secret key.",
         "errClientSecret": "Enter the client secret.",
         "errConnectOrPassword": "Either connect the account, or fill in the sending details with an app password."
-      },
-      "templatesHint": "What each message says, and the shared layout they are all rendered into.",
-      "editTemplates": "Edit templates"
+      }
     },
     "templates": {
       "title": "Email templates",
