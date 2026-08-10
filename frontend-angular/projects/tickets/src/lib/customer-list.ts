@@ -169,12 +169,12 @@ import { CustomerForm } from './customer-form';
                 </th>
                 <th scope="col">{{ 'customers.columns.company' | transloco }}</th>
                 <th scope="col">{{ 'customers.columns.contact' | transloco }}</th>
-                <th scope="col" class="text-right">
+                <th scope="col" class="col-right">
                   <button type="button" class="font-inherit hover:text-foreground" (click)="setParam('sort', 'tickets')">
                     {{ 'customers.columns.tickets' | transloco }}
                   </button>
                 </th>
-                <th scope="col" class="text-right">{{ 'customers.columns.open' | transloco }}</th>
+                <th scope="col" class="col-right">{{ 'customers.columns.open' | transloco }}</th>
                 <th scope="col">
                   <button type="button" class="font-inherit hover:text-foreground" (click)="setParam('sort', 'lastSeen')">
                     {{ 'customers.columns.signedIn' | transloco }}
@@ -216,8 +216,8 @@ import { CustomerForm } from './customer-form';
                         <span class="block text-meta text-muted-foreground">{{ customer.phone }}</span>
                       }
                     </td>
-                    <td class="text-right font-mono text-body">{{ customer.totalTickets }}</td>
-                    <td class="text-right">
+                    <td class="col-right font-mono text-body">{{ customer.totalTickets }}</td>
+                    <td class="col-right">
                       @if (customer.openTickets) {
                         <tk-badge tone="warning">{{ customer.openTickets }}</tk-badge>
                       } @else {

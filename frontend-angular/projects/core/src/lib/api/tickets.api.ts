@@ -1127,6 +1127,19 @@ export class TicketsApi {
     return this.api.delete<void>(`/api/teams/${id}`);
   }
 
+  /**
+   * Membership is what makes routing work: a ticket filed into a department is
+   * round-robin assigned **within its members**, so an empty department is a
+   * department that quietly assigns nobody.
+   */
+  addTeamMember(teamId: string, userId: string): Promise<void> {
+    return this.api.post<void>(`/api/teams/${teamId}/members`, { userId });
+  }
+
+  removeTeamMember(teamId: string, userId: string): Promise<void> {
+    return this.api.delete<void>(`/api/teams/${teamId}/members/${userId}`);
+  }
+
   /** `parentId` creates a sub-category. Two levels only. */
   createCategory(body: { name: string; color?: string; parentId?: string | null }): Promise<Category> {
     return this.api.post<Category>('/api/categories', body);

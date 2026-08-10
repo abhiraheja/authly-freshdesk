@@ -1,12 +1,31 @@
-import { TranslocoPipe } from '@jsverse/transloco';
-import { ChangeDetectionStrategy, Component, computed, inject, resource, signal } from '@angular/core';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  computed,
+  effect,
+  inject,
+  resource,
+  signal,
+} from '@angular/core';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, type Event as RouterEvent } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
-import { SessionStore, TicketsApi, errorMessage } from '@trackly/core';
+import { ChatPresence, SessionStore, TicketsApi, errorMessage } from '@trackly/core';
 import { ThemeService } from '@trackly/core';
-import { Avatar, AvatarUpload, Button, ConfirmHost, Icon, Kbd, Modal, Toaster } from '@trackly/ui';
+import {
+  Avatar,
+  AvatarUpload,
+  Button,
+  ConfirmHost,
+  Icon,
+  Kbd,
+  Modal,
+  Toaster,
+  ToastService,
+} from '@trackly/ui';
 import { CommandPalette } from './command-palette';
 import { NotificationBell } from './notification-bell';
 import { NAV, type NavGroup, type NavItem } from './nav';
@@ -47,8 +66,19 @@ import { NAV, type NavGroup, type NavItem } from './nav';
 export class Shell {
   private readonly router = inject(Router);
   private readonly api = inject(TicketsApi);
+  private readonly chat = inject(ChatPresence);
+  private readonly toast = inject(ToastService);
+  private readonly transloco = inject(TranslocoService);
   protected readonly session = inject(SessionStore);
   protected readonly theme = inject(ThemeService);
+
+  constructor() {
+    // Only the shell starts it, and the shell only renders for staff — so a
+    // customer or a guest never opens a lobby connection.
+    void this.chat.start();
+    inject(DestroyRef).onDestroy(() => this.chat.stop());
+    this.announceChats();
+  }
 
   /** Current URL, as a signal, so active-state is computed rather than imperatively set. */
   private readonly url = toSignal(
@@ -91,9 +121,17 @@ export class Shell {
     loader: () => this.api.stats().catch(() => null),
   });
 
-  protected readonly counts = computed<Readonly<Record<string, number>>>(
-    () => (this.stats.value() as unknown as Record<string, number> | null) ?? {},
-  );
+  /**
+   * The saved-view numbers, plus the one that does not come from `/stats`.
+   *
+   * Live chat is pushed over the hub rather than counted by a query on
+   * navigation — a visitor who arrives while an agent reads a ticket has to show
+   * up without the agent going anywhere. Same lookup table, two sources.
+   */
+  protected readonly counts = computed<Readonly<Record<string, number>>>(() => ({
+    ...((this.stats.value() as unknown as Record<string, number> | null) ?? {}),
+    chatWaiting: this.chat.waiting(),
+  }));
 
   /**
    * The rail, filtered to what this person may reach.
@@ -249,8 +287,36 @@ export class Shell {
 
   protected async signOut(): Promise<void> {
     this.profileOpen.set(false);
+    this.chat.stop();
     await this.session.signOut();
     void this.router.navigate(['/login']);
+  }
+
+  /**
+   * A live chat is the one arrival worth interrupting for, so it gets a toast
+   * with a way straight into it — the badge alone only works for somebody who
+   * happens to be looking at the rail.
+   *
+   * The signal is cleared as it is read: leaving it set would re-announce the
+   * same visitor on every subsequent change-detection pass.
+   */
+  private announceChats(): void {
+    effect(() => {
+      const session = this.chat.arrived();
+      if (!session) return;
+      this.chat.arrived.set(null);
+
+      const who = session.visitorName || session.visitorEmail;
+      this.toast.info(
+        who
+          ? this.transloco.translate('chat.arrivedNamed', { name: who })
+          : this.transloco.translate('chat.arrived'),
+        {
+          label: this.transloco.translate('chat.open'),
+          run: () => void this.router.navigate(['/dashboard/chat']),
+        },
+      );
+    });
   }
 
   /** ⌘K / Ctrl+K anywhere in the shell opens the palette. */

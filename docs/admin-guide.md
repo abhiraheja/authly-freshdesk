@@ -442,6 +442,12 @@ department, tags, SLA and the agent-facing resolution note are all withheld.
 **Set up.** Nothing beyond branding (§10). Customers reach it after signing in
 (magic link) or from links in notification emails.
 
+**Chat from the portal.** The header carries a **Chat with us** link straight
+into live chat (§15), with the name and email already filled in — a signed-in
+customer should not have to introduce themselves again. It is listed before
+*New ticket* on purpose: chat is the faster of the two, and somebody who wanted a
+ticket will read past it.
+
 **How it looks.** The portal carries **your** header — your logo, name and
 primary colour — not Trackly's, and it is always light. Everything is derived
 from the one colour you set in Branding, so there is nothing else to configure.
@@ -493,6 +499,12 @@ suggest them (§13).
 
 **Set up.** Create a team, add members. Then route tickets to it manually (details
 pane) or automatically via an automation rule (§7, “Assign team”).
+
+**An empty department is a routing hole**, so the screen says so on its face
+rather than letting it look like a finished row: a ticket sent to a department
+with nobody in it is assigned to nobody and sits unowned. Deleting a department
+leaves its existing tickets with whoever already had them; it only stops new ones
+being routed there.
 
 ### 5.4 Problems
 
@@ -628,13 +640,26 @@ target: "0%" reads as failure and the truth is that no target applied.
 **Set up.** Each rule has:
 - **When** — *Ticket created* or *Ticket updated*.
 - **Conditions** — field **is / is not / contains** a value (e.g. priority *is*
-  urgent).
-- **Actions** — **Set priority**, **Assign team**, or **Add tag**.
-- **Enabled** toggle and an order (rules run top-down).
+  urgent). Fields: priority, status, channel, category, subject.
+- **Actions** — **Set priority**, **Set status**, **Assign department**,
+  **Add tag**, or **Add internal note**.
+- **Enabled** toggle and an **order** number — lowest runs first, and a later
+  rule sees what an earlier one did.
+
+**All conditions must match.** There is no “any of these”: a rule with two
+conditions fires only when both hold. A rule with **no** conditions runs on every
+ticket, which the editor warns about rather than letting you discover it in
+production.
+
+Every rule is listed as a sentence — *priority is urgent → Add tag sev1* — so
+finding the rule doing the surprising thing does not mean opening all of them.
+The **Enabled** switch writes straight through from the list: stopping a
+misfiring rule should not require opening an editor first.
 
 **Use / safety.** A rule’s own changes aren’t re-evaluated in the same pass, so
-rules can’t loop; a malformed rule is skipped, not fatal. Example: *when priority
-is urgent → add tag “sev1” and assign the on-call team*.
+rules can’t loop; a malformed rule is skipped, not fatal. Deleting a rule stops
+it running but does not revert tickets it already changed. Example: *when
+priority is urgent → add tag “sev1” and assign the on-call department*.
 
 ---
 
@@ -904,6 +929,23 @@ a future time. **Where:** **Admin ▾ → Insights → Announcements**.
 background worker sends scheduled announcements at the set time. _(The scheduler
 assumes a single running server instance — deployment concern.)_
 
+**Writing and sending are two steps, on purpose.** Saving always leaves the
+announcement **unsent** — even with a schedule filled in — and sending is a
+separate, confirmed action. This is the only screen in Trackly that writes to
+hundreds of inboxes at once and none of it can be taken back, so the one
+keystroke worth separating is separated.
+
+Four **types** — unplanned outage, planned maintenance, resolved, general — shown
+as a coloured chip. A customer scanning their inbox reads the type before the
+subject, and *we are down* versus *we are back* is the pair they most need to
+tell apart. An announcement can be **linked to a Problem** (§5.4), which is how a
+follow-up traces to the outage it closes.
+
+After sending, the row shows **delivered / total**, with failures called out
+separately in red: a bounced batch that reads as a plain "sent" is the one
+outcome an admin must not be able to scroll past. **Guests are never included** —
+Trackly has no verified opt-in for somebody who only emailed the desk once.
+
 ---
 
 ## 13. AI copilot
@@ -970,6 +1012,17 @@ shown its reference before their window closes.
 
 Unanswered chats carry a **New** chip in the console until an agent replies, so
 the list reads as a queue rather than a history.
+
+**Agents do not have to sit on the console.** While any agent or admin is signed
+in, the sidebar's **Live chat** row carries a count of chats wanting attention,
+and a toast appears when one starts — with an **Open** button that goes straight
+there. The count includes chats nobody has answered *and* chats where the visitor
+has written again since anyone last opened them, so a follow-up on a conversation
+an agent walked away from still surfaces. Opening a chat clears it from the count.
+
+Unlike the notification bell (which polls once a minute), this is pushed over the
+same connection live chat already uses: a visitor is still sitting there, and a
+minute of silence is the whole conversation.
 
 **If WebSockets are blocked**, the chat does not break: every message is sent and
 saved over ordinary HTTP, and only *live* delivery is lost. The console shows a

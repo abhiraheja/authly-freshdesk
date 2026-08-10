@@ -692,10 +692,7 @@
       "yourTicket": "Your ticket",
       "acceptInvitation": "Accept invitation",
       "analytics": "Analytics",
-      "announcements": "Announcements",
       "members": "Members",
-      "teams": "Teams",
-      "automation": "Automation",
       "messagingChannels": "Messaging channels",
       "widget": "Widget",
       "aiCopilot": "AI copilot",
@@ -1604,7 +1601,8 @@
       "send": "Send",
       "sendFailed": "Couldn't send your reply",
       "loadFailed": "Couldn't load this ticket"
-    }
+    },
+    "chat": "Chat with us"
   },
   "canned": {
     "title": "Canned responses",
@@ -1741,6 +1739,155 @@
     "loadFailed": "Couldn’t load chats",
     "refresh": "Refresh",
     "offlineHeading": "Live updates are off",
-    "offlineBody": "New messages will not appear on their own. Everything still sends and saves."
+    "offlineBody": "New messages will not appear on their own. Everything still sends and saves.",
+    "arrived": "New live chat waiting",
+    "arrivedNamed": "{{name}} started a live chat",
+    "open": "Open"
+  },
+  "teams": {
+    "title": "Departments",
+    "subtitle": "A ticket filed into a department is assigned round-robin among its members.",
+    "add": "Add department",
+    "addHeading": "New department",
+    "addMember": "Add to department",
+    "count": "{{count}} agents",
+    "countOne": "1 agent",
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "Billing",
+      "addAgent": "Add an agent",
+      "choose": "Choose an agent…"
+    },
+    "emptyWarning": "Nobody is in this department. Tickets routed here will not be assigned to anyone.",
+    "empty": "No departments yet",
+    "emptyBody": "Create one per area of work, then add the agents who handle it.",
+    "renameOne": "Rename {{name}}",
+    "deleteOne": "Delete {{name}}",
+    "removeMember": "Remove {{name}}",
+    "created": "{{name}} created",
+    "renamed": "Renamed to {{name}}",
+    "deleted": "{{name}} deleted",
+    "deleteHeading": "Delete this department?",
+    "deleteMessage": "“{{name}}” is removed and its tickets keep their current assignee. New tickets can no longer be routed to it.",
+    "loadFailed": "Couldn't load departments"
+  },
+  "announcements": {
+    "title": "Announcements",
+    "subtitle": "One email to every customer with an account. Guests are not included.",
+    "add": "New announcement",
+    "newHeading": "New announcement",
+    "save": "Save as draft",
+    "send": "Send",
+    "columns": {
+      "subject": "Subject",
+      "type": "Type",
+      "status": "Status",
+      "delivery": "Delivered"
+    },
+    "types": {
+      "unplanned_outage": "Unplanned outage",
+      "planned_outage": "Planned maintenance",
+      "resolved": "Resolved",
+      "general": "General"
+    },
+    "form": {
+      "type": "Type",
+      "subject": "Subject",
+      "subjectPlaceholder": "Checkout is currently unavailable",
+      "body": "Message",
+      "bodyPlaceholder": "What is happening, who it affects, and when you will next update them.",
+      "problem": "Link to a problem",
+      "noProblem": "Not linked",
+      "schedule": "Send at",
+      "scheduleHint": "Leave empty to keep it as a draft and send it by hand."
+    },
+    "draft": "Draft",
+    "scheduledFor": "Scheduled for {{when}}",
+    "sentAt": "Sent {{when}}",
+    "failed": "{{count}} failed",
+    "created": "Announcement saved as a draft",
+    "sent": "Sent to {{count}} customers",
+    "sendHeading": "Send this announcement now?",
+    "sendMessage": "“{{subject}}” goes to every customer with an account, immediately. It cannot be unsent or edited afterwards.",
+    "sendConfirm": "Send it",
+    "empty": "No announcements yet",
+    "emptyBody": "Use one to tell every customer about an outage, a maintenance window or a fix.",
+    "createFailed": "Couldn't save the announcement",
+    "loadFailed": "Couldn't load announcements"
+  },
+  "automation": {
+    "title": "Automation",
+    "subtitle": "Rules run inside every create and update, in order. A rule's own changes are never re-evaluated.",
+    "add": "New rule",
+    "newHeading": "New rule",
+    "editHeading": "Edit rule",
+    "everyTicket": "Every ticket",
+    "columns": {
+      "order": "#",
+      "rule": "Rule",
+      "trigger": "Runs on",
+      "enabled": "Enabled"
+    },
+    "triggers": {
+      "on_create": "Created",
+      "on_update": "Updated"
+    },
+    "fields": {
+      "priority": "Priority",
+      "status": "Status",
+      "channel": "Channel",
+      "category": "Category",
+      "subject": "Subject"
+    },
+    "ops": {
+      "equals": "is",
+      "not_equals": "is not",
+      "contains": "contains"
+    },
+    "actions": {
+      "set_priority": "Set priority",
+      "set_status": "Set status",
+      "assign_team": "Assign department",
+      "add_tag": "Add tag",
+      "add_note": "Add internal note"
+    },
+    "actionHints": {
+      "set_priority": "urgent",
+      "set_status": "pending",
+      "assign_team": "Billing",
+      "add_tag": "sev1",
+      "add_note": "Escalated automatically"
+    },
+    "form": {
+      "name": "Rule name",
+      "namePlaceholder": "Tag urgent tickets sev1",
+      "trigger": "Runs on",
+      "order": "Order",
+      "orderHint": "Lowest first. A later rule sees what an earlier one did.",
+      "conditions": "When",
+      "conditionsHint": "All conditions must match. There is no “any of these”.",
+      "noConditions": "With no conditions this runs on every ticket.",
+      "actions": "Then",
+      "field": "Field",
+      "operator": "Operator",
+      "value": "Value",
+      "action": "Action",
+      "addCondition": "Add condition",
+      "removeCondition": "Remove condition",
+      "addAction": "Add action",
+      "removeAction": "Remove action",
+      "enabled": "Rule is enabled"
+    },
+    "saved": "“{{name}}” saved",
+    "deleted": "“{{name}}” deleted",
+    "editOne": "Edit {{name}}",
+    "deleteOne": "Delete {{name}}",
+    "toggleOne": "Enable {{name}}",
+    "deleteHeading": "Delete this rule?",
+    "deleteMessage": "“{{name}}” stops running. Tickets it already changed are not reverted.",
+    "empty": "No rules yet",
+    "emptyBody": "Automate the triage nobody should have to remember — tagging, routing, priority.",
+    "saveFailed": "Couldn't save the rule",
+    "loadFailed": "Couldn't load rules"
   }
 }

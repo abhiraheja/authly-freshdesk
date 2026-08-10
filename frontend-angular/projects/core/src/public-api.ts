@@ -25,6 +25,7 @@ export * from './lib/api/notifications.api';
 export * from './lib/api/public.api';
 export * from './lib/api/sso.api';
 export * from './lib/api/tickets.api';
+export * from './lib/api/workspace-ops.api';
 export * from './lib/auth/auth.api';
 
 // Session + routing
@@ -36,6 +37,7 @@ export * from './lib/auth/guards';
 export * from './lib/theme/theme.service';
 export * from './lib/theme/brand-tokens';
 export * from './lib/ui-prefs.store';
+export * from './lib/chat-presence.store';
 export * from './lib/format';
 export * from './lib/resource-utils';
 export * from './lib/route-params';

@@ -109,7 +109,9 @@ export const NAV: readonly NavGroup[] = [
   {
     labelKey: 'nav.groups.workspace',
     items: [
-      { labelKey: 'nav.items.liveChat', icon: 'messages-square', route: '/dashboard/chat' },
+      // The only count here that is pushed rather than fetched: a visitor is
+      // still sitting there, so the number has to move without a navigation.
+      { labelKey: 'nav.items.liveChat', icon: 'messages-square', route: '/dashboard/chat', countKey: 'chatWaiting' },
       { labelKey: 'nav.items.problems', icon: 'puzzle', route: '/dashboard/problems', countKey: 'openProblems' },
       // The people, before the things: a support desk is about who is asking long
       // before it is about what they are asking on.

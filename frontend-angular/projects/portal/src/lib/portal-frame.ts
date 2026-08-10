@@ -29,6 +29,17 @@ import { Avatar, BrandedFrame, ConfirmHost, Icon, Toaster } from '@trackly/ui';
       [hidePoweredBy]="branding.value()?.hidePoweredBy ?? false"
     >
       <div frame-actions class="relative flex items-center gap-1">
+        <!-- Chat first: it is the faster of the two, and somebody who wanted a
+             ticket will read past it. The slug travels on the link, so the chat
+             page brands itself the same way this one did. -->
+        <a
+          class="hidden items-center gap-1.5 rounded-[10px] px-3 py-1.5 text-body font-semibold transition-colors hover:bg-primary-foreground/15 sm:inline-flex"
+          routerLink="/chat"
+          [queryParams]="{ workspace: slug() }"
+        >
+          <tk-icon name="message-square" [size]="16" />
+          {{ 'portal.chat' | transloco }}
+        </a>
         <a
           class="hidden rounded-[10px] px-3 py-1.5 text-body font-semibold transition-colors hover:bg-primary-foreground/15 sm:inline-flex"
           routerLink="/portal/tickets/new"
@@ -59,6 +70,15 @@ import { Avatar, BrandedFrame, ConfirmHost, Icon, Toaster } from '@trackly/ui';
               <p class="truncate px-3 pb-2 text-meta text-muted-foreground">{{ email }}</p>
             }
             <div class="menu-sep"></div>
+            <a
+              class="menu-item sm:hidden"
+              routerLink="/chat"
+              [queryParams]="{ workspace: slug() }"
+              (click)="menuOpen.set(false)"
+            >
+              <tk-icon name="message-square" [size]="16" />
+              {{ 'portal.chat' | transloco }}
+            </a>
             <a class="menu-item sm:hidden" routerLink="/portal/tickets/new" (click)="menuOpen.set(false)">
               <tk-icon name="plus" [size]="16" />
               {{ 'portal.newTicket' | transloco }}
@@ -105,6 +125,9 @@ export class PortalFrame {
   );
 
   protected readonly accent = computed(() => this.branding.value()?.primaryColor ?? null);
+
+  /** Carried onto `/chat`, which is anonymous and cannot read the session. */
+  protected readonly slug = computed(() => this.session.workspace()?.slug ?? '');
 
   protected async signOut(): Promise<void> {
     this.menuOpen.set(false);

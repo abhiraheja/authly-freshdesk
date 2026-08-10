@@ -667,6 +667,16 @@ Append here as phases land, so nothing is missed later.
     instance** — the same single-instance guidance the IMAP/announcement workers
     already impose (§4). Cookie auth flows over the same-origin WS handshake, so
     keep the SPA and API same-origin (§5).
+  - **The SPA ships a SignalR client** (`@microsoft/signalr`, a runtime
+    dependency of `frontend-angular`). It is the only third-party runtime package
+    in the frontend; it is bundled, so it needs no CDN and no CSP exception
+    beyond the WebSocket connect-src to your own origin.
+  - **A blocked upgrade degrades, it does not break.** Messages are posted and
+    persisted over plain HTTP and only *delivered* over the socket, so a proxy
+    that refuses the upgrade leaves both sides working with no live updates —
+    the console shows a banner with a Refresh button and the visitor's window
+    shows an amber connection dot. Worth knowing before somebody debugs a
+    "broken" chat that is in fact a missing `proxy_set_header Upgrade`.
   - **Connector signing secrets** are per-workspace, AES-256-GCM encrypted (data,
     not env). Inbound uses `X-Trackly-Signature` (HMAC-SHA256 over the raw body);
     a provider-native relay (Slack/WhatsApp/Teams) translates the provider payload

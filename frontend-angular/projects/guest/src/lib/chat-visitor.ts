@@ -14,6 +14,7 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import {
   ChatApi,
   PublicApi,
+  SessionStore,
   errorMessage,
   fromQuery,
   type ChatMessage,
@@ -184,6 +185,8 @@ interface StoredSession {
 export class ChatVisitor {
   private readonly api = inject(ChatApi);
   private readonly publicApi = inject(PublicApi);
+  /** Named for the store, not the chat — `session` below is the visitor's own. */
+  private readonly sessionStore = inject(SessionStore);
   private readonly transloco = inject(TranslocoService);
   private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
 
@@ -216,6 +219,17 @@ export class ChatVisitor {
 
   constructor() {
     inject(DestroyRef).onDestroy(() => this.disconnect());
+
+    // If they walked here from the portal, we already know who they are — the
+    // session store is warm from that navigation. Read, never fetch: this page
+    // is anonymous, and calling `/me` on it would put a 401 on every real
+    // visitor's first load to save a signed-in one two fields.
+    const me = this.sessionStore.user();
+    if (me) {
+      this.name.set(me.name ?? '');
+      this.email.set(me.email ?? '');
+    }
+
     void this.restore();
   }
 

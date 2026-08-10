@@ -13,6 +13,7 @@ import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
   ChatApi,
+  ChatPresence,
   errorMessage,
   timeAgo,
   type ChatMessage,
@@ -200,6 +201,7 @@ import {
 })
 export class ChatConsole {
   private readonly api = inject(ChatApi);
+  private readonly presence = inject(ChatPresence);
   private readonly router = inject(Router);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
@@ -323,6 +325,10 @@ export class ChatConsole {
     this.visitorTyping.set(false);
     this.sendError.set(null);
     this.messages.set([]);
+    // Somebody is now looking at it, so it stops counting against the rail's
+    // badge. Told rather than inferred: the presence store cannot see which
+    // conversation is on screen.
+    this.presence.markSeen(id);
 
     try {
       const thread = await this.api.thread(id);
