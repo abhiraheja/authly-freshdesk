@@ -39,6 +39,81 @@ dotnet ef database update --project src/Trackly.Infrastructure --startup-project
 
 ---
 
+## 0.5 Deploying with Docker (the supported path)
+
+Trackly ships as **two images**, built and published by
+`.github/workflows/docker-image.yml` on every push to `main`:
+
+| Image | Built from | What it is |
+|---|---|---|
+| `abhiraheja/trackly-api` | `Dockerfile.api` (context = repo root) | ASP.NET Core API + SignalR hub + background workers. Listens on `8080`, runs as uid **1654** (non-root) |
+| `abhiraheja/trackly-web` | `frontend-angular/Dockerfile` | The Angular bundle served by nginx, which also reverse-proxies `/api`, `/hubs` and `/widget.js` to the API. Listens on `8080` |
+
+Tags: `latest` (default branch), `sha-<commit>`, and `X.Y.Z` / `X.Y` when a
+`v*.*.*` tag is pushed. Pin a digest or a version tag in production — `latest`
+means "whatever landed on main".
+
+**Only `web` should be published.** It is the single origin the browser talks to.
+That is a correctness requirement, not a preference: the session cookie is
+`HttpOnly; SameSite=Strict; Path=/`, so an SPA on one origin and an API on
+another would drop it on every request (§5). Exposing the API's port as well is
+harmless but pointless; exposing it *instead* does not work.
+
+```bash
+cp .env.example .env          # fill POSTGRES_PASSWORD + TRACKLY_MASTER_KEY
+docker compose -f docker-compose.self-host.yml up -d
+docker compose -f docker-compose.self-host.yml logs -f api   # watch migrations
+```
+
+Then open the published URL — an unclaimed install lands on `/setup`. Re-read
+§0.1 before that URL is reachable by anyone else.
+
+### What must be persisted
+
+| Volume | Mount | Loses what, if missing |
+|---|---|---|
+| `trackly-pgdata` | `postgres:/var/lib/postgresql/data` | everything |
+| `trackly-storage` | `api:/app/data` | attachments, workspace logos, avatars (`Storage:LocalPath`, preset to `/app/data/storage` in the image) |
+
+The API image creates `/app/data` owned by uid 1654 before dropping privileges,
+so a **named** volume inherits that ownership. A **bind mount** does not — `chown
+-R 1654:1654` the host directory yourself or every upload fails with a
+permission error that only surfaces when a user attaches a file.
+
+### Image-level configuration
+
+Config keys map to environment variables with `__` for `:` —
+`ConnectionStrings__Trackly`, `Security__MasterKey`, `App__FrontendBaseUrl`.
+`docker-compose.self-host.yml` wires the full set from `.env`; §1 below is the
+authoritative list of what each one does.
+
+The `web` image takes three of its own:
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `TRACKLY_API_URL` | `http://api:8080` | Where nginx forwards `/api`, `/hubs`, `/widget.js`. **No trailing slash** — a trailing slash becomes a `proxy_pass` URI and rewrites the request path |
+| `TRACKLY_RESOLVER` | `127.0.0.11` | DNS for re-resolving `TRACKLY_API_URL` per request (Docker's embedded resolver). Change it if the API is not a compose service on the same network. Re-resolution is what keeps the proxy alive across an API container restart, which changes its IP |
+| `TRACKLY_MAX_BODY_SIZE` | `30m` | Upload ceiling at the proxy. Keep it **≥** the API's own attachment limit or large uploads fail with a bare `413` from nginx before the API ever sees them |
+
+### TLS
+
+Neither image terminates TLS — put Caddy, Traefik or nginx in front of `web` and
+forward `X-Forwarded-Proto`. The compose file already sets
+`App__ForwardedHeaders=true` on the API, which is what makes the session cookie
+pick up `Secure` and the rate limiter see real client IPs (§6).
+
+### Health
+
+Both images declare a `HEALTHCHECK`, so `depends_on: condition: service_healthy`
+works and orchestrators get a real signal:
+
+- API → `GET /health` (anonymous, **does not touch the database**: first boot
+  runs EF migrations, and a probe that waited on the DB would restart the
+  container mid-migration). Use it for liveness, not readiness.
+- Web → `GET /healthz`, served by nginx itself.
+
+---
+
 ## 1. Server configuration (`Trackly.Api`)
 
 Set via `appsettings.{Environment}.json`, environment variables
@@ -54,6 +129,7 @@ store. Empty strings in the committed `appsettings.json` are placeholders.
 | `Ai:Model` | Claude model id for the copilot (defaults to `claude-opus-5`) | optional | no |
 | `App:FrontendBaseUrl` | Absolute base URL of the SPA; used to build links in **emails** (magic links, invites, guest tracking, notifications) and SSO redirects | per-env (e.g. `https://app.trackly.com`) | no |
 | `App:ApiBaseUrl` | Public base URL of the API; used to build the **OIDC/SAML redirect (callback) URI**, the **mail OAuth callback URI**, and the **workspace logo URL in HTML emails**. Falls back to the request scheme+host if unset for the callbacks — but the logo has no request to fall back on, so leaving it unset means emails show the workspace name as text instead of the logo | per-env (e.g. `https://app.trackly.com`) | no |
+| `App:ForwardedHeaders` | Trust `X-Forwarded-For` / `X-Forwarded-Proto`. **Required behind any reverse proxy** (including the bundled nginx image) — without it the per-IP auth rate limiter collapses onto one bucket and the session cookie loses `Secure` behind TLS termination. Leave **false** if the API is directly internet-reachable: the headers are client-spoofable and this flag is the trust boundary (§6) | true behind a proxy, false otherwise | no |
 | `Storage:LocalPath` | Directory for uploaded attachments + logos | per-env (see §3) | no |
 | `Email:Smtp:Host` | Shared/deployment-level SMTP relay host. Empty ⇒ emails are logged, not sent | per-env | no |
 | `Email:Smtp:Port` | SMTP port | default 587 | no |
@@ -359,19 +435,34 @@ worker on all but one) if any workspace uses mailbox polling.
     design. Prefer same-origin.
 - No build-time API URL is baked in (calls are relative `/api/...`), so the same
   build works in every environment.
+- **The `trackly-web` image is this, already assembled** (§0.5): the bundle plus
+  an nginx that proxies `/api`, `/hubs` (with the WebSocket upgrade) and
+  `/widget.js` to the API, so one published port satisfies the same-origin
+  requirement above. Rolling your own proxy instead? Copy the rules from
+  `frontend-angular/nginx/default.conf.template` — in particular `/widget.js`,
+  which is served by the API at the **site root**, not under `/api`, and is
+  invisible in a proxy config written from the SPA's routes alone.
 
 ---
 
 ## 6. Security hardening (prod)
 
 - **HTTPS everywhere.** The session cookie's `Secure` flag is set only when the
-  request is HTTPS (`Request.IsHttps`). Terminate TLS at the proxy and forward
-  proto so the app sees HTTPS (configure `ForwardedHeaders` if behind a proxy —
-  **not yet wired up; add when deploying behind a load balancer**).
+  request is HTTPS (`Request.IsHttps`). Terminate TLS at the proxy and set
+  **`App:ForwardedHeaders=true`** so the app trusts `X-Forwarded-Proto` and sees
+  HTTPS. Without it the cookie silently loses `Secure` behind a TLS-terminating
+  proxy — the sign-in still works, so nothing looks wrong.
+  - Opt-in on purpose: `X-Forwarded-*` are client-spoofable, and the flag *is*
+    the trust boundary (the middleware's default loopback allow-list is cleared,
+    because a container proxy's address is not knowable ahead of time). Turn it
+    on only when a proxy you control is the sole thing that can reach the API —
+    which is exactly the case in `docker-compose.self-host.yml`, where it is
+    already set. Never turn it on for an API that is directly internet-reachable.
 - `AllowedHosts` → the real hostname(s).
 - Rate limiting: the `auth` policy is a fixed 20 req/min per IP on public
   auth/guest/webhook endpoints (in `Program.cs`). Behind a proxy this needs the
-  real client IP (forwarded headers, above) or it limits the proxy's IP.
+  real client IP (`App:ForwardedHeaders`, above) or every visitor in the world
+  shares one bucket — the proxy's.
 - Secrets: `Security:MasterKey`, DB password, SMTP password → secret store only.
 - Confirm the dev master-key fallback is **not** in effect (set a real
   `Security:MasterKey`).
@@ -411,7 +502,11 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] Cloud buckets are **private** — unless a CDN is in use, in which case the exposure noted in §3 was a conscious decision
 - [ ] Shared SMTP relay configured + SPF/DKIM, or a conscious decision to rely only on per-workspace relays
 - [ ] SPA served same-origin with `/api/*` reverse-proxied over HTTPS
-- [ ] `AllowedHosts` restricted; forwarded headers configured behind the proxy
+- [ ] **Only the `web` container's port is published** — the API is reachable through it, never directly
+- [ ] **Image tags pinned** to a version or digest, not `latest`
+- [ ] **`/app/data` on the API and `/var/lib/postgresql/data` on Postgres are on persistent volumes** — and if either is a *bind* mount, the host directory is `chown`ed to uid 1654 for the API (§0.5)
+- [ ] `TRACKLY_MAX_BODY_SIZE` on the `web` container ≥ the API's attachment limit
+- [ ] `AllowedHosts` restricted; `App:ForwardedHeaders=true` **and** the API unreachable except through the proxy (§6)
 - [ ] One API instance if any workspace uses IMAP polling **or live chat** (or add a SignalR backplane) — until leader election / a backplane exists
 - [ ] Proxy allows the WebSocket upgrade on `/hubs/*` (live chat)
 - [ ] Inbound webhook endpoint publicly reachable over HTTPS (if any tenant uses Option A)
@@ -541,3 +636,17 @@ Append here as phases land, so nothing is missed later.
   - Data note: `Ticket.ResolvedAt` (analytics), `csat_surveys`, `channel_*`,
     `inbound_channel_events`, and `chat_*` tables ship via the Phase 7C migrations
     — apply them (§0.1).
+- **Packaging (Docker images + CI):** one new server key,
+  **`App:ForwardedHeaders`** (§1, §6) — off by default, set to `true` in
+  `docker-compose.self-host.yml` because the bundled nginx is then the only thing
+  that can reach the API. It is what makes the per-IP auth rate limiter and the
+  session cookie's `Secure` flag behave behind a proxy; both fail *silently*
+  without it, which is why it is worth checking rather than assuming.
+  - New anonymous endpoint **`GET /health`** (liveness, no DB access) for
+    container and orchestrator probes. It reveals nothing and needs no config.
+  - The `web` image adds three of its own variables (`TRACKLY_API_URL`,
+    `TRACKLY_RESOLVER`, `TRACKLY_MAX_BODY_SIZE` — §0.5). No secrets.
+  - **CI secrets:** `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` on the repository
+    or its `DockerDeploy` environment. Nothing else in the workflow is sensitive;
+    pull requests build both images but never push.
+  - Two new persistent volumes to provision and back up (§0.5).

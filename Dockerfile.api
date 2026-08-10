@@ -1,0 +1,65 @@
+# syntax=docker/dockerfile:1
+#
+# Trackly API — ASP.NET Core (.NET 10) + EF Core + SignalR.
+#
+# Ships as its own image (the SPA is a separate image, see
+# frontend-angular/Dockerfile). Build from the repository root:
+#
+#   docker build -f Dockerfile.api -t abhiraheja/trackly-api:latest .
+
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+
+# nuget.config first: it <clear />s inherited machine feeds, so restore only ever
+# talks to nuget.org. Without it a build machine carrying a private feed fails
+# restore with NU1301/401 when that feed's PAT has expired.
+COPY nuget.config ./
+COPY Trackly.slnx ./
+
+# Project files before sources, so `dotnet restore` is cached until a
+# PackageReference actually changes.
+COPY src/Trackly.Core/Trackly.Core.csproj                     src/Trackly.Core/
+COPY src/Trackly.Modules/Trackly.Modules.csproj               src/Trackly.Modules/
+COPY src/Trackly.Infrastructure/Trackly.Infrastructure.csproj src/Trackly.Infrastructure/
+COPY src/Trackly.Api/Trackly.Api.csproj                       src/Trackly.Api/
+RUN dotnet restore src/Trackly.Api/Trackly.Api.csproj
+
+COPY src/ src/
+RUN dotnet publish src/Trackly.Api/Trackly.Api.csproj \
+    -c Release \
+    -o /app/publish \
+    --no-restore \
+    /p:UseAppHost=false
+
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
+WORKDIR /app
+
+# curl is here for the container HEALTHCHECK below — the aspnet image carries no
+# HTTP client, and an orchestrator with no health signal restarts blind.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/publish ./
+
+# Attachments, logos and avatars land here (Storage:LocalPath). Mount a volume on
+# /app/data or every upload dies with the container. Created and owned before the
+# USER switch so a *named* volume inherits the ownership; a bind mount must be
+# chowned to 1654 on the host (see DOCKERHUB.md).
+RUN mkdir -p /app/data/storage && chown -R $APP_UID:$APP_UID /app/data
+USER $APP_UID
+
+ENV ASPNETCORE_URLS=http://+:8080 \
+    ASPNETCORE_ENVIRONMENT=Production \
+    Storage__LocalPath=/app/data/storage
+
+EXPOSE 8080
+
+# Anonymous, DB-free liveness probe (see Program.cs). Deliberately not a
+# readiness probe: on an empty database the first boot runs EF migrations, and a
+# probe that touched the DB would kill the container mid-migration.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
+    CMD curl -fsS http://localhost:8080/health || exit 1
+
+ENTRYPOINT ["dotnet", "Trackly.Api.dll"]

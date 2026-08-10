@@ -1,0 +1,149 @@
+# Trackly SPA + reverse proxy to the API.
+#
+# Rendered by nginx's envsubst entrypoint at container start. `${TRACKLY_*}` are
+# environment variables; every other `$name` is an nginx variable and is left
+# alone (NGINX_ENVSUBST_FILTER="^TRACKLY_" in the Dockerfile).
+#
+# Env:
+#   TRACKLY_API_URL        origin of the API container, NO trailing slash and no
+#                          path — e.g. http://api:8080. A trailing slash turns
+#                          into a proxy_pass URI and rewrites the request path.
+#   TRACKLY_RESOLVER       DNS used to re-resolve TRACKLY_API_URL at request
+#                          time. 127.0.0.11 is Docker's embedded resolver; set
+#                          it to a real nameserver when the API is external.
+#   TRACKLY_MAX_BODY_SIZE  upload ceiling; must stay >= the API's own attachment
+#                          limit or large uploads fail at the proxy with 413.
+
+# SignalR's WebSocket upgrade. `''  close` matters: without it every ordinary
+# request would carry `Connection: upgrade` and the API would reject it.
+map $http_upgrade $trackly_connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen      8080;
+    listen      [::]:8080;
+    server_name _;
+
+    root  /usr/share/nginx/html;
+    index index.html;
+
+    # Re-resolve the API name on each request instead of pinning the IP nginx saw
+    # at boot — otherwise restarting the API container (new IP) blackholes the
+    # proxy until nginx is restarted too.
+    resolver ${TRACKLY_RESOLVER} valid=10s ipv6=off;
+
+    client_max_body_size ${TRACKLY_MAX_BODY_SIZE};
+    # Stream uploads straight through; buffering a 30 MB attachment to disk first
+    # only adds latency.
+    proxy_request_buffering off;
+
+    gzip              on;
+    gzip_vary         on;
+    gzip_min_length   1024;
+    gzip_proxied      any;
+    gzip_types        text/plain text/css text/xml application/javascript
+                      application/json application/manifest+json image/svg+xml;
+
+    # No X-Frame-Options / frame-ancestors anywhere on purpose: the embeddable
+    # widget renders the workspace-branded submit form inside the customer's own
+    # page in an iframe (plan §widget), and a blanket DENY would break every embed.
+    #
+    # These two are repeated verbatim in every location below that sets an
+    # add_header of its own. That is not redundancy: nginx's add_header does not
+    # merge — a location with any add_header discards every one inherited from
+    # here, so omitting them would silently drop nosniff on the HTML itself.
+    add_header X-Content-Type-Options nosniff always;
+    add_header Referrer-Policy strict-origin-when-cross-origin always;
+
+    # ---- API ---------------------------------------------------------------
+    # proxy_pass through a variable is what makes `resolver` apply. With no URI
+    # part on the target, nginx forwards the original request path unchanged, so
+    # /api/... reaches the API as /api/... .
+    location /api/ {
+        set $trackly_api ${TRACKLY_API_URL};
+        proxy_pass $trackly_api;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Host  $host;
+
+        # SSO callbacks bounce through a third-party IdP; give the round trip room.
+        proxy_connect_timeout 10s;
+        proxy_read_timeout    120s;
+        proxy_send_timeout    120s;
+    }
+
+    # ---- SignalR live-chat hub ---------------------------------------------
+    location /hubs/ {
+        set $trackly_hub ${TRACKLY_API_URL};
+        proxy_pass $trackly_hub;
+
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade           $http_upgrade;
+        proxy_set_header Connection        $trackly_connection_upgrade;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # A live-chat socket is idle between messages; the 60s default would cut
+        # it and force a long-polling fallback.
+        proxy_buffering    off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+    }
+
+    # ---- Widget loader ------------------------------------------------------
+    # Served by the API at the site root (WidgetController), not under /api.
+    location = /widget.js {
+        set $trackly_widget ${TRACKLY_API_URL};
+        proxy_pass $trackly_widget;
+
+        proxy_http_version 1.1;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Real-IP         $remote_addr;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # ---- This container's own liveness -------------------------------------
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+
+    # ---- Static SPA ---------------------------------------------------------
+    # Every asset is content-hashed (outputHashing: all), so it can never go
+    # stale under a client's cache.
+    location ~* \.(?:js|css|woff2?|ttf|eot|otf|png|jpe?g|gif|svg|webp|avif|ico)$ {
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        access_log off;
+        try_files $uri =404;
+    }
+
+    # Translations are NOT hashed — a stale copy would pin the UI to the previous
+    # release's wording, so revalidate on every load.
+    location /i18n/ {
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        add_header Cache-Control "no-cache" always;
+        try_files $uri =404;
+    }
+
+    # index.html must never be cached: it is the only file naming the current
+    # bundle hashes, so a cached copy freezes the app on the previous deploy.
+    location / {
+        add_header X-Content-Type-Options nosniff always;
+        add_header Referrer-Policy strict-origin-when-cross-origin always;
+        add_header Cache-Control "no-store, must-revalidate" always;
+        try_files $uri $uri/ /index.html;
+    }
+}

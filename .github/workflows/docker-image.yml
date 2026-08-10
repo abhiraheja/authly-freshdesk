@@ -1,0 +1,97 @@
+name: Docker Images
+
+# Builds the two Trackly images and pushes them to Docker Hub.
+#
+#   abhiraheja/trackly-api  — ASP.NET Core API (Dockerfile.api)
+#   abhiraheja/trackly-web  — Angular SPA behind nginx (frontend-angular/Dockerfile)
+#
+# Pull requests build both images to prove they still compile, but never push —
+# a fork's PR has no access to secrets, so a push step there would just fail.
+#
+# Repository setup (once): add DOCKERHUB_USERNAME and DOCKERHUB_TOKEN as secrets.
+# They can live on the repository or on the `DockerDeploy` environment below;
+# an environment lets you require a manual approval before anything is published.
+
+on:
+  push:
+    branches: ["main"]
+    tags: ["v*.*.*"]
+  pull_request:
+    branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    environment: DockerDeploy
+    permissions:
+      contents: read
+
+    strategy:
+      # Both images are independent; a broken SPA build shouldn't hide a broken
+      # API build (or vice versa) on the same commit.
+      fail-fast: false
+      matrix:
+        include:
+          - name: api
+            image: abhiraheja/trackly-api
+            context: .
+            dockerfile: ./Dockerfile.api
+          - name: web
+            image: abhiraheja/trackly-web
+            context: ./frontend-angular
+            dockerfile: ./frontend-angular/Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Skipped on pull_request: forks get no secrets, and nothing is pushed there.
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ matrix.image }}
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=Trackly ${{ matrix.name }}
+            org.opencontainers.image.description=Self-hosted ticket management — ${{ matrix.name }}
+            org.opencontainers.image.licenses=MIT
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: false
+          # linux/amd64 only. arm64 would have to run the .NET and Angular
+          # compilers under QEMU, which turns a ~5 minute build into ~40. Add
+          # `platforms: linux/amd64,linux/arm64` here if you need Apple Silicon
+          # or Raspberry Pi hosts to run natively.
+          platforms: linux/amd64
+          # Scoped per image — one shared scope would make the two matrix legs
+          # evict each other's layers on every run.
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.name }}

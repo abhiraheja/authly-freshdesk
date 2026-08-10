@@ -1,0 +1,45 @@
+# Build context for Dockerfile.api (context = repo root).
+# Everything the API image does not need is excluded, so an edit to the SPA or
+# the docs never invalidates the .NET build cache.
+
+# Build outputs
+**/bin
+**/obj
+artifacts/
+TestResults/
+**/*.binlog
+
+# Frontends — they build in their own image (frontend-angular/Dockerfile) and
+# the API does not serve static files.
+frontend/
+frontend-angular/
+
+# Node tooling
+**/node_modules
+
+# VCS / IDE / tooling
+.git
+.gitignore
+.github
+.vs
+.vscode
+.claude
+.claudeignore
+.idea
+
+# Docs and local scripts
+docs/
+scripts/
+*.md
+
+# Local config and secrets — never bake these into an image
+.env
+.env.*
+!.env.example
+**/appsettings.Development.json
+**/appsettings.Local.json
+**/*.pfx
+**/*.user
+
+# Compose files (the image is built from Dockerfile.api, not from these)
+docker-compose*.yml

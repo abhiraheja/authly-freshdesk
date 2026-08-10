@@ -1,0 +1,11 @@
+# Build context for frontend-angular/Dockerfile (context = frontend-angular/).
+# Dependencies are installed fresh from package-lock.json inside the image.
+node_modules
+dist
+.angular
+coverage
+.vscode
+.idea
+*.log
+.env
+.env.*

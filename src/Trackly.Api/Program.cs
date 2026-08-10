@@ -1,5 +1,6 @@
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Trackly.Api;
@@ -118,10 +119,35 @@ if (app.Configuration.GetValue("Trackly:AutoMigrate", true))
     scope.ServiceProvider.GetRequiredService<TracklyDbContext>().Database.Migrate();
 }
 
+// In the container topology the SPA's nginx fronts the API, so the socket peer
+// is the proxy, not the visitor. Unhandled, that (a) collapses the per-IP auth
+// rate limiter below onto a single partition, and (b) makes Request.IsHttps
+// false behind a TLS-terminating proxy, which silently drops `Secure` from the
+// session cookie. Opt-in, because these headers are client-spoofable and only
+// mean anything when a proxy you control is the one setting them.
+if (app.Configuration.GetValue("App:ForwardedHeaders", false))
+{
+    var forwarded = new ForwardedHeadersOptions
+    {
+        ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto,
+    };
+    // The proxy's address is assigned by the container network and isn't knowable
+    // ahead of time; the flag above is the trust boundary, so drop the default
+    // loopback-only allow-list that would otherwise ignore the headers.
+    forwarded.KnownIPNetworks.Clear();
+    forwarded.KnownProxies.Clear();
+    app.UseForwardedHeaders(forwarded);
+}
+
 app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
+
+// Container/orchestrator liveness. Anonymous, and deliberately does not touch
+// the database: first boot applies EF migrations, and a probe that waited on the
+// DB would restart the container mid-migration.
+app.MapGet("/health", () => Results.Ok(new { status = "ok" }));
 
 app.Run();

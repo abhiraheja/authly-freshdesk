@@ -24,6 +24,10 @@ A standalone, **self-hosted** ticket management app — submit, track, and resol
 | `docs/admin-guide.md` | **Admin handbook** — every feature with setup + usage |
 | `docs/go-live.md` | Living deployment checklist (config, secrets, infra) |
 | `docs/mockups/` | Approved HTML design mockups — open `index.html` in a browser |
+| `DOCKERHUB.md` | Docker Hub description — the image-first quick start and every environment variable |
+| `Dockerfile.api` | API image (build from the repo root) |
+| `frontend-angular/Dockerfile` | SPA image — the Angular bundle plus the nginx that fronts the API |
+| `docker-compose.self-host.yml` | The whole stack from published images: Postgres + API + SPA |
 | `src/Trackly.Core` | Entities, interfaces, enums |
 | `src/Trackly.Modules` | Business logic — auth, tickets, guest flow, email, SSO, problems, KB, SLA, automation, AI, channels (connectors), chat, CSAT, analytics |
 | `src/Trackly.Infrastructure` | EF Core DbContext + migrations, email (SMTP/IMAP), storage, crypto, OIDC/DNS, Anthropic AI client |
@@ -36,7 +40,40 @@ A standalone, **self-hosted** ticket management app — submit, track, and resol
 
 ASP.NET Core (.NET 10) · EF Core · PostgreSQL · SignalR (live chat) · Angular 22 + TypeScript · Tailwind v4 · MailKit · Anthropic SDK (AI copilot)
 
-## Running locally
+## Running it (self-hosted, no toolchain needed)
+
+Two published images and a Postgres — nothing to build:
+
+```bash
+cp .env.example .env    # fill POSTGRES_PASSWORD + TRACKLY_MASTER_KEY
+docker compose -f docker-compose.self-host.yml up -d
+```
+
+Open **http://localhost:8080**. An unclaimed installation lands on `/setup`,
+where you name the organisation and create the first administrator — you are
+signed in immediately, which is what makes a fresh install usable before SMTP or
+SSO exist.
+
+> ⚠️ `/setup` is anonymous by necessity: there is no account to authenticate
+> against yet, so **whoever reaches it first becomes your administrator.** Claim
+> it as soon as the URL is live. Afterwards it answers `409` forever.
+
+Only the `web` container publishes a port; the API is reached through it at
+`/api`, `/hubs` and `/widget.js`. That is required, not tidy — the session cookie
+is `SameSite=Strict`, so a split origin would drop it on every request.
+
+See **[`DOCKERHUB.md`](DOCKERHUB.md)** for every environment variable and
+**[`docs/go-live.md` §0.5](docs/go-live.md)** for volumes, TLS and production
+notes. Images are built and pushed by
+[`.github/workflows/docker-image.yml`](.github/workflows/docker-image.yml) on
+every push to `main`:
+
+| Image | Contents |
+|---|---|
+| `abhiraheja/trackly-api` | ASP.NET Core API + SignalR hub + background workers |
+| `abhiraheja/trackly-web` | Angular SPA behind nginx, which also proxies the API |
+
+## Running locally (development)
 
 > New to the project? **[`docs/dev-setup.md`](docs/dev-setup.md)** is the full
 > first-time setup walkthrough (prerequisites → config → run → first login → dev

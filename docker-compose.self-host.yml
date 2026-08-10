@@ -1,0 +1,95 @@
+# Trackly — complete self-hosted stack (PostgreSQL + API + SPA).
+#
+#   1. cp .env.example .env      and fill in the two required values
+#   2. docker compose -f docker-compose.self-host.yml up -d
+#   3. open http://localhost:8080  →  it lands on /setup, which claims the empty
+#      database and makes you the workspace's first administrator.
+#
+# Only `web` publishes a port. The API is reachable through it at /api, /hubs and
+# /widget.js, which is required rather than tidy: the session is an HttpOnly
+# SameSite=Strict cookie, so the SPA and the API must share one origin.
+#
+# NOTE: `/setup` is anonymous by necessity — there is no account to authenticate
+# against yet. Whoever reaches it first becomes your admin. Claim it immediately.
+
+name: trackly
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-trackly}
+      POSTGRES_USER: ${POSTGRES_USER:-trackly}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - trackly-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-trackly} -d ${POSTGRES_DB:-trackly}"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  api:
+    image: abhiraheja/trackly-api:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Trackly: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-trackly};Username=${POSTGRES_USER:-trackly};Password=${POSTGRES_PASSWORD}"
+
+      # REQUIRED, and permanent. Encrypts every stored secret (SMTP/IMAP
+      # passwords, SSO client secrets, OAuth tokens, connector signing keys).
+      # Lose or change it and none of them can be decrypted again — generate once
+      # per deployment and back it up:  openssl rand -base64 32
+      Security__MasterKey: ${TRACKLY_MASTER_KEY:?set TRACKLY_MASTER_KEY in .env}
+
+      # The public origin users type into a browser. It builds the links inside
+      # emails (magic links, invites, guest tracking) and the SSO/mail-OAuth
+      # redirect URIs registered at your IdP, so it must be the externally
+      # reachable URL — not localhost — the moment this is not a laptop.
+      App__FrontendBaseUrl: ${TRACKLY_PUBLIC_URL:-http://localhost:8080}
+      App__ApiBaseUrl: ${TRACKLY_PUBLIC_URL:-http://localhost:8080}
+
+      # nginx in the `web` container is the only thing that talks to this
+      # service, so trust its X-Forwarded-* headers. Without this every visitor
+      # shares one rate-limit bucket and the session cookie loses `Secure`
+      # behind TLS termination.
+      App__ForwardedHeaders: "true"
+
+      # Restrict once you know the hostname, e.g. "support.example.com".
+      AllowedHosts: ${TRACKLY_ALLOWED_HOSTS:-*}
+
+      # Optional — the AI copilot stays off everywhere while this is empty.
+      Ai__ApiKey: ${ANTHROPIC_API_KEY:-}
+
+      # Optional deployment-level SMTP relay. Leave unset and outbound mail is
+      # only written to the log; per-workspace SMTP is configured in the admin UI.
+      Email__Smtp__Host: ${SMTP_HOST:-}
+      Email__Smtp__Port: ${SMTP_PORT:-587}
+      Email__Smtp__Username: ${SMTP_USERNAME:-}
+      Email__Smtp__Password: ${SMTP_PASSWORD:-}
+      Email__Smtp__FromEmail: ${SMTP_FROM_EMAIL:-no-reply@trackly.local}
+      Email__Smtp__FromName: ${SMTP_FROM_NAME:-Trackly}
+    volumes:
+      # Attachments, workspace logos and avatars. Without this they vanish with
+      # the container on the next image pull.
+      - trackly-storage:/app/data
+
+  web:
+    image: abhiraheja/trackly-web:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      TRACKLY_API_URL: http://api:8080
+      # Keep >= the API's own 30 MB attachment ceiling or uploads 413 at the proxy.
+      TRACKLY_MAX_BODY_SIZE: 30m
+    ports:
+      - "${TRACKLY_PORT:-8080}:8080"
+
+volumes:
+  trackly-pgdata:
+  trackly-storage:
