@@ -8,7 +8,7 @@
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "//": "Libraries resolve to source during dev (see tsconfig paths), so the app build compiles them and `ng serve` needs no lib build. build:libs produces real ng-packagr packages — run it only to publish or to consume a library from another repo. Order matters: core, then ui, then the features that depend on both.",
-    "build:libs": "ng build @trackly/core && ng build @trackly/ui && ng build @trackly/auth && ng build @trackly/dashboard && ng build @trackly/tickets && ng build @trackly/admin && ng build @trackly/portal && ng build @trackly/guest"
+    "build:libs": "ng build @trackly/core && ng build @trackly/ui && ng build @trackly/auth && ng build @trackly/dashboard && ng build @trackly/tickets && ng build @trackly/releases && ng build @trackly/admin && ng build @trackly/portal && ng build @trackly/guest"
   },
   "private": true,
   "packageManager": "npm@11.13.0",

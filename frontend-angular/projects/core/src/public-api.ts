@@ -23,6 +23,7 @@ export * from './lib/api/chat.api';
 export * from './lib/api/email.api';
 export * from './lib/api/notifications.api';
 export * from './lib/api/public.api';
+export * from './lib/api/releases.api';
 export * from './lib/api/sso.api';
 export * from './lib/api/tickets.api';
 export * from './lib/api/workspace-ops.api';

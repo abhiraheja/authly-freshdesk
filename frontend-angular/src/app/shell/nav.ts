@@ -113,6 +113,7 @@ export const NAV: readonly NavGroup[] = [
       // still sitting there, so the number has to move without a navigation.
       { labelKey: 'nav.items.liveChat', icon: 'messages-square', route: '/dashboard/chat', countKey: 'chatWaiting' },
       { labelKey: 'nav.items.problems', icon: 'puzzle', route: '/dashboard/problems', countKey: 'openProblems' },
+      { labelKey: 'nav.items.releases', icon: 'rocket', route: '/dashboard/releases' },
       // The people, before the things: a support desk is about who is asking long
       // before it is about what they are asking on.
       { labelKey: 'nav.items.customers', icon: 'user-round', route: '/dashboard/customers', countKey: 'customers' },

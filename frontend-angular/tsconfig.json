@@ -15,6 +15,7 @@
       "@trackly/dashboard": ["./projects/dashboard/src/public-api.ts"],
       "@trackly/guest": ["./projects/guest/src/public-api.ts"],
       "@trackly/portal": ["./projects/portal/src/public-api.ts"],
+      "@trackly/releases": ["./projects/releases/src/public-api.ts"],
       "@trackly/tickets": ["./projects/tickets/src/public-api.ts"],
       "@trackly/ui": ["./projects/ui/src/public-api.ts"]
     },

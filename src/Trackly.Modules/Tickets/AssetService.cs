@@ -342,7 +342,7 @@ public class AssetService(TracklyDbContext db, ActivityLog activity)
             {
                 s.Id, s.Name, s.Description, s.OwnerTeamId,
                 OwnerTeamName = s.OwnerTeam != null ? s.OwnerTeam.Name : null,
-                s.IsActive, s.SortOrder,
+                s.IsActive, s.SortOrder, s.PipelineUrl,
                 // Open tickets currently hitting it — the number that makes the
                 // catalogue an incident board rather than a list of nouns.
                 OpenTickets = db.TicketImpactedServices.Count(x =>
@@ -377,7 +377,7 @@ public class AssetService(TracklyDbContext db, ActivityLog activity)
         return rows
             .Select(s => new BusinessServiceDto(
                 s.Id, s.Name, s.Description, s.OwnerTeamId, s.OwnerTeamName,
-                s.IsActive, s.SortOrder, s.OpenTickets, LevelOf(s.WorstRank)))
+                s.IsActive, s.SortOrder, s.OpenTickets, LevelOf(s.WorstRank), s.PipelineUrl))
             .ToList();
     }
 
@@ -434,7 +434,8 @@ public class AssetService(TracklyDbContext db, ActivityLog activity)
     }
 
     public async Task<BusinessServiceDto> CreateServiceAsync(
-        Actor actor, string name, string? description, Guid? ownerTeamId, CancellationToken ct)
+        Actor actor, string name, string? description, Guid? ownerTeamId,
+        string? pipelineUrl, CancellationToken ct)
     {
         RequireAdmin(actor);
         name = Clean(name) ?? throw new ArgumentException("A service needs a name.");
@@ -452,18 +453,21 @@ public class AssetService(TracklyDbContext db, ActivityLog activity)
             Name = name,
             Description = Clean(description, 1000),
             OwnerTeamId = ownerTeamId,
+            PipelineUrl = Clean(pipelineUrl, 500),
             SortOrder = next + 1,
         };
         db.BusinessServices.Add(service);
         await db.SaveChangesAsync(ct);
         // A service that did not exist a moment ago cannot be broken yet.
         return new BusinessServiceDto(service.Id, service.Name, service.Description,
-            service.OwnerTeamId, null, service.IsActive, service.SortOrder, 0, null);
+            service.OwnerTeamId, null, service.IsActive, service.SortOrder, 0, null,
+            service.PipelineUrl);
     }
 
     public async Task<BusinessServiceDto?> UpdateServiceAsync(
         Actor actor, Guid id, string? name, string? description,
-        Guid? ownerTeamId, bool clearOwner, int? sortOrder, bool? isActive, CancellationToken ct)
+        Guid? ownerTeamId, bool clearOwner, int? sortOrder, bool? isActive,
+        string? pipelineUrl, CancellationToken ct)
     {
         RequireAdmin(actor);
         var service = await db.BusinessServices
@@ -477,6 +481,7 @@ public class AssetService(TracklyDbContext db, ActivityLog activity)
         else if (ownerTeamId is not null) service.OwnerTeamId = ownerTeamId;
         if (sortOrder is not null) service.SortOrder = sortOrder.Value;
         if (isActive is not null) service.IsActive = isActive.Value;
+        if (pipelineUrl is not null) service.PipelineUrl = Clean(pipelineUrl, 500);
         service.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
@@ -493,7 +498,7 @@ public class AssetService(TracklyDbContext db, ActivityLog activity)
             : 2), ct);
         return new BusinessServiceDto(service.Id, service.Name, service.Description,
             service.OwnerTeamId, service.OwnerTeam?.Name, service.IsActive, service.SortOrder,
-            open, LevelOf(worst));
+            open, LevelOf(worst), service.PipelineUrl);
     }
 
     public async Task<AssetDeleteResult> DeleteServiceAsync(Actor actor, Guid id, CancellationToken ct)
@@ -665,9 +670,15 @@ public record TicketAssetDto(
 /// field the status board colours by; <paramref name="OpenTicketCount"/> is how
 /// many people are saying it.
 /// </param>
+/// <param name="PipelineUrl">
+/// How this service is deployed. Lives on the catalogue rather than being typed
+/// into each release, so adding the service to a release plan fills the link in
+/// by itself — a release COPIES it, so editing here never rewrites history.
+/// </param>
 public record BusinessServiceDto(
     Guid Id, string Name, string? Description, Guid? OwnerTeamId, string? OwnerTeamName,
-    bool IsActive, int SortOrder, int OpenTicketCount, string? WorstLevel);
+    bool IsActive, int SortOrder, int OpenTicketCount, string? WorstLevel,
+    string? PipelineUrl = null);
 
 /// <param name="Level">How badly this particular ticket says the service is affected.</param>
 /// <param name="Impact">The agent's own words, if they wrote any.</param>

@@ -23,7 +23,8 @@
     "copied": "Copied",
     "copyFailed": "Could not copy — select the text instead.",
     "done": "Done",
-    "actions": "Actions"
+    "actions": "Actions",
+    "someone": "Someone"
   },
   "nav": {
     "main": "Main",
@@ -80,7 +81,8 @@
       "assets": "Assets",
       "services": "Services",
       "rewards": "Rewards",
-      "customers": "Customers"
+      "customers": "Customers",
+      "releases": "Releases"
     }
   },
   "palette": {
@@ -880,7 +882,10 @@
         "select": "Dropdown",
         "radio": "Radio buttons",
         "checkbox": "Checkbox"
-      }
+      },
+      "pipelineUrl": "Pipeline link",
+      "pipelinePlaceholder": "Pipeline URL (optional)",
+      "pipelineSaved": "Pipeline link saved"
     },
     "hours": {
       "title": "Business hours",
@@ -1889,5 +1894,231 @@
     "emptyBody": "Automate the triage nobody should have to remember — tagging, routing, priority.",
     "saveFailed": "Couldn't save the rule",
     "loadFailed": "Couldn't load rules"
+  },
+  "releases": {
+    "title": "Releases",
+    "subtitle": "What is going out, what has to happen for it, and who has done which part.",
+    "add": "New release",
+    "loadFailed": "Couldn't load releases",
+    "createFailed": "Couldn't create the release",
+    "actionFailed": "That didn't work",
+    "noDate": "No date yet",
+    "noManager": "Unassigned",
+    "untestedCount": "{{count}} untested",
+    "tabs": {
+      "open": "Upcoming",
+      "released": "Shipped",
+      "all": "All"
+    },
+    "columns": {
+      "release": "Release",
+      "scheduled": "Scheduled",
+      "manager": "Release manager",
+      "plan": "Plan",
+      "tested": "Tested",
+      "status": "Status"
+    },
+    "empty": {
+      "openHeading": "Nothing scheduled",
+      "openBody": "Create a release to plan the next deployment — the services going out, the steps to run and the tasks shipping with them.",
+      "releasedHeading": "Nothing has shipped yet",
+      "releasedBody": "Released and rolled-back plans stay here as a record of what was actually done.",
+      "allHeading": "No releases yet",
+      "allBody": "A release plan replaces the page somebody writes before every deployment — except every line can be ticked off, by name."
+    },
+    "newHeading": "New release",
+    "form": {
+      "version": "Version",
+      "versionPlaceholder": "2.14.0",
+      "versionHint": "Whatever the team already says out loud — a version, a date, a sprint number.",
+      "title": "Title",
+      "titlePlaceholder": "August maintenance",
+      "scheduled": "Scheduled for",
+      "scheduledHint": "Tentative. Nobody is held to it; it is there so the rest of the team can plan around it.",
+      "submit": "Create release",
+      "manager": "Release manager",
+      "rollback": "Rollback plan",
+      "rollbackHint": "Required before this release can be marked ready. It is the field everyone skips and the only one that matters when it goes wrong.",
+      "notes": "Other notes"
+    },
+    "settings": {
+      "open": "Task links",
+      "heading": "Task links",
+      "intro": "Set this once and everybody after you types a task number instead of hunting for a URL.",
+      "template": "Task URL template",
+      "templateHint": "Must contain {id}, which the task number replaces.",
+      "saved": "Task link template saved",
+      "saveFailed": "Couldn't save that"
+    },
+    "status": {
+      "planning": "Planning",
+      "ready": "Ready",
+      "inProgress": "Deploying",
+      "released": "Released",
+      "rolledBack": "Rolled back",
+      "cancelled": "Cancelled"
+    },
+    "run": {
+      "pending": "To do",
+      "inProgress": "In progress",
+      "done": "Done",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    },
+    "test": {
+      "notTested": "Not tested",
+      "passed": "Passed",
+      "failed": "Failed",
+      "blocked": "Blocked",
+      "skipped": "Skipped"
+    },
+    "readiness": {
+      "heading": "Not ready to ship yet",
+      "noComponents": "No services have been added to this release.",
+      "noRollbackPlan": "There is no rollback plan.",
+      "failedItems": "{{count}} task(s) failed testing or are blocked.",
+      "untestedItems": "{{count}} task(s) have not been tested.",
+      "okHeading": "Ready when you are",
+      "okBody": "Every task is tested, the rollback plan is written and the services are listed."
+    },
+    "actions": {
+      "markReady": "Mark ready",
+      "start": "Start deployment",
+      "reopen": "Back to planning",
+      "markReleased": "Mark released",
+      "rollBack": "Rolled back"
+    },
+    "confirm": {
+      "releasedHeading": "Mark this release as done?",
+      "releasedBody": "The plan becomes a record after this — steps and tasks can no longer be edited, only verified on production.",
+      "rolledBackHeading": "Record a rollback?",
+      "rolledBackBody": "This says the release went out and had to be undone. It stays on the record, which is the point."
+    },
+    "detail": {
+      "noTitle": "Release plan",
+      "back": "All releases",
+      "clone": "Start next release",
+      "components": "Services ({{count}})",
+      "summary": "Summary",
+      "activity": "Activity",
+      "activityEmpty": "Nothing has happened on this release yet.",
+      "rollback": "Rollback plan",
+      "rollbackMissing": "No rollback plan yet. This release cannot be marked ready without one.",
+      "notes": "Notes",
+      "started": "Started",
+      "releasedAt": "Released",
+      "editHeading": "Edit release",
+      "rollbackAdd": "Add a rollback plan"
+    },
+    "component": {
+      "add": "Add service",
+      "addHeading": "Add a service",
+      "editHeading": "Edit service",
+      "order": "Step {{n}} in the order",
+      "pipeline": "Pipeline",
+      "finishedAt": "finished {{when}}",
+      "edit": "Edit this service",
+      "remove": "Remove this service",
+      "service": "From the catalogue",
+      "serviceCustom": "Something else (type a name)",
+      "serviceHint": "Picking one fills in its name and pipeline link. The release keeps its own copy, so editing the catalogue later never rewrites this plan.",
+      "name": "Name",
+      "build": "Build",
+      "buildHint": "The tag, commit or build number actually going out.",
+      "pipelineUrl": "Pipeline link",
+      "pipelineHint": "The page somebody opens to run the deployment.",
+      "owner": "Who runs it",
+      "noOwner": "Nobody yet",
+      "removeHeading": "Remove this service?",
+      "removeBody": "Its steps go with it. Tasks filed under it stay on the release without a heading.",
+      "emptyHeading": "No services yet",
+      "emptyBody": "Add the services this release touches. Each one gets its own runbook and the tasks shipping with it."
+    },
+    "step": {
+      "add": "Add step",
+      "addHeading": "Add a step",
+      "kind": "Kind",
+      "kinds": {
+        "pipeline": "Run a pipeline",
+        "db_script": "Database script",
+        "env_change": "Configuration change",
+        "manual": "Manual step",
+        "verify": "Check it worked"
+      },
+      "title": "What has to be done",
+      "env": "Where",
+      "envPlaceholder": "staging + prod",
+      "url": "Link",
+      "urlHint": "The pipeline run page, the dashboard — whatever you would otherwise paste into chat.",
+      "body": "Details",
+      "bodyEnv": "Variable and where it is set",
+      "bodyPlaceholder": {
+        "pipeline": "Anything the person running it needs to know — parameters, the order of stages.",
+        "db_script": "Paste the SQL exactly as it should be run.",
+        "env_change": "TOKEN__KEY — Auth API, staging and prod. Value comes from the vault.",
+        "manual": "What to do, step by step.",
+        "verify": "What to open, and what it should say."
+      },
+      "secretHeading": "Names here, never values",
+      "secretBody": "Write down which variable changes and where — that is the part people forget. The value belongs in your vault: anything written here is one more copy to rotate and one more place it can leak from.",
+      "open": "Open",
+      "markDone": "Done",
+      "markFailed": "Mark as failed",
+      "skip": "Skip",
+      "undo": "Undo this tick",
+      "remove": "Remove this step",
+      "removeHeading": "Remove this step?",
+      "removeBody": "\"{{title}}\" will be deleted from the plan.",
+      "none": "No steps yet. Add the pipeline to run, the script to apply, the variable to set.",
+      "doneBy": "by {{who}}, {{when}}",
+      "outOfOrderHeading": "An earlier step is still open",
+      "outOfOrderBody": "Something above \"{{title}}\" has not been done yet. Ticking this anyway is fine — it will be recorded as out of order.",
+      "outOfOrderConfirm": "Tick it anyway"
+    },
+    "item": {
+      "heading": "Shipping with it ({{count}})",
+      "add": "Add task",
+      "addHeading": "Add a task",
+      "assign": "File under a service",
+      "assignHeading": "File this task under a service",
+      "key": "Task number",
+      "keyPlaceholder": "55335",
+      "keyHint": "Becomes a link automatically once an admin has set the task URL template.",
+      "title": "What it is",
+      "url": "Link",
+      "urlHint": "Only needed when the number does not fit the template.",
+      "component": "Service",
+      "noComponent": "None — release-wide",
+      "looseHeading": "Tasks not filed under a service",
+      "looseHint": "These still count towards testing. File them under a service so whoever deploys it knows what to check.",
+      "looseEmpty": "Every task is filed under a service.",
+      "test": "Test",
+      "verify": "On prod",
+      "testedBy": "tested by {{who}}, {{when}}",
+      "verifiedAs": "On prod: {{status}}"
+    },
+    "clone": {
+      "heading": "Start the next release",
+      "intro": "Copies the services and their repeatable steps. Tasks, ticks, build numbers, migrations and configuration changes do not carry over — last release’s script is not this release’s script.",
+      "submit": "Create it",
+      "created": "Release {{version}} created"
+    },
+    "activity": {
+      "created": "created this release",
+      "updated": "edited the release",
+      "statusChanged": "moved it",
+      "componentAdded": "added",
+      "componentRemoved": "removed",
+      "componentStatus": "set",
+      "stepAdded": "added a step",
+      "stepRemoved": "removed a step",
+      "stepDone": "ticked off",
+      "stepFailed": "marked as failed",
+      "stepOutOfOrder": "ticked out of order",
+      "itemAdded": "added",
+      "itemRemoved": "removed",
+      "itemTested": "tested",
+      "itemVerified": "verified on prod"
+    }
   }
 }

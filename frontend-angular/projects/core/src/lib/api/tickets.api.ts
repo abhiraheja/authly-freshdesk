@@ -611,6 +611,13 @@ export interface BusinessService {
    * people are saying it.
    */
   worstLevel: string | null;
+
+  /**
+   * How this service is deployed. Read by release plans, which COPY it when the
+   * service is added so that editing the catalogue never rewrites what an old
+   * release says was run.
+   */
+  pipelineUrl: string | null;
 }
 
 /** One open ticket saying a service is affected — the drill-down from the board. */
@@ -1653,7 +1660,12 @@ export class TicketsApi {
     return this.api.get<ServiceTicket[]>(`/api/services/${id}/tickets`, { includeFinished });
   }
 
-  createService(body: { name: string; description?: string | null; ownerTeamId?: string | null }) {
+  createService(body: {
+    name: string;
+    description?: string | null;
+    ownerTeamId?: string | null;
+    pipelineUrl?: string | null;
+  }) {
     return this.api.post<BusinessService>('/api/services', body);
   }
 
@@ -1666,6 +1678,8 @@ export class TicketsApi {
       clearOwner?: boolean;
       sortOrder?: number;
       isActive?: boolean;
+      /** Copied into a release plan when this service is added to one. */
+      pipelineUrl?: string | null;
     },
   ): Promise<BusinessService> {
     return this.api.put<BusinessService>(`/api/services/${id}`, body);

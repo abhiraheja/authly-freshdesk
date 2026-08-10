@@ -758,3 +758,23 @@ Append here as phases land, so nothing is missed later.
     response times and CSAT by editing a query string.
   - Nothing is seeded. An install with no reward goals shows no scoreboard anywhere,
     which is the correct empty state rather than a configuration gap.
+
+- **Release plans** — no new config key, no secret, no external dependency. Two
+  things to know before this reaches production:
+  - **`release_steps.body` is stored in plaintext, on purpose.** It holds
+    migrations and shell commands, which are not secrets and are worthless if the
+    person running them has to retype them from memory. Configuration steps store
+    the variable **name** only — there is no field in the UI in which a value can
+    be typed — so no application secret is meant to reach this table. That is a
+    convention the product enforces structurally, not a database constraint: if
+    somebody pastes a connection string into a manual step, it is in the table.
+    Treat `release_steps` as readable by every agent, because it is.
+  - **`workspaces.work_item_url_template` is interpolated into an `href`.** It is
+    admin-only to write, must contain `{id}`, and the key is URL-escaped before
+    substitution. It is a link target, not markup — but it is also the one field
+    here that a non-admin's browser follows, so keep it admin-only if you ever move
+    the endpoint.
+  - Deleting a user is unaffected: every actor column on a release
+    (`done_by`, `tested_by`, `verified_by`, `completed_by`, `release_manager_id`,
+    `actor_id`) is `ON DELETE SET NULL`, so a two-year-old tick never blocks an
+    offboarding. `releases.created_by` is `RESTRICT`, matching `problems`.

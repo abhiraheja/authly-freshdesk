@@ -29,6 +29,16 @@ public class BusinessService
     public Guid? OwnerTeamId { get; set; }
     public Team? OwnerTeam { get; set; }
 
+    /// <summary>
+    /// The pipeline that deploys it. Remembered here so that adding this service
+    /// to a release fills the link in by itself — a link somebody has to go and
+    /// find every time is a link that ends up pasted in chat instead.
+    ///
+    /// A release COPIES this rather than reading through it, so editing the
+    /// catalogue never rewrites what an old release says was run.
+    /// </summary>
+    public string? PipelineUrl { get; set; }
+
     /// <summary>Retired rather than deleted — tickets referencing it keep their meaning.</summary>
     public bool IsActive { get; set; } = true;
     public int SortOrder { get; set; }

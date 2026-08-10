@@ -157,6 +157,25 @@ import {
                           {{ service.description || service.ownerTeamName || '—' }}
                         </p>
                       </div>
+                      <!-- Remembered here so that adding this service to a
+                           release plan fills the link in by itself. Enter to
+                           save, matching how everything else on this screen
+                           commits — a blur-save would fire on every tab. -->
+                      <div class="w-56">
+                        <label tkLabel [for]="'pipeline-' + service.id" class="sr-only">
+                          {{ 'admin.catalogue.pipelineUrl' | transloco }}
+                        </label>
+                        <input
+                          tkInput
+                          inset
+                          inputSize="sm"
+                          class="w-full"
+                          [id]="'pipeline-' + service.id"
+                          [value]="service.pipelineUrl || ''"
+                          [placeholder]="'admin.catalogue.pipelinePlaceholder' | transloco"
+                          (keydown.enter)="saveServicePipeline(service, $event)"
+                        />
+                      </div>
                       @if (service.openTicketCount) {
                         <tk-badge tone="warning">
                           {{ 'admin.catalogue.openIncidents' | transloco: { count: service.openTicketCount } }}
@@ -439,6 +458,14 @@ export class CatalogueSettings {
 
   protected async setServiceActive(service: BusinessService, isActive: boolean): Promise<void> {
     await this.write(() => this.api.updateService(service.id, { isActive }), this.services);
+  }
+
+  /** Empty clears it — a service that stopped having a pipeline should stop claiming one. */
+  protected async saveServicePipeline(service: BusinessService, event: Event): Promise<void> {
+    const pipelineUrl = (event.target as HTMLInputElement).value.trim() || null;
+    if (pipelineUrl === (service.pipelineUrl || null)) return;
+    await this.write(() => this.api.updateService(service.id, { pipelineUrl }), this.services);
+    this.toast.success(this.transloco.translate('admin.catalogue.pipelineSaved'));
   }
 
   // ---- Custom properties ----

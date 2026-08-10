@@ -1615,3 +1615,125 @@ now" are different questions.
 Clicking a row opens their profile, which is where everything about one person is
 edited — details, custom fields, photo, and their full ticket history. Nothing about
 a customer is duplicated on this screen.
+
+---
+
+## 27. Release plans
+
+**Where:** Workspace → Releases (`/dashboard/releases`). Agents and admins.
+
+The page you write before every deployment: what is going out, what has to happen
+for it, and who has done which part. It exists to replace the wiki page most teams
+keep for this, and it is built around the one thing that page cannot do — **carry a
+tick, a name and a timestamp on every line**.
+
+A release reads top to bottom like the document it replaces. It is also the
+checklist the deployment is run from, and those are the same rows, so they cannot
+drift apart.
+
+### The board
+
+Ordered by **what is going out next**, not by what changed last. Unscheduled
+releases sort after the scheduled ones, because they are still being written.
+
+Two numbers carry each row. **Plan** is how much of the runbook is done. **Tested**
+is how much of the scope has been through a pre-deploy pass — and it gets an amber
+"N untested" line under it, because that is the number that decides whether the
+release can go at all.
+
+### Writing one
+
+Create a release with a version — whatever the team already says out loud, a
+version, a date, a sprint number — and a tentative date. Nobody is held to the
+date; it is there so the rest of the team can plan around it.
+
+Then add the **services** going out. Pick from the service catalogue and the name
+and pipeline link fill in by themselves. The release keeps its own copy of both, so
+renaming or retiring a service next year never rewrites what an old plan says was
+run. You can also type a name for something that was never in the catalogue.
+
+Each service gets **steps** — the runbook. Five kinds:
+
+| Kind | What it holds |
+|---|---|
+| Run a pipeline | The link somebody opens to deploy it |
+| Database script | The SQL, verbatim, exactly as it should be run |
+| Configuration change | The variable **name** and where it is set |
+| Manual step | Anything done by hand |
+| Check it worked | What to open, and what it should say |
+
+**Configuration steps record names, never values.** There is no field to type a
+value into, and that is deliberate. A release plan needs to say *that* a variable
+changes — the part people forget. The value belongs in your vault: anything written
+here is one more copy to rotate and one more place it can leak from.
+
+Database scripts are the opposite: stored in full, because "did anyone run it on
+prod?" is the 2am question, and the answer is only useful if the script and the
+name of whoever ran it are in the same place.
+
+### The task list is also the test checklist
+
+Add the tasks shipping in the release — `55335 — Auth issue fix` — under the
+service each belongs to. Every task carries a **Test** state that anybody can set
+before deploy, and it records who set it.
+
+That is what makes a last round of testing something a colleague can actually
+do: they can open every task from the plan, work through them, and leave their
+name against each one. Five outcomes, and `Blocked` and `Skipped` exist precisely
+because they are not "passed" and should not be hidden.
+
+Once the deployment is under way, a second **On prod** state appears on each task.
+It is separate from the first on purpose: pre-deploy testing decides whether to
+ship, production verification decides whether to roll back, and only one of those
+is asked while the site is on fire.
+
+**Task links.** Admins set a URL template once under **Task links** on the board —
+`https://dev.azure.com/org/project/_workitems/edit/{id}` — and everybody after that
+types `55335` and gets a link. It has to contain `{id}`. Without it, task numbers
+are plain text, and a task nobody can open is a task only its author can test.
+
+### Shipping it
+
+A release will not go to **Ready** — or straight to **Deploying** — until it has
+services, a rollback plan, and every task tested or consciously skipped. The
+banner at the top lists exactly what is missing, from the moment the plan is
+created, because that is the only cheap time to fix it.
+
+The rollback plan is required. It is the field every team skips and the only one
+that matters on the night it goes wrong.
+
+On the night: tick steps as you go. Ticking the first step of a **Ready** release
+starts it, so nobody has to remember a button. If you tick something while an
+earlier step in that service is still open, Trackly asks once and then records it
+as out of order — a rule that cannot be overridden is a rule that gets worked
+around outside the tool, where nothing is recorded.
+
+When it is out, mark it **Released**. If it goes bad afterwards, **Rolled back**
+stays available: a release can fail hours later, and the record has to be able to
+say so without anybody editing history.
+
+### After it ships
+
+A released, rolled-back or cancelled release is **read-only**. Production
+verification still works, because that happens afterwards; nothing else does. The
+plan has become a record, and the record is the point — next time, somebody can
+read what was actually done rather than guessing.
+
+The **Activity** panel is append-only: who ticked what, when, including every
+out-of-order override. Nothing on it can be edited or removed.
+
+**Start next release** copies the services and their repeatable steps — pipelines,
+manual steps, checks. It does **not** copy ticks, build numbers, tasks, migrations
+or configuration changes. Last release's migration is not this release's migration,
+and a plan pre-filled with somebody else's SQL is worse than an empty one, because
+it looks filled in.
+
+### Who can do what
+
+Agents can do everything an admin can, except delete. That is deliberate: the
+person who runs the pipeline for a service is the person who should tick it off,
+and making them ask an admin is how a checklist stops being ticked at all.
+Accountability comes from the activity log, not from a permission wall.
+
+Only admins can delete a release, and only while it has not shipped. Anything that
+went out is cancelled or rolled back, never deleted.

@@ -121,6 +121,13 @@ export const routes: Routes = [
         loadComponent: () => import('@trackly/tickets').then((m) => m.ProblemDetail),
       },
       {
+        // A whole area, so it mounts its own routes rather than listing screens
+        // here — the app knows the path and nothing about what is behind it.
+        path: 'dashboard/releases',
+        canActivate: [roleGuard('agent', 'admin')],
+        loadChildren: () => import('@trackly/releases').then((m) => m.releaseRoutes),
+      },
+      {
         path: 'dashboard/kb',
         canActivate: [roleGuard('agent', 'admin')],
         loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
