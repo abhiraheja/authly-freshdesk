@@ -38,6 +38,21 @@ public class WidgetVisitor
     /// <summary>The host application's own id for this person (<c>unique_id</c>).</summary>
     public string? ExternalId { get; set; }
 
+    /// <summary>
+    /// What this browser says it is called, from the details form or from the
+    /// host page's config object.
+    ///
+    /// <para>
+    /// Deliberately here and not on <see cref="User"/>: until
+    /// <see cref="IsVerified"/> these are <i>claims</i>, and a claim must never
+    /// be written into the workspace's contact records. They are what fills the
+    /// ticket's guest columns, exactly as a guest form's would.
+    /// </para>
+    /// </summary>
+    public string? Name { get; set; }
+    public string? Email { get; set; }
+    public string? Phone { get; set; }
+
     public bool IsVerified { get; set; }
 
     /// <summary>Free-form bag the host page attaches (<c>variables</c>).</summary>

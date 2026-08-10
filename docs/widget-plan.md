@@ -280,6 +280,9 @@ CREATE TABLE widget_visitors (
     external_id        TEXT,                   -- the host app's unique_id
     is_verified        BOOLEAN NOT NULL DEFAULT false,
     variables          JSONB NOT NULL DEFAULT '{}',
+    name               TEXT,                   -- claimed, never a contact record
+    email              TEXT,
+    phone              TEXT,
     created_at         TIMESTAMPTZ DEFAULT now(),
     last_seen_at       TIMESTAMPTZ DEFAULT now()
 );
@@ -291,6 +294,17 @@ CREATE INDEX ix_widget_visitors_user ON widget_visitors (workspace_id, user_id);
 `workspace_id` is denormalised from `widget_id` on purpose: invariant 1 says
 every query filters by it, and a visitor lookup that had to join to get there
 would be the one query that quietly does not.
+
+**`name` / `email` / `phone` were added in phase 2** — the original sketch had
+nowhere to put what the details form collects. They are deliberately *not*
+written to a `users` row: until `is_verified` they are claims, and a claim in
+the contact table is indistinguishable from a fact. They are what fills a
+ticket's `guest_name` / `guest_email`, exactly as the guest form's would.
+
+`visitor_token_hash` is the SHA-256 of a **server-issued** token, not of a
+client-chosen id. § 6.2 lists a `visitorId` in the session body; that would be
+worth nothing as a credential, since anyone could send someone else's. The frame
+stores what the server minted and returns it in `X-Trackly-Visitor`.
 
 ### 5.3 `widget_conversation_reads` — new
 
@@ -347,9 +361,11 @@ for one release so the React screen does not break mid-migration, then goes.
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/api/public/widget/{token}/config` | Branding + launch defaults + which identity fields to ask for. `Origin`-checked (§ 9.2). Cacheable, 60s |
-| POST | `/api/public/widget/{token}/session` | Body: `visitorId`, optional `uniqueId`/`name`/`mail`/`number`/`variables`, optional signed `token`. Returns the visitor token |
+| GET | `/api/public/widget/{token}/config` | Branding + launch defaults + which identity fields to ask for. `Origin`-checked (§ 9.2). `private, max-age=60` + `Vary: Origin` — a shared cache keyed on the URL alone would hand one site another site's answer |
+| POST | `/api/public/widget/{token}/session` | Optional `unique_id`/`name`/`mail`/`number`/`variables`, optional signed `token`. Mints and returns the visitor token, or resumes the one in `X-Trackly-Visitor` |
 | PATCH | `/api/public/widget/{token}/session` | The details form's Submit — same upsert, mid-session |
+| POST | `/api/public/widget/{token}/session/verify-email` | Emails a six-digit code. **Added in phase 2** |
+| POST | `/api/public/widget/{token}/session/verify-email/confirm` | Confirms it, which is the *only* other way to reach verified. **Added in phase 2** |
 | GET | `/api/public/widget/{token}/conversations` | Scoped by the trust rule. Open threads always; resolved/closed only from the last 30 days. Each row carries `unreadCount`, the last sender's name and a message preview |
 | POST | `/api/public/widget/{token}/conversations` | Creates a ticket, `Channel = widget`. Called by the **first send**, not by opening the new-conversation view |
 | GET | `/api/public/widget/{token}/conversations/{id}` | Thread. `is_internal` comments excluded (invariant 5) |
@@ -603,12 +619,38 @@ Each is independently shippable and leaves the existing widget working.
 | # | Scope | Done when |
 |---|---|---|
 | 1 ✅ | Reshaped `widget_configs` + `widget_visitors` + `tickets.widget_visitor_id`, EF migration with backfill, admin CRUD, secret encrypt/regenerate/verify | An admin can create two widgets over the API and each has its own token; the old snippet still renders |
-| 2 | Public config + session endpoints, JWT verification, contact-upsert service, ticket creation with `Channel = widget` and `RequesterId` | A widget ticket appears on the Customer Detail screen's "previous tickets" with no UI change |
+| 2 ✅ | Public config + session endpoints, JWT verification, contact-upsert service, ticket creation with `Channel = widget` and `RequesterId` | A widget ticket appears on the Customer Detail screen's "previous tickets" with no UI change |
 | 3 | Conversation list + thread + reply + attachments, trust rule, `widget_conversation_reads` + `unreadCount` + read receipt, SignalR per-visitor group with polling fallback | Two browsers with different visitor tokens cannot see each other's conversations — asserted by test |
 | 4 | `/widget.js` rewritten: `initChatWidget`, open/close/identify, branded launcher, postMessage handshake, back-compat path | The snippet in § 7.1 works on a plain HTML page |
 | 5 | Angular customer surface `/widget/:token` (home, details form, thread, closed section) | Four states each, brand-coloured, light |
 | 6 | Angular admin `/admin/widget` list + Configuration/Branding/Integration tabs with live preview; `/admin/settings/branding` route and nav entry removed (§ 4.2) | React `WidgetPage.tsx` is no longer reachable and branding is editable in exactly one place |
 | 7 | Docs | § 11 |
+
+Phase 2 shipped with `scripts/verify-widget-phase2.ps1` — 52 assertions, most of
+them about the trust rule refusing to bend. Four decisions it forced:
+
+- **Email verification was built, not deferred.** `require_email_verification`
+  was going to be a toggle with nothing behind it: a widget whose host page sends
+  no signature has no other route to verified, so turning the switch on would
+  have made the widget unusable and looked like a Trackly bug. The two endpoints
+  above reuse `EmailToken` and the existing `guest_otp` template.
+- **An unverified visitor still raises tickets** — as a guest, with their claimed
+  details in `guest_name` / `guest_email` and `requester_id` null. Only a proven
+  identity becomes a requester. That is § 3.3 at the one point where it is
+  observable in the database.
+- **A verified visitor cannot be downgraded.** A later unsigned payload on the
+  same visitor token is ignored rather than applied. Without that, a host page
+  that forgets the token on one route would silently unlink the contact — and a
+  page that sent a *different* address would repoint it.
+- **The confirmation email only goes to a proven address.** Sending "we got your
+  request" to whatever was typed would make every embed on the internet a way to
+  post a Trackly-branded email to a stranger's inbox. The panel is the receipt.
+
+One binding bug worth remembering: `unique_id` needs an explicit
+`[JsonPropertyName]`. The serializer's camelCase default looks for `uniqueId`,
+binds nothing, and an unmatched claim reads as *"the page named nobody"* rather
+than as an error — so a signature/claim mismatch would have gone unchecked. It
+was caught only because a test asserted the mismatch is rejected.
 
 Phase 1 shipped with `scripts/verify-widget-phase1.ps1` — 43 assertions covering
 multi-widget creation, secret masking, every way a JWT can be wrong (wrong key,

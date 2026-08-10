@@ -635,6 +635,29 @@ Append here as phases land, so nothing is missed later.
     sends — reinforces the **single-instance** guidance until leader election
     exists (§4).
   - No new config keys or secrets.
+- **Widget rework (`docs/widget-plan.md`, phases 1–2 landed):**
+  - **A new family of anonymous endpoints** under `/api/public/widget/{token}/…`
+    — config, session, email verification, conversation create. All must be
+    reachable over HTTPS from every site that embeds a widget. They resolve the
+    workspace from the widget token server-side and never accept a slug.
+  - **Widget secret keys are AES-256-GCM under `Security:MasterKey`.** Losing or
+    rotating that key makes every widget's secret unreadable, which breaks
+    identity verification on every embed at once. Rotation story: regenerate each
+    widget's key from the admin screen and re-deploy the host pages' signing
+    config — there is deliberately no overlap window, so plan the order.
+  - **The `allowed_origins` allowlist is the only enforcement there is.** A
+    `frame-ancestors` header cannot be set for `/widget/:token`, because nginx
+    serves it as a static SPA route and does not know the per-widget list (see
+    the deliberate no-`X-Frame-Options` comment in `default.conf.template`). An
+    unlisted site can still *draw* the iframe; it just cannot obtain config or a
+    session, so the panel is inert. Leave the list empty only if you are happy
+    for the widget to load anywhere.
+  - **`X-Forwarded-For` matters more here than anywhere else.** The session,
+    verification and conversation endpoints carry the per-IP `"auth"` rate limit;
+    behind the SPA's nginx without `App:ForwardedHeaders` (§5) every visitor on
+    the internet shares one partition, and 20 requests a minute is the whole
+    widget's budget.
+  - No new config keys.
 - **Phase 7A (service desk fundamentals):** tags, teams, SLA policies, knowledge
   base, canned responses, automation rules. No new config keys or secrets — all
   per-workspace data. The public KB endpoints (`/api/public/workspaces/{slug}/kb`,

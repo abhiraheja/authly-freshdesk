@@ -80,6 +80,7 @@ builder.Services.AddScoped<CsatService>();
 builder.Services.AddScoped<ChannelInboundService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<WidgetService>();
+builder.Services.AddScoped<WidgetPublicService>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<AnnouncementWorker>();
 builder.Services.AddHostedService<SlaBreachWorker>();
