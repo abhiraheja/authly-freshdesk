@@ -66,6 +66,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
     public DbSet<WidgetConfig> WidgetConfigs => Set<WidgetConfig>();
+    public DbSet<WidgetVisitor> WidgetVisitors => Set<WidgetVisitor>();
     public DbSet<CsatSurvey> CsatSurveys => Set<CsatSurvey>();
     public DbSet<ChannelConnector> ChannelConnectors => Set<ChannelConnector>();
     public DbSet<ChannelConversation> ChannelConversations => Set<ChannelConversation>();
@@ -240,6 +241,17 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.HasIndex(t => new { t.ResolveDueAt, t.FirstResponseDueAt })
                 .HasDatabaseName("ix_tickets_sla_sweep")
                 .HasFilter("status_category NOT IN ('resolved', 'closed')");
+            // The widget's "everything I have raised" query. Partial, because
+            // only widget traffic ever sets it and that is a slice of the table.
+            e.HasIndex(t => t.WidgetVisitorId)
+                .HasFilter("widget_visitor_id IS NOT NULL");
+            // SetNull, and it is the delete path for "Delete Widget": the widget
+            // cascades to its visitors, and each of their tickets stays in the
+            // queue as an ordinary ticket with nobody able to claim it. Restrict
+            // would make deleting a widget impossible the moment anyone used it;
+            // cascade would delete real support history to tidy up a config row.
+            e.HasOne(t => t.WidgetVisitor).WithMany().HasForeignKey(t => t.WidgetVisitorId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<TicketTimeEntry>(e =>
@@ -806,11 +818,47 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
         modelBuilder.Entity<WidgetConfig>(e =>
         {
             e.ToTable("widget_configs");
-            e.HasIndex(w => w.WorkspaceId).IsUnique();
+            // Deliberately NOT unique on workspace any more: a workspace runs as
+            // many widgets as it has surfaces to embed one on. The token is what
+            // is unique now, and it is what every public request resolves by.
+            e.HasIndex(w => w.WorkspaceId);
+            e.HasIndex(w => w.PublicToken).IsUnique();
             e.Property(w => w.EmbedType).HasDefaultValue(WidgetEmbedType.Floating);
             e.Property(w => w.Theme).HasDefaultValue("light");
             e.HasOne(w => w.Workspace).WithMany().HasForeignKey(w => w.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(w => w.Team).WithMany().HasForeignKey(w => w.TeamId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<WidgetVisitor>(e =>
+        {
+            e.ToTable("widget_visitors");
+            e.HasIndex(v => v.VisitorTokenHash).IsUnique();     // the lookup on every request
+            e.HasIndex(v => new { v.WidgetId, v.ExternalId });  // re-identify a returning host-page user
+            e.HasIndex(v => new { v.WorkspaceId, v.UserId });   // a contact's visitors, workspace-scoped
+            // Same reason as User.CustomFields: without a comparer EF compares
+            // the dictionary by reference and an in-place edit saves nothing.
+            e.Property(v => v.Variables)
+                .HasColumnName("variables")
+                .HasColumnType("jsonb")
+                .HasConversion(
+                    v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+                    v => JsonSerializer.Deserialize<Dictionary<string, string>>(v, (JsonSerializerOptions?)null)
+                         ?? new Dictionary<string, string>(),
+                    new ValueComparer<Dictionary<string, string>>(
+                        (a, b) => a != null && b != null && a.Count == b.Count && !a.Except(b).Any(),
+                        v => v.Aggregate(0, (hash, kv) => HashCode.Combine(hash, kv.Key, kv.Value)),
+                        v => new Dictionary<string, string>(v)));
+            e.HasOne(v => v.Workspace).WithMany().HasForeignKey(v => v.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(v => v.Widget).WithMany().HasForeignKey(v => v.WidgetId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // The visitor outlives the contact record: losing a browser's whole
+            // conversation history because a customer row was merged away would
+            // be worse than an orphaned visitor.
+            e.HasOne(v => v.User).WithMany().HasForeignKey(v => v.UserId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<AutomationRule>(e =>

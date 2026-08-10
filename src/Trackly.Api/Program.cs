@@ -24,6 +24,7 @@ using Trackly.Modules.Problems;
 using Trackly.Modules.Setup;
 using Trackly.Modules.Sso;
 using Trackly.Modules.Tickets;
+using Trackly.Modules.Widgets;
 using Trackly.Api.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -78,6 +79,7 @@ builder.Services.AddScoped<AiService>();
 builder.Services.AddScoped<CsatService>();
 builder.Services.AddScoped<ChannelInboundService>();
 builder.Services.AddScoped<ChatService>();
+builder.Services.AddScoped<WidgetService>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<AnnouncementWorker>();
 builder.Services.AddHostedService<SlaBreachWorker>();

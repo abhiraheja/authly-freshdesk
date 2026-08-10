@@ -69,6 +69,15 @@ public class Ticket
 
     public string Channel { get; set; } = TicketChannel.Web;
 
+    /// <summary>
+    /// The browser that raised this through the embeddable widget. This is what
+    /// makes the widget's trust rule enforceable: an unverified visitor's own
+    /// conversations are <c>WHERE widget_visitor_id = @me</c>, never
+    /// <c>WHERE guest_email = @claimed</c>. Null on every other channel.
+    /// </summary>
+    public Guid? WidgetVisitorId { get; set; }
+    public WidgetVisitor? WidgetVisitor { get; set; }
+
     // SLA (nullable = no policy applies). first_response_at stops the response
     // clock; sla_paused_at holds the moment the resolve clock paused (pending).
     public DateTime? FirstResponseDueAt { get; set; }

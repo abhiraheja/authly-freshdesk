@@ -254,9 +254,15 @@ Integration tab's snippet flavour (floating / inline / link).
 names it after the workspace, so an install that already pasted the old snippet
 keeps working (the loader continues to accept `data-workspace`, § 7.3).
 
-`public_token`: 12 chars, `TokenUtils`-generated, URL-safe. Not a secret —
-unguessability buys nothing when the token is in page source — but short enough
-to read out loud, as MSG91's `"017a4"` is.
+`public_token`: 12 chars, `TokenUtils.GenerateShortToken`, URL-safe. Not a secret
+— unguessability buys nothing when the token is in page source — but short
+enough to read out loud, as MSG91's `"017a4"` is, so the alphabet drops `0`,
+`1`, `i`, `l` and `o`.
+
+There is deliberately **no `last_used_at` column**, though § 8.2's list screen
+shows one: it is `MAX(widget_visitors.last_seen_at)` instead. Storing it would
+mean a write on every public config read, which is the hottest path this
+feature has.
 
 `secret_key_encrypted`: AES-256-GCM at rest (invariant 3), returned in plaintext
 **once** on create/regenerate and masked (`UHVV…zHZQ`) thereafter, exactly as
@@ -305,12 +311,18 @@ phone carries its own unread count on each. `unreadCount` for a row is then
 ### 5.4 `tickets` — one column
 
 ```sql
-ALTER TABLE tickets ADD COLUMN widget_visitor_id UUID REFERENCES widget_visitors(id);
+ALTER TABLE tickets ADD COLUMN widget_visitor_id UUID REFERENCES widget_visitors(id) ON DELETE SET NULL;
 CREATE INDEX ix_tickets_widget_visitor ON tickets (widget_visitor_id) WHERE widget_visitor_id IS NOT NULL;
 ```
 
 This is what makes the trust rule enforceable: the unverified half of § 3.3 is
 `WHERE widget_visitor_id = @me`, not `WHERE guest_email = @claimed`.
+
+`ON DELETE SET NULL` is the delete path for the screen's **Delete Widget**
+button, decided when phase 1 landed. The widget cascades to its visitors and
+each of their tickets stays in the queue as an ordinary ticket that nobody can
+claim. `RESTRICT` would make a widget undeletable the moment anyone used it;
+`CASCADE` would delete real support history to tidy up a config row.
 
 ---
 
@@ -413,6 +425,13 @@ The current `data-workspace` / `data-embed` / `data-theme` / `data-user-name` /
 `initChatWidget` call arrives and the script tag carries `data-workspace`, the
 loader resolves that workspace's first active widget and self-initialises. Old
 snippets keep working; the Integration tab only ever generates the new form.
+
+**Until phase 4 lands, the Integration tab keeps generating the `data-*` form**,
+because that is still the only form `widget.js` understands — generating the
+§ 7.1 snippet earlier would hand admins something inert. It already emits
+`data-widget="{public_token}"` alongside `data-workspace`, which the current
+loader ignores and the phase-4 loader reads, so a snippet pasted before the
+rewrite addresses the right widget after it.
 
 ---
 
@@ -583,13 +602,22 @@ Each is independently shippable and leaves the existing widget working.
 
 | # | Scope | Done when |
 |---|---|---|
-| 1 | Reshaped `widget_configs` + `widget_visitors` + `tickets.widget_visitor_id`, EF migration with backfill, admin CRUD, secret encrypt/regenerate/verify | An admin can create two widgets over the API and each has its own token; the old snippet still renders |
+| 1 ✅ | Reshaped `widget_configs` + `widget_visitors` + `tickets.widget_visitor_id`, EF migration with backfill, admin CRUD, secret encrypt/regenerate/verify | An admin can create two widgets over the API and each has its own token; the old snippet still renders |
 | 2 | Public config + session endpoints, JWT verification, contact-upsert service, ticket creation with `Channel = widget` and `RequesterId` | A widget ticket appears on the Customer Detail screen's "previous tickets" with no UI change |
 | 3 | Conversation list + thread + reply + attachments, trust rule, `widget_conversation_reads` + `unreadCount` + read receipt, SignalR per-visitor group with polling fallback | Two browsers with different visitor tokens cannot see each other's conversations — asserted by test |
 | 4 | `/widget.js` rewritten: `initChatWidget`, open/close/identify, branded launcher, postMessage handshake, back-compat path | The snippet in § 7.1 works on a plain HTML page |
 | 5 | Angular customer surface `/widget/:token` (home, details form, thread, closed section) | Four states each, brand-coloured, light |
 | 6 | Angular admin `/admin/widget` list + Configuration/Branding/Integration tabs with live preview; `/admin/settings/branding` route and nav entry removed (§ 4.2) | React `WidgetPage.tsx` is no longer reachable and branding is editable in exactly one place |
 | 7 | Docs | § 11 |
+
+Phase 1 shipped with `scripts/verify-widget-phase1.ps1` — 43 assertions covering
+multi-widget creation, secret masking, every way a JWT can be wrong (wrong key,
+regenerated-away key, expired, no `exp`, `alg: none`, no `unique_id`, another
+widget's token), and the back-compatibility clause. The migration's backfill was
+exercised by rolling the database back to `InitialCreate`, inserting a
+pre-reshape row and migrating forward: it gains a 12-char token, the workspace's
+name, and `is_active` / `show_widget_form` / `show_close_button` /
+`show_send_button` all **true**, so a live embed does not go dark on upgrade.
 
 ## 11. Docs to update as phases land
 

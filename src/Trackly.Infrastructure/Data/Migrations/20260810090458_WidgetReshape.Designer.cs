@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Trackly.Infrastructure.Data;
@@ -11,9 +12,11 @@ using Trackly.Infrastructure.Data;
 namespace Trackly.Infrastructure.Data.Migrations
 {
     [DbContext(typeof(TracklyDbContext))]
-    partial class TracklyDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260810090458_WidgetReshape")]
+    partial class WidgetReshape
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -21,59 +24,6 @@ namespace Trackly.Infrastructure.Data.Migrations
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
-
-            modelBuilder.Entity("Trackly.Core.Entities.AgentRewardAward", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("AgentId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("agent_id");
-
-                    b.Property<DateTime>("AwardedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("awarded_at");
-
-                    b.Property<Guid>("GoalId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("goal_id");
-
-                    b.Property<string>("PeriodKey")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("period_key");
-
-                    b.Property<int>("Points")
-                        .HasColumnType("integer")
-                        .HasColumnName("points");
-
-                    b.Property<int>("Value")
-                        .HasColumnType("integer")
-                        .HasColumnName("value");
-
-                    b.Property<Guid>("WorkspaceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("workspace_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_agent_reward_awards");
-
-                    b.HasIndex("WorkspaceId")
-                        .HasDatabaseName("ix_agent_reward_awards_workspace_id");
-
-                    b.HasIndex("AgentId", "AwardedAt")
-                        .HasDatabaseName("ix_agent_reward_awards_agent_id_awarded_at");
-
-                    b.HasIndex("GoalId", "AgentId", "PeriodKey")
-                        .IsUnique()
-                        .HasDatabaseName("ix_agent_reward_awards_goal_id_agent_id_period_key");
-
-                    b.ToTable("agent_reward_awards", (string)null);
-                });
 
             modelBuilder.Entity("Trackly.Core.Entities.Announcement", b =>
                 {
@@ -1671,83 +1621,6 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_problems_workspace_id_status");
 
                     b.ToTable("problems", (string)null);
-                });
-
-            modelBuilder.Entity("Trackly.Core.Entities.RewardGoal", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("created_at");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)")
-                        .HasColumnName("description");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean")
-                        .HasColumnName("is_active");
-
-                    b.Property<string>("Metric")
-                        .IsRequired()
-                        .HasMaxLength(40)
-                        .HasColumnType("character varying(40)")
-                        .HasColumnName("metric");
-
-                    b.Property<int>("MinimumSample")
-                        .HasColumnType("integer")
-                        .HasColumnName("minimum_sample");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)")
-                        .HasColumnName("name");
-
-                    b.Property<string>("Period")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("period");
-
-                    b.Property<int>("Points")
-                        .HasColumnType("integer")
-                        .HasColumnName("points");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer")
-                        .HasColumnName("sort_order");
-
-                    b.Property<int>("Target")
-                        .HasColumnType("integer")
-                        .HasColumnName("target");
-
-                    b.Property<string>("Tier")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("tier");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("updated_at");
-
-                    b.Property<Guid>("WorkspaceId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("workspace_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_reward_goals");
-
-                    b.HasIndex("WorkspaceId", "SortOrder")
-                        .HasDatabaseName("ix_reward_goals_workspace_id_sort_order");
-
-                    b.ToTable("reward_goals", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.Session", b =>
@@ -3630,36 +3503,6 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.ToTable("workspace_invitations", (string)null);
                 });
 
-            modelBuilder.Entity("Trackly.Core.Entities.AgentRewardAward", b =>
-                {
-                    b.HasOne("Trackly.Core.Entities.User", "Agent")
-                        .WithMany()
-                        .HasForeignKey("AgentId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_agent_reward_awards_users_agent_id");
-
-                    b.HasOne("Trackly.Core.Entities.RewardGoal", "Goal")
-                        .WithMany()
-                        .HasForeignKey("GoalId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_agent_reward_awards_reward_goals_goal_id");
-
-                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
-                        .WithMany()
-                        .HasForeignKey("WorkspaceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_agent_reward_awards_workspaces_workspace_id");
-
-                    b.Navigation("Agent");
-
-                    b.Navigation("Goal");
-
-                    b.Navigation("Workspace");
-                });
-
             modelBuilder.Entity("Trackly.Core.Entities.Announcement", b =>
                 {
                     b.HasOne("Trackly.Core.Entities.User", "CreatedByUser")
@@ -4201,18 +4044,6 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("Assignee");
 
                     b.Navigation("CreatedByUser");
-
-                    b.Navigation("Workspace");
-                });
-
-            modelBuilder.Entity("Trackly.Core.Entities.RewardGoal", b =>
-                {
-                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
-                        .WithMany()
-                        .HasForeignKey("WorkspaceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired()
-                        .HasConstraintName("fk_reward_goals_workspaces_workspace_id");
 
                     b.Navigation("Workspace");
                 });
