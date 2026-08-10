@@ -1005,6 +1005,11 @@ CREATE TABLE notification_settings (
 
 ## Embeddable Widget & Integration Options
 
+> The widget is being reworked into a token-addressed, multi-widget surface that
+> creates contact records and shows a visitor their own conversation history.
+> See `docs/widget-plan.md` for the full design; fold it back into this section
+> as each phase lands.
+
 Admin configures at `/admin/widget`. Three embed types:
 
 | Type | How it works |
