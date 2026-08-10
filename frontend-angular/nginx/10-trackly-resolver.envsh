@@ -1,0 +1,39 @@
+#!/bin/sh
+# Picks the DNS resolver nginx should use for TRACKLY_API_URL, unless the operator
+# pinned one via TRACKLY_RESOLVER.
+#
+# Why this exists: default.conf.template re-resolves the API name on every request
+# (so restarting the API container, which changes its IP, does not blackhole the
+# proxy). nginx's `resolver` directive needs an explicit address and cannot read
+# /etc/resolv.conf itself — so a hard-coded default would have to pick a side:
+# 127.0.0.11 is Docker's embedded DNS and is simply absent under Kubernetes, where
+# the resolver is kube-dns on a cluster IP. Reading resolv.conf makes one image
+# correct in both, with no per-platform env var to remember.
+#
+# `.envsh`, not `.sh`: nginx's entrypoint *sources* .envsh files and *executes*
+# .sh files. An exported variable from an executed script dies with its subshell,
+# so a .sh version of this would appear to work and change nothing. The `10-`
+# prefix puts it ahead of nginx's own 20-envsubst-on-templates.sh, which is what
+# substitutes the value into the config.
+
+if [ -z "${TRACKLY_RESOLVER:-}" ]; then
+    # IPv4 only: an IPv6 nameserver would need [brackets] in the resolver
+    # directive, and every platform that matters also advertises a v4 one.
+    TRACKLY_RESOLVER="$(awk '/^nameserver/ && $2 !~ /:/ { printf "%s ", $2 }' /etc/resolv.conf 2>/dev/null)"
+    # Trim trailing space; nginx tolerates it, but the log line below shouldn't lie.
+    TRACKLY_RESOLVER="$(echo "$TRACKLY_RESOLVER" | sed 's/[[:space:]]*$//')"
+
+    if [ -z "$TRACKLY_RESOLVER" ]; then
+        # No resolv.conf worth reading (host networking on some setups). Docker's
+        # embedded DNS is the likeliest answer and a wrong guess only costs the
+        # startup failure this script is trying to avoid.
+        TRACKLY_RESOLVER="127.0.0.11"
+        echo "$0: no nameserver in /etc/resolv.conf, falling back to $TRACKLY_RESOLVER"
+    else
+        echo "$0: resolver from /etc/resolv.conf: $TRACKLY_RESOLVER"
+    fi
+
+    export TRACKLY_RESOLVER
+else
+    echo "$0: resolver pinned by TRACKLY_RESOLVER: $TRACKLY_RESOLVER"
+fi

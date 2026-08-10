@@ -9,8 +9,10 @@
 #                          path — e.g. http://api:8080. A trailing slash turns
 #                          into a proxy_pass URI and rewrites the request path.
 #   TRACKLY_RESOLVER       DNS used to re-resolve TRACKLY_API_URL at request
-#                          time. 127.0.0.11 is Docker's embedded resolver; set
-#                          it to a real nameserver when the API is external.
+#                          time. Normally leave it unset: 10-trackly-resolver.envsh
+#                          reads it from /etc/resolv.conf, which is right under
+#                          Docker (127.0.0.11) and Kubernetes (kube-dns) alike.
+#                          Pin it only when neither is what you want.
 #   TRACKLY_MAX_BODY_SIZE  upload ceiling; must stay >= the API's own attachment
 #                          limit or large uploads fail at the proxy with 413.
 

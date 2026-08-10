@@ -43,12 +43,20 @@ RUN rm -f /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist/frontend-angular/browser /usr/share/nginx/html
 COPY nginx/default.conf.template /etc/nginx/templates/default.conf.template
 
+# Derives TRACKLY_RESOLVER from /etc/resolv.conf when it isn't pinned, so the same
+# image resolves the API under both Docker (127.0.0.11) and Kubernetes (kube-dns).
+# Runs before nginx's own 20-envsubst-on-templates.sh — see the file's header.
+COPY nginx/10-trackly-resolver.envsh /docker-entrypoint.d/10-trackly-resolver.envsh
+RUN chmod +x /docker-entrypoint.d/10-trackly-resolver.envsh
+
 # nginx's entrypoint runs envsubst over /etc/nginx/templates/*.template at start.
 # The filter keeps it to TRACKLY_* only, so nginx's own $variables ($http_upgrade,
-# $connection_upgrade, …) survive untouched.
+# $trackly_connection_upgrade, …) survive untouched.
+#
+# TRACKLY_RESOLVER is deliberately NOT given a default here: an ENV default would
+# always be "set", which would defeat the auto-detection above.
 ENV NGINX_ENVSUBST_FILTER="^TRACKLY_" \
     TRACKLY_API_URL="http://api:8080" \
-    TRACKLY_RESOLVER="127.0.0.11" \
     TRACKLY_MAX_BODY_SIZE="30m"
 
 EXPOSE 8080
