@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Trackly.Modules.Tickets;
 using Trackly.Modules.Widgets;
 
 namespace Trackly.Api.Controllers;
@@ -95,5 +96,79 @@ public class PublicWidgetController(WidgetPublicService widgets) : ControllerBas
         return created is null
             ? NotFound(new { error = "Session not found." })
             : StatusCode(StatusCodes.Status201Created, created);
+    }
+
+    /// <summary>
+    /// The home list. Scoped by the trust rule inside the service: one browser's
+    /// threads for an unverified visitor, the whole contact's for a proven one.
+    /// </summary>
+    [HttpGet("conversations")]
+    public async Task<IActionResult> ListConversations(string token, CancellationToken ct)
+    {
+        var list = await widgets.ListConversationsAsync(token, Origin, VisitorToken, ct);
+        return list is null ? NotFound(new { error = "Session not found." }) : Ok(list);
+    }
+
+    /// <summary>
+    /// One thread. A conversation this visitor may not read is a 404, not a 403 —
+    /// telling an anonymous caller that a ticket exists but is not theirs is
+    /// already more than they should learn.
+    /// </summary>
+    [HttpGet("conversations/{conversationId:guid}")]
+    public async Task<IActionResult> GetConversation(string token, Guid conversationId, CancellationToken ct)
+    {
+        var thread = await widgets.GetConversationAsync(token, Origin, VisitorToken, conversationId, ct);
+        return thread is null ? NotFound(new { error = "Conversation not found." }) : Ok(thread);
+    }
+
+    [HttpPost("conversations/{conversationId:guid}/messages")]
+    [EnableRateLimiting("auth")]
+    public async Task<IActionResult> Reply(
+        string token, Guid conversationId, [FromBody] WidgetReplyRequest req, CancellationToken ct)
+    {
+        var message = await widgets.ReplyAsync(token, Origin, VisitorToken, conversationId, req?.Message, ct);
+        return message is null
+            ? NotFound(new { error = "Conversation not found." })
+            : StatusCode(StatusCodes.Status201Created, message);
+    }
+
+    /// <summary>The read receipt behind the unread badge (plan § 8.1).</summary>
+    [HttpPost("conversations/{conversationId:guid}/read")]
+    public async Task<IActionResult> MarkRead(string token, Guid conversationId, CancellationToken ct)
+    {
+        var ok = await widgets.MarkReadAsync(token, Origin, VisitorToken, conversationId, ct);
+        return ok ? NoContent() : NotFound(new { error = "Conversation not found." });
+    }
+
+    // ---- Attachments -----------------------------------------------------------
+
+    [HttpPost("conversations/{conversationId:guid}/attachments")]
+    [EnableRateLimiting("auth")]
+    [RequestSizeLimit(AttachmentService.MaxSizeBytes + 1024)]
+    public async Task<IActionResult> UploadAttachment(
+        string token, Guid conversationId, IFormFile file, [FromQuery] Guid? messageId, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "A file is required." });
+
+        await using var stream = file.OpenReadStream();
+        var uploaded = await widgets.UploadAttachmentAsync(
+            token, Origin, VisitorToken, conversationId, messageId,
+            file.FileName, file.ContentType, file.Length, stream, ct);
+        return uploaded is null
+            ? NotFound(new { error = "Conversation not found." })
+            : StatusCode(StatusCodes.Status201Created, uploaded);
+    }
+
+    [HttpGet("conversations/{conversationId:guid}/attachments/{attachmentId:guid}")]
+    public async Task<IActionResult> DownloadAttachment(
+        string token, Guid conversationId, Guid attachmentId, CancellationToken ct)
+    {
+        var found = await widgets.DownloadAttachmentAsync(
+            token, Origin, VisitorToken, conversationId, attachmentId, ct);
+        if (found is null) return NotFound(new { error = "Attachment not found." });
+
+        var (meta, content) = found.Value;
+        return File(content, meta.ContentType, meta.FileName);
     }
 }

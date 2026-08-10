@@ -20,6 +20,7 @@ public class NotificationService(
     IWorkspaceEmailSender sender,
     EmailProviderService providers,
     EmailTemplateService templates,
+    IWidgetRealtime widgetRealtime,
     IConfiguration configuration,
     ILogger<NotificationService> logger)
 {
@@ -62,6 +63,13 @@ public class NotificationService(
 
             var comment = await db.Comments.SingleOrDefaultAsync(c => c.Id == commentId, ct);
             if (comment is null || comment.IsInternal) return;
+
+            // Nudge any embedded widget panel watching this ticket. Deliberately
+            // ahead of the settings gates below: an open panel is a live screen,
+            // not an email preference, and an admin who turned reply emails off
+            // did not ask for the widget to stop updating. Best-effort by
+            // contract, so it cannot throw into the sends that follow.
+            await widgetRealtime.ConversationUpdatedAsync(ticketId, ct);
 
             // Stamp + persist the Message-ID so an inbound reply's In-Reply-To can
             // be matched back to this comment (threading fallback).

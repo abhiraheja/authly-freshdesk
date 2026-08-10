@@ -106,3 +106,63 @@ public record WidgetConversationCreatedDto(
     string Subject,
     string Status,
     DateTime CreatedAt);
+
+/// <summary>
+/// One row of the panel's home list (plan § 8.1, "Continue Conversations").
+/// </summary>
+public record WidgetConversationDto(
+    Guid Id,
+    string Reference,
+    string Subject,
+    string Status,
+    /// <summary>
+    /// The bucket the client branches on. <see cref="Status"/> is workspace
+    /// vocabulary — a panel that switched on it would break the day an admin
+    /// renamed one.
+    /// </summary>
+    string StatusCategory,
+    /// <summary>Who wrote the last public message, for the `{sender}: {message}` line.</summary>
+    string? LastSenderName,
+    bool LastFromAgent,
+    /// <summary>Plain text, truncated. HTML bodies are flattened — the row is one line.</summary>
+    string Preview,
+    /// <summary>
+    /// Agent messages since this <i>visitor</i> last opened the thread. Derived,
+    /// never stored.
+    /// </summary>
+    int UnreadCount,
+    DateTime CreatedAt,
+    DateTime LastMessageAt);
+
+/// <summary>
+/// A message in the panel's thread. Not <c>CommentDto</c>: that record carries
+/// <c>IsInternal</c> and <c>Visibility</c>, and a customer-facing surface should
+/// not be able to report a private note's existence even by echoing its label
+/// back (invariant 5). The shape here has nowhere to put one.
+/// </summary>
+public record WidgetMessageDto(
+    Guid Id,
+    bool FromAgent,
+    /// <summary>The agent's name, or the visitor's own. Never an email address.</summary>
+    string? AuthorName,
+    string Body,
+    /// <summary>"text" or "html" — the client must branch, never sniff.</summary>
+    string BodyFormat,
+    IReadOnlyList<Trackly.Modules.Tickets.AttachmentDto> Attachments,
+    DateTime CreatedAt);
+
+public record WidgetThreadDto(
+    Guid Id,
+    string Reference,
+    string Subject,
+    string Status,
+    string StatusCategory,
+    /// <summary>The assigned agent, for the thread header's title block.</summary>
+    string? AgentName,
+    IReadOnlyList<WidgetMessageDto> Messages,
+    int UnreadCount,
+    DateTime CreatedAt,
+    DateTime UpdatedAt);
+
+public record WidgetReplyRequest(string Message);
+

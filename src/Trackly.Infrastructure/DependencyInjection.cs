@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
 using Trackly.Infrastructure.Ai;
@@ -56,6 +57,11 @@ public static class DependencyInjection
         // so a singleton like its siblings.
         services.AddSingleton<IEmailOAuthClient, EmailOAuthClient>();
         services.AddScoped<IAiCopilot, AnthropicAiCopilot>();
+
+        // The widget's live push has no implementation down here — the hub lives
+        // in the API. This is the floor, so a host that never maps it still
+        // resolves NotificationService; the API replaces it with the real one.
+        services.TryAddSingleton<IWidgetRealtime, NoOpWidgetRealtime>();
 
         return services;
     }

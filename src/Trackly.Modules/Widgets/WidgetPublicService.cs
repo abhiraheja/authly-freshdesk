@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using Trackly.Core.Entities;
 using Trackly.Core.Interfaces;
 using Trackly.Infrastructure.Data;
+using Trackly.Infrastructure.Text;
 using Trackly.Modules.Auth;
 using Trackly.Modules.Email;
 using Trackly.Modules.Guest;
@@ -43,6 +44,7 @@ public class WidgetPublicService(
     SlaService sla,
     AutomationService automation,
     ActivityLog activity,
+    IWorkspaceFileStorage storage,
     IConfiguration configuration,
     ILogger<WidgetPublicService> logger)
 {
@@ -50,6 +52,18 @@ public class WidgetPublicService(
     private static readonly TimeSpan OtpLifetime = TimeSpan.FromMinutes(10);
     private const int MaxSendsPer15Minutes = 3;
     private const int MaxCodeAttempts = 5;
+
+    /// <summary>
+    /// How far back a finished conversation stays on the home list (plan § 8.1).
+    /// Older ones drop off entirely — the panel is a support inbox, not an archive.
+    /// </summary>
+    private static readonly TimeSpan ClosedWindow = TimeSpan.FromDays(30);
+
+    /// <summary>Threads on the home list. A panel that needs paging has other problems.</summary>
+    private const int MaxConversations = 50;
+
+    /// <summary>Characters of the last message kept for the one-line row preview.</summary>
+    private const int PreviewLength = 160;
 
     // ---- Resolution ---------------------------------------------------------
 
@@ -530,7 +544,400 @@ public class WidgetPublicService(
         }
     }
 
+    // ---- The trust rule, as two queries ----------------------------------------
+    // Plan § 3.3 and § 9.7. These are separate methods on purpose: the verified
+    // scope is strictly wider, and the only way to reach it is to ask for it by
+    // name on a visitor that has actually been proven. Everything that lists,
+    // opens, replies to or attaches to a conversation goes through
+    // <see cref="Conversations"/> — there is no other path to a ticket in this
+    // file, so dropping the filter is not something a new endpoint can do by
+    // forgetting.
+
+    /// <summary>
+    /// What one browser raised. The whole of an unverified visitor's world.
+    /// Matched by the visitor row, never by a claimed email address — that is the
+    /// difference between "my conversations" and "type any address, read their
+    /// support history".
+    /// </summary>
+    private IQueryable<Ticket> OwnConversations(WidgetVisitor visitor) =>
+        db.Tickets.Where(t => t.WorkspaceId == visitor.WorkspaceId && t.WidgetVisitorId == visitor.Id);
+
+    /// <summary>
+    /// Everything belonging to the contact behind a <b>proven</b> identity,
+    /// whatever channel it arrived on, plus anything this browser raised before
+    /// it was proven.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// If the visitor is not verified. A guard, not a validation: reaching here
+    /// with an unverified visitor would be the data leak the trust rule exists to
+    /// prevent, so it fails loudly rather than returning rows.
+    /// </exception>
+    private IQueryable<Ticket> ContactConversations(WidgetVisitor visitor)
+    {
+        if (!visitor.IsVerified || visitor.UserId is null)
+            throw new InvalidOperationException("The contact scope is only for a verified visitor.");
+
+        var userId = visitor.UserId.Value;
+        return db.Tickets.Where(t => t.WorkspaceId == visitor.WorkspaceId
+                                     && (t.RequesterId == userId || t.WidgetVisitorId == visitor.Id));
+    }
+
+    private IQueryable<Ticket> Conversations(WidgetVisitor visitor)
+        => visitor is { IsVerified: true, UserId: not null }
+            ? ContactConversations(visitor)
+            : OwnConversations(visitor);
+
+    // ---- Reading conversations ---------------------------------------------------
+
+    /// <summary>
+    /// The home list: open threads always, finished ones only while they are
+    /// recent.
+    /// </summary>
+    public async Task<IReadOnlyList<WidgetConversationDto>?> ListConversationsAsync(
+        string publicToken, string? origin, string visitorToken, CancellationToken ct)
+    {
+        var (_, visitor) = await ResolveVisitorAsync(publicToken, origin, visitorToken, ct);
+        if (visitor is null) return null;
+
+        var cutoff = DateTime.UtcNow - ClosedWindow;
+        var tickets = await Conversations(visitor)
+            .Where(t => (t.StatusCategory != TicketStatusCategory.Resolved
+                         && t.StatusCategory != TicketStatusCategory.Closed)
+                        || t.UpdatedAt >= cutoff)
+            .OrderByDescending(t => t.UpdatedAt)
+            .Take(MaxConversations)
+            .Select(t => new
+            {
+                t.Id, t.Subject, t.Status, t.StatusCategory,
+                t.Description, t.CreatedAt, t.UpdatedAt,
+            })
+            .ToListAsync(ct);
+        if (tickets.Count == 0) return [];
+
+        var ids = tickets.Select(t => t.Id).ToList();
+
+        // One pass over the public comments of those threads. The body is cut to
+        // the preview length in SQL — the row shows one line, and a panel asking
+        // for its list has no use for fifty full messages.
+        var messages = await db.Comments
+            .Where(c => ids.Contains(c.TicketId) && !c.IsInternal)
+            .Select(c => new
+            {
+                c.TicketId,
+                c.CreatedAt,
+                Body = c.Body.Length > PreviewLength ? c.Body.Substring(0, PreviewLength) : c.Body,
+                c.BodyFormat,
+                AuthorName = c.Author != null ? c.Author.Name : null,
+                AuthorRole = c.Author != null ? c.Author.Role : null,
+            })
+            .ToListAsync(ct);
+
+        var reads = await db.WidgetConversationReads
+            .Where(r => r.VisitorId == visitor.Id && ids.Contains(r.TicketId))
+            .ToDictionaryAsync(r => r.TicketId, r => r.LastReadAt, ct);
+
+        var visitorName = await VisitorNameAsync(visitor, ct);
+
+        return tickets.Select(t =>
+        {
+            var thread = messages.Where(m => m.TicketId == t.Id).OrderBy(m => m.CreatedAt).ToList();
+            var last = thread.LastOrDefault();
+
+            // No read marker means never opened, so every agent message counts.
+            var lastRead = reads.TryGetValue(t.Id, out var at) ? at : DateTime.MinValue;
+            var unread = thread.Count(m => IsAgent(m.AuthorRole) && m.CreatedAt > lastRead);
+
+            var lastFromAgent = last is not null && IsAgent(last.AuthorRole);
+            return new WidgetConversationDto(
+                t.Id,
+                GuestService.Reference(t.Id),
+                t.Subject,
+                t.Status,
+                t.StatusCategory,
+                // The opening message is the visitor's own, so an empty thread
+                // reads "You: ..." rather than having no sender at all.
+                last is null ? visitorName : lastFromAgent ? last.AuthorName : visitorName,
+                lastFromAgent,
+                Preview(last?.Body ?? t.Description, last?.BodyFormat ?? CommentBodyFormat.Text),
+                unread,
+                t.CreatedAt,
+                last?.CreatedAt ?? t.CreatedAt);
+        }).ToList();
+    }
+
+    /// <summary>
+    /// One thread. The ticket's own description is the first message — it is what
+    /// the visitor typed into the composer, and the panel has no other place to
+    /// show it.
+    /// </summary>
+    public async Task<WidgetThreadDto?> GetConversationAsync(
+        string publicToken, string? origin, string visitorToken, Guid conversationId, CancellationToken ct)
+    {
+        var (_, visitor) = await ResolveVisitorAsync(publicToken, origin, visitorToken, ct);
+        if (visitor is null) return null;
+
+        var ticket = await Conversations(visitor)
+            .Include(t => t.Assignee)
+            .SingleOrDefaultAsync(t => t.Id == conversationId, ct);
+        if (ticket is null) return null;
+
+        // Private notes and their attachments never reach a widget (invariant 5),
+        // so the filter is on the comment query rather than on the projection.
+        var comments = await db.Comments
+            .Where(c => c.TicketId == ticket.Id && !c.IsInternal)
+            .Include(c => c.Author)
+            .OrderBy(c => c.CreatedAt)
+            .ToListAsync(ct);
+        var attachments = await db.Attachments
+            .Where(a => a.TicketId == ticket.Id)
+            .OrderBy(a => a.CreatedAt)
+            .ToListAsync(ct);
+
+        AttachmentDto ToDto(Attachment a) =>
+            new(a.Id, a.CommentId, a.FileName, a.ContentType, a.SizeBytes, a.CreatedAt);
+
+        var visitorName = await VisitorNameAsync(visitor, ct);
+        var messages = new List<WidgetMessageDto>
+        {
+            // The opening message carries the ticket's id, not a comment's. It is
+            // the one message with no comment row behind it, and the frame only
+            // needs the id to be stable and unique within the thread.
+            new(ticket.Id, false, visitorName, ticket.Description, CommentBodyFormat.Text,
+                attachments.Where(a => a.CommentId == null).Select(ToDto).ToList(),
+                ticket.CreatedAt),
+        };
+        messages.AddRange(comments.Select(c => new WidgetMessageDto(
+            c.Id,
+            IsAgent(c.Author?.Role),
+            // The author's name or the visitor's, never an email address: an
+            // anonymous panel showing "someone@example.com replied" would leak an
+            // address to whoever is sitting at that browser.
+            IsAgent(c.Author?.Role) ? c.Author?.Name : visitorName,
+            c.Body,
+            c.BodyFormat,
+            attachments.Where(a => a.CommentId == c.Id).Select(ToDto).ToList(),
+            c.CreatedAt)));
+
+        var lastRead = await db.WidgetConversationReads
+            .Where(r => r.VisitorId == visitor.Id && r.TicketId == ticket.Id)
+            .Select(r => (DateTime?)r.LastReadAt)
+            .SingleOrDefaultAsync(ct) ?? DateTime.MinValue;
+
+        return new WidgetThreadDto(
+            ticket.Id,
+            GuestService.Reference(ticket.Id),
+            ticket.Subject,
+            ticket.Status,
+            ticket.StatusCategory,
+            ticket.Assignee?.Name,
+            messages,
+            comments.Count(c => IsAgent(c.Author?.Role) && c.CreatedAt > lastRead),
+            ticket.CreatedAt,
+            ticket.UpdatedAt);
+    }
+
+    // ---- Writing to a conversation -----------------------------------------------
+
+    /// <summary>
+    /// A reply from the panel. Reopening a resolved thread is exactly this — the
+    /// same thing the guest view does, and the same thing automation already
+    /// watches for.
+    /// </summary>
+    public async Task<WidgetMessageDto?> ReplyAsync(
+        string publicToken, string? origin, string visitorToken,
+        Guid conversationId, string? body, CancellationToken ct)
+    {
+        var (_, visitor) = await ResolveVisitorAsync(publicToken, origin, visitorToken, ct);
+        if (visitor is null) return null;
+
+        var message = body?.Trim();
+        if (string.IsNullOrEmpty(message))
+            throw new ArgumentException("A message is required.");
+
+        var ticket = await Conversations(visitor).SingleOrDefaultAsync(t => t.Id == conversationId, ct);
+        if (ticket is null) return null;
+
+        var comment = new Comment
+        {
+            TicketId = ticket.Id,
+            // A proven visitor writes as their contact; an unproven one writes as
+            // the guest they are, with the address they claimed — the same split
+            // the ticket itself was created under.
+            AuthorId = visitor.UserId,
+            GuestEmail = visitor.UserId is null ? visitor.Email ?? ticket.GuestEmail : null,
+            // Plain text, always. Accepting markup from an anonymous caller would
+            // make the widget the softest way into every agent's screen.
+            Body = message,
+            BodyFormat = CommentBodyFormat.Text,
+            IsInternal = false,
+            Visibility = CommentVisibility.Public,
+        };
+        db.Comments.Add(comment);
+        ticket.UpdatedAt = DateTime.UtcNow;
+        activity.Happened(ticket.WorkspaceId, ticket.Id, visitor.UserId, TicketActivityType.Replied);
+
+        // You have read what you just wrote. Without this the visitor's own reply
+        // would leave the thread's earlier agent messages counted as unread on the
+        // next poll, and the badge would come back for no reason.
+        await StampReadAsync(visitor.Id, ticket.Id, ticket.UpdatedAt, ct);
+
+        visitor.LastSeenAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        await notifications.OnReplyAsync(ticket.Id, comment.Id, authoredByAgent: false, ct);
+
+        var name = await VisitorNameAsync(visitor, ct);
+        return new WidgetMessageDto(
+            comment.Id, false, name, comment.Body, comment.BodyFormat, [], comment.CreatedAt);
+    }
+
+    /// <summary>
+    /// The read receipt. Stamped when the visitor opens a thread, which is what
+    /// stops the badge coming back on the next poll (plan § 8.1, unread step 3).
+    /// </summary>
+    public async Task<bool> MarkReadAsync(
+        string publicToken, string? origin, string visitorToken, Guid conversationId, CancellationToken ct)
+    {
+        var (_, visitor) = await ResolveVisitorAsync(publicToken, origin, visitorToken, ct);
+        if (visitor is null) return false;
+
+        var exists = await Conversations(visitor).AnyAsync(t => t.Id == conversationId, ct);
+        if (!exists) return false;
+
+        await StampReadAsync(visitor.Id, conversationId, DateTime.UtcNow, ct);
+        visitor.LastSeenAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    private async Task StampReadAsync(Guid visitorId, Guid ticketId, DateTime at, CancellationToken ct)
+    {
+        var row = await db.WidgetConversationReads
+            .SingleOrDefaultAsync(r => r.VisitorId == visitorId && r.TicketId == ticketId, ct);
+        if (row is null)
+        {
+            db.WidgetConversationReads.Add(new WidgetConversationRead
+            {
+                VisitorId = visitorId, TicketId = ticketId, LastReadAt = at,
+            });
+            return;
+        }
+        // Never moves backwards: two tabs posting receipts out of order must not
+        // resurrect a badge that one of them already cleared.
+        if (at > row.LastReadAt) row.LastReadAt = at;
+    }
+
+    // ---- Attachments ----------------------------------------------------------------
+
+    public async Task<AttachmentDto?> UploadAttachmentAsync(
+        string publicToken, string? origin, string visitorToken, Guid conversationId,
+        Guid? commentId, string fileName, string contentType, long sizeBytes, Stream content,
+        CancellationToken ct)
+    {
+        var (_, visitor) = await ResolveVisitorAsync(publicToken, origin, visitorToken, ct);
+        if (visitor is null) return null;
+
+        var ticket = await Conversations(visitor).SingleOrDefaultAsync(t => t.Id == conversationId, ct);
+        if (ticket is null) return null;
+
+        if (sizeBytes is <= 0 or > AttachmentService.MaxSizeBytes)
+            throw new ArgumentException("File must be between 1 byte and 10 MB.");
+        if (commentId is not null)
+        {
+            // `!IsInternal` as well as the ticket check: attaching to a private
+            // note would put a customer's file inside something they cannot see,
+            // and would tell them the note exists.
+            var belongs = await db.Comments.AnyAsync(
+                c => c.Id == commentId && c.TicketId == ticket.Id && !c.IsInternal, ct);
+            if (!belongs)
+                throw new ArgumentException("Message does not belong to this conversation.");
+        }
+
+        var storageKey = await storage.SaveAsync(
+            ticket.WorkspaceId, $"{ticket.WorkspaceId}/{ticket.Id}", fileName, content, ct: ct);
+        var attachment = new Attachment
+        {
+            WorkspaceId = ticket.WorkspaceId,
+            TicketId = ticket.Id,
+            CommentId = commentId,
+            UploadedBy = visitor.UserId,
+            FileName = Path.GetFileName(fileName),
+            ContentType = string.IsNullOrWhiteSpace(contentType) ? "application/octet-stream" : contentType,
+            SizeBytes = sizeBytes,
+            StorageKey = storageKey,
+        };
+        db.Attachments.Add(attachment);
+        ticket.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        return new AttachmentDto(attachment.Id, attachment.CommentId, attachment.FileName,
+            attachment.ContentType, attachment.SizeBytes, attachment.CreatedAt);
+    }
+
+    /// <summary>
+    /// Downloading is not in the plan's endpoint table, but without it the panel
+    /// can attach files and never show one back — including the agent's. Scoped
+    /// the same way as everything else here: the attachment's ticket has to be
+    /// one the trust rule already lets this visitor read.
+    /// </summary>
+    public async Task<(AttachmentDto Meta, Stream Content)?> DownloadAttachmentAsync(
+        string publicToken, string? origin, string visitorToken, Guid conversationId,
+        Guid attachmentId, CancellationToken ct)
+    {
+        var (_, visitor) = await ResolveVisitorAsync(publicToken, origin, visitorToken, ct);
+        if (visitor is null) return null;
+
+        var ticket = await Conversations(visitor).SingleOrDefaultAsync(t => t.Id == conversationId, ct);
+        if (ticket is null) return null;
+
+        var attachment = await db.Attachments
+            .Include(a => a.Comment)
+            .SingleOrDefaultAsync(a => a.Id == attachmentId && a.TicketId == ticket.Id, ct);
+        if (attachment is null || attachment.Comment?.IsInternal == true) return null;
+
+        var stream = await storage.OpenReadAsync(attachment.WorkspaceId, attachment.StorageKey, ct);
+        return (new AttachmentDto(attachment.Id, attachment.CommentId, attachment.FileName,
+            attachment.ContentType, attachment.SizeBytes, attachment.CreatedAt), stream);
+    }
+
     // ---- Shared ---------------------------------------------------------------
+
+    /// <summary>
+    /// Widget + visitor, or nothing. Every conversation endpoint starts here, so
+    /// none of them can be called without both.
+    /// </summary>
+    private async Task<(WidgetConfig? Widget, WidgetVisitor? Visitor)> ResolveVisitorAsync(
+        string publicToken, string? origin, string visitorToken, CancellationToken ct)
+    {
+        var widget = await ResolveAsync(publicToken, origin, ct);
+        if (widget is null) return (null, null);
+        return (widget, await FindVisitorAsync(widget, visitorToken, ct));
+    }
+
+    /// <summary>
+    /// Anyone who is not a customer wrote as the desk. Role is Trackly's
+    /// (invariant 2), so this is the only honest test — a null author is a guest
+    /// or an inbound email, never an agent.
+    /// </summary>
+    private static bool IsAgent(string? role) => role is not null && role != TracklyRoles.Customer;
+
+    private async Task<string?> VisitorNameAsync(WidgetVisitor visitor, CancellationToken ct)
+    {
+        if (visitor.UserId is null) return visitor.Name;
+        return await db.Users
+            .Where(u => u.Id == visitor.UserId && u.WorkspaceId == visitor.WorkspaceId)
+            .Select(u => u.Name)
+            .SingleOrDefaultAsync(ct) ?? visitor.Name;
+    }
+
+    /// <summary>One line of plain text. An HTML body is flattened, never truncated as markup.</summary>
+    private static string Preview(string? body, string format)
+    {
+        var text = format == CommentBodyFormat.Html ? RichText.ToPlainText(body) : body ?? "";
+        text = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        while (text.Contains("  ")) text = text.Replace("  ", " ");
+        return text.Length <= PreviewLength ? text : text[..(PreviewLength - 1)] + "…";
+    }
 
     private async Task<WidgetSessionDto> ToSessionAsync(
         WidgetConfig widget, WidgetVisitor visitor, string? issuedToken, string? identityError, CancellationToken ct)

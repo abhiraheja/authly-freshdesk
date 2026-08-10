@@ -322,6 +322,12 @@ phone carries its own unread count on each. `unreadCount` for a row is then
 `COUNT(comments WHERE !is_internal AND author IS agent AND created_at > last_read_at)`
 — derived, so nothing can drift out of step with the thread it describes.
 
+"Author is agent" is `role != customer`, decided when phase 3 landed. `author_id
+IS NOT NULL` looks equivalent and is not: a customer replying through the portal
+has an author row too, and that reading would count someone's own message as
+unread on their own thread. A null author is a guest or an inbound email, never
+an agent.
+
 ### 5.4 `tickets` — one column
 
 ```sql
@@ -372,6 +378,16 @@ for one release so the React screen does not break mid-migration, then goes.
 | POST | `/api/public/widget/{token}/conversations/{id}/messages` | Reply |
 | POST | `/api/public/widget/{token}/conversations/{id}/read` | Read receipt — stamps `last_read_at`, clearing the badge |
 | POST | `/api/public/widget/{token}/conversations/{id}/attachments` | Existing `AttachmentService` limits |
+| GET | `/api/public/widget/{token}/conversations/{id}/attachments/{attachmentId}` | **Added in phase 3** — the table above could upload a file and never show one back, including the agent's. Scoped like everything else here, and a file on an internal note is a 404 |
+
+Real-time is a second SignalR hub, **`/hubs/widget`**, joined with
+`?widget={publicToken}&visitorToken=…` — the same two credentials the REST
+surface uses. One group per **visitor row**, so two devices are two groups. It
+carries `conversation` with nothing but a `conversationId`: the panel re-fetches
+through the endpoints above, which is where the trust rule and the private-note
+filter already live, so nothing can leak down the socket that could not leak over
+HTTP. `Origin` is not re-checked on the handshake — the visitor token was issued
+over an origin-checked POST and is the thing being trusted.
 
 Every one of these authenticates by the visitor token in a header, resolves the
 workspace from `{token}` (never from a client-supplied slug), and is written so
@@ -620,11 +636,37 @@ Each is independently shippable and leaves the existing widget working.
 |---|---|---|
 | 1 ✅ | Reshaped `widget_configs` + `widget_visitors` + `tickets.widget_visitor_id`, EF migration with backfill, admin CRUD, secret encrypt/regenerate/verify | An admin can create two widgets over the API and each has its own token; the old snippet still renders |
 | 2 ✅ | Public config + session endpoints, JWT verification, contact-upsert service, ticket creation with `Channel = widget` and `RequesterId` | A widget ticket appears on the Customer Detail screen's "previous tickets" with no UI change |
-| 3 | Conversation list + thread + reply + attachments, trust rule, `widget_conversation_reads` + `unreadCount` + read receipt, SignalR per-visitor group with polling fallback | Two browsers with different visitor tokens cannot see each other's conversations — asserted by test |
+| 3 ✅ | Conversation list + thread + reply + attachments, trust rule, `widget_conversation_reads` + `unreadCount` + read receipt, SignalR per-visitor group with polling fallback | Two browsers with different visitor tokens cannot see each other's conversations — asserted by test |
 | 4 | `/widget.js` rewritten: `initChatWidget`, open/close/identify, branded launcher, postMessage handshake, back-compat path | The snippet in § 7.1 works on a plain HTML page |
 | 5 | Angular customer surface `/widget/:token` (home, details form, thread, closed section) | Four states each, brand-coloured, light |
 | 6 | Angular admin `/admin/widget` list + Configuration/Branding/Integration tabs with live preview; `/admin/settings/branding` route and nav entry removed (§ 4.2) | React `WidgetPage.tsx` is no longer reachable and branding is editable in exactly one place |
 | 7 | Docs | § 11 |
+
+Phase 3 shipped with `scripts/verify-widget-phase3.ps1` — 62 assertions. The
+done-when is taken apart directly: two browsers on one widget, **both claiming
+the same email address**, each see exactly their own conversation and get a 404
+on the other's thread, reply, read receipt and attachment. The verified half is
+checked too — a signed visitor sees a ticket an agent logged for that contact
+over the phone, which never touched a widget at all.
+
+Three things the phase settled that the plan had not:
+
+- **A read marker never moves backwards.** Two tabs posting receipts out of order
+  would otherwise resurrect a badge one of them had already cleared. The stamp is
+  `if (at > row.LastReadAt)`, not an assignment.
+- **The real-time push sits ahead of the notification settings gate.** Every reply
+  path already funnels through `NotificationService.OnReplyAsync`, which is why
+  the hook lives there — but *above* `NotifyCustomerOnReply`. An open panel is a
+  live screen, not an email preference, and an admin who turned reply emails off
+  did not ask for the widget to stop updating.
+- **"Agent" is `role != customer`, not `AuthorId != null`.** A customer replying
+  through the portal has an author row too, so the obvious test would have
+  counted a customer's own message as unread on their own thread.
+
+`Trackly.Modules` cannot see the hub, which lives in `Trackly.Api`, so the push
+goes through `IWidgetRealtime` in `Trackly.Core.Interfaces` with a no-op default
+registered in the infrastructure. That default is what makes the fallback honest:
+a host that never maps the hub still runs, and the panel still polls.
 
 Phase 2 shipped with `scripts/verify-widget-phase2.ps1` — 52 assertions, most of
 them about the trust rule refusing to bend. Four decisions it forced:

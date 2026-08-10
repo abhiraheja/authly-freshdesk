@@ -67,6 +67,7 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<AnnouncementDelivery> AnnouncementDeliveries => Set<AnnouncementDelivery>();
     public DbSet<WidgetConfig> WidgetConfigs => Set<WidgetConfig>();
     public DbSet<WidgetVisitor> WidgetVisitors => Set<WidgetVisitor>();
+    public DbSet<WidgetConversationRead> WidgetConversationReads => Set<WidgetConversationRead>();
     public DbSet<CsatSurvey> CsatSurveys => Set<CsatSurvey>();
     public DbSet<ChannelConnector> ChannelConnectors => Set<ChannelConnector>();
     public DbSet<ChannelConversation> ChannelConversations => Set<ChannelConversation>();
@@ -859,6 +860,19 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             // be worse than an orphaned visitor.
             e.HasOne(v => v.User).WithMany().HasForeignKey(v => v.UserId)
                 .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<WidgetConversationRead>(e =>
+        {
+            e.ToTable("widget_conversation_reads");
+            e.HasKey(r => new { r.VisitorId, r.TicketId });
+            // Both sides cascade: a read marker is meaningless without the
+            // visitor who made it or the thread it points into, and it holds no
+            // history worth keeping once either is gone.
+            e.HasOne(r => r.Visitor).WithMany().HasForeignKey(r => r.VisitorId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.Ticket).WithMany().HasForeignKey(r => r.TicketId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<AutomationRule>(e =>

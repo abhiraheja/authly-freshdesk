@@ -5,7 +5,9 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Trackly.Api;
 using Trackly.Api.Auth;
+using Trackly.Api.Widgets;
 using Trackly.Core.Entities;
+using Trackly.Core.Interfaces;
 using Trackly.Infrastructure;
 using Trackly.Infrastructure.Data;
 using Trackly.Modules.Ai;
@@ -81,6 +83,9 @@ builder.Services.AddScoped<ChannelInboundService>();
 builder.Services.AddScoped<ChatService>();
 builder.Services.AddScoped<WidgetService>();
 builder.Services.AddScoped<WidgetPublicService>();
+// The push behind the widget's unread badge. Scoped, because it reads the
+// ticket to work out which visitors are watching it.
+builder.Services.AddScoped<IWidgetRealtime, WidgetHubRealtime>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<AnnouncementWorker>();
 builder.Services.AddHostedService<SlaBreachWorker>();
@@ -152,6 +157,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
+app.MapHub<WidgetHub>("/hubs/widget");
 
 // Container/orchestrator liveness. Anonymous, and deliberately does not touch
 // the database: first boot applies EF migrations, and a probe that waited on the

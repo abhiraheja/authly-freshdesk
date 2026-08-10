@@ -547,8 +547,8 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] **`/app/data` on the API and `/var/lib/postgresql/data` on Postgres are on persistent volumes** — and if either is a *bind* mount, the host directory is `chown`ed to uid 1654 for the API (§0.5)
 - [ ] `TRACKLY_MAX_BODY_SIZE` on the `web` container ≥ the API's attachment limit
 - [ ] `AllowedHosts` restricted; `App:ForwardedHeaders=true` **and** the API unreachable except through the proxy (§6)
-- [ ] One API instance if any workspace uses IMAP polling **or live chat** (or add a SignalR backplane) — until leader election / a backplane exists
-- [ ] Proxy allows the WebSocket upgrade on `/hubs/*` (live chat)
+- [ ] One API instance if any workspace uses IMAP polling **or live chat** (or add a SignalR backplane) — until leader election / a backplane exists. The widget hub has the same constraint, but degrades to polling rather than breaking
+- [ ] Proxy allows the WebSocket upgrade on `/hubs/*` (live chat, widget)
 - [ ] Inbound webhook endpoint publicly reachable over HTTPS (if any tenant uses Option A)
 - [ ] Database backups verified **restorable** — bulk delete has no undo (§6)
 - [ ] Smoke test: sign in, create a ticket, agent reply → notification email sent, inbound reply → comment added
@@ -635,11 +635,17 @@ Append here as phases land, so nothing is missed later.
     sends — reinforces the **single-instance** guidance until leader election
     exists (§4).
   - No new config keys or secrets.
-- **Widget rework (`docs/widget-plan.md`, phases 1–2 landed):**
+- **Widget rework (`docs/widget-plan.md`, phases 1–3 landed):**
   - **A new family of anonymous endpoints** under `/api/public/widget/{token}/…`
-    — config, session, email verification, conversation create. All must be
-    reachable over HTTPS from every site that embeds a widget. They resolve the
-    workspace from the widget token server-side and never accept a slug.
+    — config, session, email verification, conversation create, conversation
+    list/thread/reply/read-receipt/attachments. All must be reachable over HTTPS
+    from every site that embeds a widget. They resolve the workspace from the
+    widget token server-side and never accept a slug.
+  - **A second SignalR hub, `/hubs/widget`** (phase 3). Same proxy requirement as
+    `/hubs/chat`: the WebSocket upgrade must be allowed on `/hubs/*`. It is a
+    latency feature only — the panel polls as well, so a proxy that blocks the
+    upgrade degrades the unread badge rather than breaking it. Worth knowing when
+    someone reports "the badge takes a few seconds".
   - **Widget secret keys are AES-256-GCM under `Security:MasterKey`.** Losing or
     rotating that key makes every widget's secret unreadable, which breaks
     identity verification on every embed at once. Rotation story: regenerate each
