@@ -308,11 +308,16 @@ public class TicketRelationService(TracklyDbContext db, ActivityLog activity)
         if (seen.Count == 0) return [];
 
         var ids = seen.ToList();
+        // Ordered on the ENTITY, before the projection. `Project` builds a
+        // LinkedTicketDto with a correlated sub-query inside it, and ordering by
+        // a property of that construction gives EF an expression it cannot
+        // translate — it throws at runtime, not at build time, and only on the
+        // path that has duplicates to preview.
         return await db.Tickets
             .Where(t => t.WorkspaceId == workspaceId && ids.Contains(t.Id))
             .Where(Unfinished())
-            .Select(Project(workspaceId))
             .OrderBy(t => t.CreatedAt)
+            .Select(Project(workspaceId))
             .ToListAsync(ct);
     }
 

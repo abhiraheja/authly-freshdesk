@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
+  ElementRef,
   computed,
   effect,
   inject,
@@ -12,10 +13,11 @@ import {
 import { TranslocoPipe } from '@jsverse/transloco';
 import {
   ApiError,
+  BRAND_TOKEN_PROPERTIES,
   ThemeService,
   WidgetApi,
   WidgetVisitorStore,
-  brandVars,
+  brandTokens,
   errorMessage,
   type WidgetConversation,
   type WidgetPublicConfig,
@@ -41,7 +43,7 @@ const THREAD_POLL_MS = 10_000;
  * the launcher's position and an in-progress draft alive across a "back".
  *
  * <h3>Customer-facing, so: the workspace's brand, always light</h3>
- * Invariant 6. {@link brandVars} re-points the primary tokens at the widget's
+ * Invariant 6. {@link brandTokens} re-points the primary tokens at the widget's
  * colour on the root element here, which re-brands every control inside it
  * without a single interpolated class name; {@link ThemeService.forceLight}
  * blocks dark mode for as long as this component lives.
@@ -57,7 +59,7 @@ const THREAD_POLL_MS = 10_000;
   imports: [TranslocoPipe, Alert, Icon, Spinner, WidgetHome, WidgetDetails, WidgetThread],
   host: { class: 'block h-full' },
   template: `
-    <div class="flex h-full flex-col bg-background" [style]="brand()">
+    <div class="flex h-full flex-col bg-background">
       @if (config(); as widget) {
         <!-- ── Chrome: left slot · title block · window controls ── -->
         <header class="shrink-0 bg-primary px-4 py-3 text-primary-foreground">
@@ -200,7 +202,19 @@ export class WidgetPanel {
   protected readonly config = signal<WidgetPublicConfig | null>(null);
   protected readonly configError = signal<string | null>(null);
 
-  protected readonly brand = computed(() => brandVars(this.config()?.primaryColor));
+  // setProperty rather than a [style] binding: Angular's style binding does not
+  // reliably reach CSS custom properties, and a token that silently fails to
+  // apply looks exactly like a workspace that never configured a colour.
+  private readonly host = inject(ElementRef).nativeElement as HTMLElement;
+
+  private readonly brandEffect = effect(() => {
+    const tokens = brandTokens(this.config()?.primaryColor);
+    for (const property of BRAND_TOKEN_PROPERTIES) {
+      const value = tokens?.[property];
+      if (value) this.host.style.setProperty(property, value);
+      else this.host.style.removeProperty(property);
+    }
+  });
 
   // ---- Session -------------------------------------------------------------
 

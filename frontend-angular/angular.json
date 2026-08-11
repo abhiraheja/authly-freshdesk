@@ -184,6 +184,32 @@
         }
       }
     },
+    "@trackly/releases": {
+      "projectType": "library",
+      "root": "projects/releases",
+      "sourceRoot": "projects/releases/src",
+      "prefix": "tk",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:ng-packagr",
+          "configurations": {
+            "production": {
+              "tsConfig": "projects/releases/tsconfig.lib.prod.json"
+            },
+            "development": {
+              "tsConfig": "projects/releases/tsconfig.lib.json"
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "test": {
+          "builder": "@angular/build:unit-test",
+          "options": {
+            "tsConfig": "projects/releases/tsconfig.spec.json"
+          }
+        }
+      }
+    },
     "@trackly/tickets": {
       "projectType": "library",
       "root": "projects/tickets",

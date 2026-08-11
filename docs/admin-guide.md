@@ -432,8 +432,25 @@ category-management screen yet — this is a known gap.)_
 and replies, branded as your workspace.
 **Where (customer):** `/portal`.
 
+**What they can do.** Three screens: their ticket list (Open / Resolved / All,
+with the most recent hundred), a short form to raise a new one (subject, an
+optional category, a message and attachments — priority and routing stay yours to
+decide), and the ticket itself as a conversation they can reply to and attach
+files in. Private notes never appear, and neither does anything internal:
+department, tags, SLA and the agent-facing resolution note are all withheld.
+
 **Set up.** Nothing beyond branding (§10). Customers reach it after signing in
 (magic link) or from links in notification emails.
+
+**Chat from the portal.** The header carries a **Chat with us** link straight
+into live chat (§15), with the name and email already filled in — a signed-in
+customer should not have to introduce themselves again. It is listed before
+*New ticket* on purpose: chat is the faster of the two, and somebody who wanted a
+ticket will read past it.
+
+**How it looks.** The portal carries **your** header — your logo, name and
+primary colour — not Trackly's, and it is always light. Everything is derived
+from the one colour you set in Branding, so there is nothing else to configure.
 
 ### 4.7 Guest submission
 
@@ -456,7 +473,14 @@ never see private notes.
 manage; agents insert them with the **⚡** button in the reply box.
 
 **Set up / use.** Create a titled snippet; agents pick it while replying and edit
-before sending.
+before sending. The **title** is what an agent scans in the ⚡ menu, so name it
+for the situation ("Refund processed"), not with the first line of the reply.
+
+Inserting **appends** to whatever is already in the reply box rather than
+replacing it, so two snippets can go into one reply and a half-typed sentence
+survives a mis-click. The ⚡ button is hidden entirely until the workspace has at
+least one snippet. Snippets are workspace-wide, not per-agent — the point is that
+everyone answers the same question the same way.
 
 ### 5.2 Tags
 
@@ -476,14 +500,36 @@ suggest them (§13).
 **Set up.** Create a team, add members. Then route tickets to it manually (details
 pane) or automatically via an automation rule (§7, “Assign team”).
 
+**An empty department is a routing hole**, so the screen says so on its face
+rather than letting it look like a finished row: a ticket sent to a department
+with nobody in it is assigned to nobody and sits unowned. Deleting a department
+leaves its existing tickets with whoever already had them; it only stops new ones
+being routed there.
+
 ### 5.4 Problems
 
 **What it is.** Group many related tickets under one underlying **problem** (e.g.
 an outage), so you can track and communicate once.
-**Where:** **Problems** (top nav).
+**Where:** **Problems** (top nav) for the list; each problem has its own page.
 
-**Use.** Create a problem, link the affected tickets, and update its status as you
-investigate and resolve.
+**Use.** Create a problem from the list, then link the affected tickets **from
+each ticket**, in its Related panel — that is where an agent notices the
+duplicate, so it is where the link is made.
+
+A problem moves through four stages, which answer a different question from a
+ticket's status: **Investigating → Identified → Monitoring → Resolved**. Change
+the stage from the picker on the problem's page.
+
+**Resolving.** *Resolve problem + tickets* ends the problem **and every open
+ticket under it** in one action, and each of those requesters is told their
+ticket is done — so the confirmation names the count before it happens. This
+deliberately bypasses the per-ticket resolve rules (§4.3): closing a problem is
+one decision about all of its tickets, and a rule that blocked one would leave
+the problem resolved with a ticket still open underneath it.
+
+Unlinking a ticket returns it to being its own ticket and changes nothing else
+about it. **Customers never see any of this** — they only ever see their own
+ticket.
 
 ---
 
@@ -594,13 +640,26 @@ target: "0%" reads as failure and the truth is that no target applied.
 **Set up.** Each rule has:
 - **When** — *Ticket created* or *Ticket updated*.
 - **Conditions** — field **is / is not / contains** a value (e.g. priority *is*
-  urgent).
-- **Actions** — **Set priority**, **Assign team**, or **Add tag**.
-- **Enabled** toggle and an order (rules run top-down).
+  urgent). Fields: priority, status, channel, category, subject.
+- **Actions** — **Set priority**, **Set status**, **Assign department**,
+  **Add tag**, or **Add internal note**.
+- **Enabled** toggle and an **order** number — lowest runs first, and a later
+  rule sees what an earlier one did.
+
+**All conditions must match.** There is no “any of these”: a rule with two
+conditions fires only when both hold. A rule with **no** conditions runs on every
+ticket, which the editor warns about rather than letting you discover it in
+production.
+
+Every rule is listed as a sentence — *priority is urgent → Add tag sev1* — so
+finding the rule doing the surprising thing does not mean opening all of them.
+The **Enabled** switch writes straight through from the list: stopping a
+misfiring rule should not require opening an editor first.
 
 **Use / safety.** A rule’s own changes aren’t re-evaluated in the same pass, so
-rules can’t loop; a malformed rule is skipped, not fatal. Example: *when priority
-is urgent → add tag “sev1” and assign the on-call team*.
+rules can’t loop; a malformed rule is skipped, not fatal. Deleting a rule stops
+it running but does not revert tickets it already changed. Example: *when
+priority is urgent → add tag “sev1” and assign the on-call department*.
 
 ---
 
@@ -925,6 +984,23 @@ a future time. **Where:** **Admin ▾ → Insights → Announcements**.
 background worker sends scheduled announcements at the set time. _(The scheduler
 assumes a single running server instance — deployment concern.)_
 
+**Writing and sending are two steps, on purpose.** Saving always leaves the
+announcement **unsent** — even with a schedule filled in — and sending is a
+separate, confirmed action. This is the only screen in Trackly that writes to
+hundreds of inboxes at once and none of it can be taken back, so the one
+keystroke worth separating is separated.
+
+Four **types** — unplanned outage, planned maintenance, resolved, general — shown
+as a coloured chip. A customer scanning their inbox reads the type before the
+subject, and *we are down* versus *we are back* is the pair they most need to
+tell apart. An announcement can be **linked to a Problem** (§5.4), which is how a
+follow-up traces to the outage it closes.
+
+After sending, the row shows **delivered / total**, with failures called out
+separately in red: a bounced batch that reads as a plain "sent" is the one
+outcome an admin must not be able to scroll past. **Guests are never included** —
+Trackly has no verified opt-in for somebody who only emailed the desk once.
+
 ---
 
 ## 13. AI copilot
@@ -985,7 +1061,30 @@ add a SignalR backplane). See go-live.md §8._
 
 **Use.** Agents watch the console for incoming chats, respond in real time, and
 click **End → ticket** to file the transcript (each message becomes a comment).
-Visitors can also end the chat themselves.
+Visitors can also end the chat themselves. Ending is confirmed, because a chat
+cannot be reopened — the follow-up happens on the ticket, and the visitor is
+shown its reference before their window closes.
+
+Unanswered chats carry a **New** chip in the console until an agent replies, so
+the list reads as a queue rather than a history.
+
+**Agents do not have to sit on the console.** While any agent or admin is signed
+in, the sidebar's **Live chat** row carries a count of chats wanting attention,
+and a toast appears when one starts — with an **Open** button that goes straight
+there. The count includes chats nobody has answered *and* chats where the visitor
+has written again since anyone last opened them, so a follow-up on a conversation
+an agent walked away from still surfaces. Opening a chat clears it from the count.
+
+Unlike the notification bell (which polls once a minute), this is pushed over the
+same connection live chat already uses: a visitor is still sitting there, and a
+minute of silence is the whole conversation.
+
+**If WebSockets are blocked**, the chat does not break: every message is sent and
+saved over ordinary HTTP, and only *live* delivery is lost. The console shows a
+banner with a Refresh button and the visitor's window shows an amber dot instead
+of a green one — so neither side is left guessing why the other has gone quiet.
+A visitor who reloads keeps their conversation (it is held for the tab's
+lifetime); closing the tab ends it, which is deliberate on a shared machine.
 
 ---
 
@@ -1571,3 +1670,152 @@ now" are different questions.
 Clicking a row opens their profile, which is where everything about one person is
 edited — details, custom fields, photo, and their full ticket history. Nothing about
 a customer is duplicated on this screen.
+
+---
+
+## 27. Release plans
+
+**Where:** Workspace → Releases (`/dashboard/releases`). Agents and admins.
+
+The page you write before every deployment: what is going out, what has to happen
+for it, and who has done which part. It exists to replace the wiki page most teams
+keep for this, and it is built around the one thing that page cannot do — **carry a
+tick, a name and a timestamp on every line**.
+
+A release reads top to bottom like the document it replaces. It is also the
+checklist the deployment is run from, and those are the same rows, so they cannot
+drift apart.
+
+### The board
+
+Ordered by **what is going out next**, not by what changed last. Unscheduled
+releases sort after the scheduled ones, because they are still being written.
+
+Two numbers carry each row. **Plan** is how much of the runbook is done. **Tested**
+is how much of the scope has been through a pre-deploy pass — and it gets an amber
+"N untested" line under it, because that is the number that decides whether the
+release can go at all.
+
+### Writing one
+
+Create a release with a version — whatever the team already says out loud, a
+version, a date, a sprint number — and a tentative date. Nobody is held to the
+date; it is there so the rest of the team can plan around it.
+
+Then add the **services** going out. Pick from the service catalogue and the name
+and pipeline link fill in by themselves. The release keeps its own copy of both, so
+renaming or retiring a service next year never rewrites what an old plan says was
+run. You can also type a name for something that was never in the catalogue.
+
+Each service gets **steps** — the runbook. Five kinds:
+
+| Kind | What it holds |
+|---|---|
+| Run a pipeline | The link somebody opens to deploy it |
+| Database script | The SQL, verbatim, exactly as it should be run |
+| Configuration change | The variable **name** and where it is set |
+| Manual step | Anything done by hand |
+| Check it worked | What to open, and what it should say |
+
+**Configuration steps record names, never values.** There is no field to type a
+value into, and that is deliberate. A release plan needs to say *that* a variable
+changes — the part people forget. The value belongs in your vault: anything written
+here is one more copy to rotate and one more place it can leak from.
+
+Database scripts are the opposite: stored in full, because "did anyone run it on
+prod?" is the 2am question, and the answer is only useful if the script and the
+name of whoever ran it are in the same place.
+
+### The task list is also the test checklist
+
+Add the tasks shipping in the release — `55335 — Auth issue fix` — under the
+service each belongs to. Every task carries a **Test** state that anybody can set
+before deploy, and it records who set it.
+
+That is what makes a last round of testing something a colleague can actually
+do: they can open every task from the plan, work through them, and leave their
+name against each one. Five outcomes, and `Blocked` and `Skipped` exist precisely
+because they are not "passed" and should not be hidden.
+
+Once the deployment is under way, a second **On prod** state appears on each task.
+It is separate from the first on purpose: pre-deploy testing decides whether to
+ship, production verification decides whether to roll back, and only one of those
+is asked while the site is on fire.
+
+**Task links.** Admins set a URL template once under **Task links** on the board —
+`https://dev.azure.com/org/project/_workitems/edit/{id}` — and everybody after that
+types `55335` and gets a link. It has to contain `{id}`. Without it, task numbers
+are plain text, and a task nobody can open is a task only its author can test.
+
+### Linking the support ticket
+
+A task can also point at the Trackly ticket that reported the bug — search by
+number or subject in the Add task drawer. It is optional, and it is what turns a
+release plan into an answer to a customer.
+
+Once linked, three things happen for free:
+
+- The **ticket shows which release its fix goes out in**, above the header, with
+  the date. An agent answering *"when is my fix coming?"* does not have to find
+  somebody who knows.
+- Marking the release **Released** offers to resolve every linked ticket and tell
+  each customer their fix has shipped — one action instead of walking the list.
+  It is asked separately from the release confirmation, it names how many people
+  it writes to, and it is off unless you say yes. Shipping a fix and telling a
+  customer are two decisions.
+- **Release notes** (admin only) build a draft announcement from what actually
+  shipped, grouped by service. Edit it — the plan is written for your team, the
+  announcement is read by customers. It saves as an **unsent** draft under
+  Announcements; sending it stays a separate, deliberate action there.
+
+### Shipping it
+
+A release will not go to **Ready** — or straight to **Deploying** — until it has
+services, a rollback plan, and every task tested or consciously skipped. The
+banner at the top lists exactly what is missing, from the moment the plan is
+created, because that is the only cheap time to fix it.
+
+The rollback plan is required. It is the field every team skips and the only one
+that matters on the night it goes wrong.
+
+On the night: tick steps as you go. **Everyone watching the release sees each
+tick as it happens** — no refreshing. That is the whole reason this is not a
+document: four people working the same checklist from four stale copies is how a
+step gets run twice or not at all. If the connection drops, the page still works
+and every tick still lands; only the other windows go quiet until it comes back.
+
+Ticking the first step of a **Ready** release starts it, so nobody has to
+remember a button. If you tick something while an
+earlier step in that service is still open, Trackly asks once and then records it
+as out of order — a rule that cannot be overridden is a rule that gets worked
+around outside the tool, where nothing is recorded.
+
+When it is out, mark it **Released**. If it goes bad afterwards, **Rolled back**
+stays available: a release can fail hours later, and the record has to be able to
+say so without anybody editing history.
+
+### After it ships
+
+A released, rolled-back or cancelled release is **read-only**. Production
+verification still works, because that happens afterwards; nothing else does. The
+plan has become a record, and the record is the point — next time, somebody can
+read what was actually done rather than guessing.
+
+The **Activity** panel is append-only: who ticked what, when, including every
+out-of-order override. Nothing on it can be edited or removed.
+
+**Start next release** copies the services and their repeatable steps — pipelines,
+manual steps, checks. It does **not** copy ticks, build numbers, tasks, migrations
+or configuration changes. Last release's migration is not this release's migration,
+and a plan pre-filled with somebody else's SQL is worse than an empty one, because
+it looks filled in.
+
+### Who can do what
+
+Agents can do everything an admin can, except delete. That is deliberate: the
+person who runs the pipeline for a service is the person who should tick it off,
+and making them ask an admin is how a checklist stops being ticked at all.
+Accountability comes from the activity log, not from a permission wall.
+
+Only admins can delete a release, and only while it has not shipped. Anything that
+went out is cancelled or rolled back, never deleted.

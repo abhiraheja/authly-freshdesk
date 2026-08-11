@@ -22,7 +22,9 @@
     "copy": "Copy",
     "copied": "Copied",
     "copyFailed": "Could not copy — select the text instead.",
-    "done": "Done"
+    "done": "Done",
+    "actions": "Actions",
+    "someone": "Someone"
   },
   "nav": {
     "main": "Main",
@@ -81,7 +83,9 @@
       "assets": "Assets",
       "services": "Services",
       "rewards": "Rewards",
-      "customers": "Customers"
+      "customers": "Customers",
+      "branding": "Branding",
+      "releases": "Releases"
     }
   },
   "palette": {
@@ -445,7 +449,11 @@
         "servicesAffected": "{{count}} service affected",
         "assets": "{{count}} asset",
         "respondersPending": "{{count}} awaiting reply"
-      }
+      },
+      "insertCanned": "Insert a canned response",
+      "noCanned": "No snippets yet.",
+      "cannedFailed": "Couldn't load your snippets.",
+      "manageCanned": "Manage canned responses"
     },
     "noCustomer": "No customer",
     "links": {
@@ -625,6 +633,10 @@
       "done": "Updated {{count}} tickets.",
       "allFailed": "None of the {{count}} tickets could be updated. {{reason}}",
       "partial": "Updated {{done}}. {{failed}} could not be: {{reason}}"
+    },
+    "release": {
+      "shipping": "The fix for this ships in",
+      "shipped": "The fix for this shipped in"
     }
   },
   "status": {
@@ -701,7 +713,9 @@
       "automation": "Automation",
       "messagingChannels": "Messaging channels",
       "aiCopilot": "AI copilot",
-      "email": "Email"
+      "email": "Email",
+      "widget": "Widget",
+      "branding": "Branding"
     }
   },
   "admin": {
@@ -884,7 +898,10 @@
         "select": "Dropdown",
         "radio": "Radio buttons",
         "checkbox": "Checkbox"
-      }
+      },
+      "pipelineUrl": "Pipeline link",
+      "pipelinePlaceholder": "Pipeline URL (optional)",
+      "pipelineSaved": "Pipeline link saved"
     },
     "hours": {
       "title": "Business hours",
@@ -1715,6 +1732,588 @@
       "attach": "Attach a file",
       "removeFile": "Remove file",
       "loadFailed": "Could not load this conversation"
+    }
+  },
+  "portal": {
+    "newTicket": "New ticket",
+    "account": "Your account",
+    "tickets": {
+      "title": "My tickets",
+      "tabs": {
+        "open": "Open",
+        "resolved": "Resolved",
+        "all": "All"
+      },
+      "updated": "Updated {{time}} ago",
+      "replyOne": "1 reply",
+      "replies": "{{count}} replies",
+      "truncated": "Showing your {{shown}} most recent tickets of {{total}}.",
+      "empty": "No tickets yet",
+      "emptyBody": "When you need help, open a ticket and the support team will pick it up.",
+      "emptyTab": "Nothing in this tab",
+      "emptyTabBody": "Switch to All to see every ticket you have raised.",
+      "loadFailed": "Couldn't load your tickets"
+    },
+    "new": {
+      "title": "New ticket",
+      "subtitle": "Tell us what happened and the support team will take it from here.",
+      "subject": "Subject",
+      "subjectPlaceholder": "A short summary of the problem",
+      "category": "What is this about?",
+      "noCategory": "Not sure",
+      "message": "Message",
+      "messagePlaceholder": "Describe what happened, what you expected, and any error message you saw.",
+      "attachments": "Attachments",
+      "submit": "Submit ticket",
+      "failed": "Couldn't submit your ticket"
+    },
+    "detail": {
+      "opened": "Opened {{when}}",
+      "you": "You",
+      "team": "Team",
+      "resolution": "How this was resolved",
+      "replyLabel": "Your reply",
+      "replyPlaceholder": "Write a reply…",
+      "attach": "Attach files",
+      "send": "Send",
+      "sendFailed": "Couldn't send your reply",
+      "loadFailed": "Couldn't load this ticket"
+    },
+    "chat": "Chat with us"
+  },
+  "canned": {
+    "title": "Canned responses",
+    "count": "{{count}} snippets",
+    "countOne": "1 snippet",
+    "add": "New snippet",
+    "newHeading": "New snippet",
+    "editHeading": "Edit snippet",
+    "columns": {
+      "title": "Title",
+      "body": "Snippet"
+    },
+    "form": {
+      "title": "Title",
+      "titlePlaceholder": "Refund processed",
+      "titleHint": "What an agent will look for in the ⚡ menu — not the first line of the reply.",
+      "body": "Snippet",
+      "bodyPlaceholder": "The reply an agent can send as it is, or edit before sending."
+    },
+    "empty": "No canned responses yet",
+    "emptyBody": "Write the answers your team sends over and over, then insert them from the ⚡ button in a reply.",
+    "editOne": "Edit {{title}}",
+    "deleteOne": "Delete {{title}}",
+    "deleteHeading": "Delete this snippet?",
+    "deleteMessage": "“{{title}}” will no longer be offered in the reply box. Replies already sent are unaffected.",
+    "deleted": "“{{title}}” deleted",
+    "saved": "“{{title}}” saved",
+    "saveFailed": "Couldn't save the snippet",
+    "loadFailed": "Couldn't load canned responses"
+  },
+  "problems": {
+    "title": "Problems",
+    "subtitle": "One root cause, and every ticket reporting it. Customers never see the grouping.",
+    "add": "New problem",
+    "create": "Create problem",
+    "newHeading": "New problem",
+    "tabs": {
+      "open": "Open",
+      "resolved": "Resolved",
+      "all": "All"
+    },
+    "columns": {
+      "problem": "Problem",
+      "status": "Stage",
+      "tickets": "Tickets",
+      "owner": "Owner",
+      "updated": "Updated"
+    },
+    "status": {
+      "investigating": "Investigating",
+      "identified": "Identified",
+      "monitoring": "Monitoring",
+      "resolved": "Resolved"
+    },
+    "form": {
+      "title": "What is happening?",
+      "titlePlaceholder": "Payment gateway down",
+      "description": "Root cause",
+      "descriptionPlaceholder": "What you know so far, and what you are checking next.",
+      "linkHint": "Tickets are linked from the ticket itself, under Related."
+    },
+    "meta": "{{count}} tickets",
+    "metaOwned": "{{count}} tickets · owned by {{owner}}",
+    "cause": "Root cause",
+    "linked": "Linked tickets",
+    "linkedCount": "{{count}} tickets under this cause",
+    "linkedOne": "1 ticket under this cause",
+    "noTickets": "No tickets linked yet",
+    "noTicketsBody": "Open a ticket reporting this and link it from its Related panel.",
+    "resolveAll": "Resolve problem + tickets",
+    "resolveHeading": "Resolve this problem?",
+    "resolveMessage": "“{{title}}” and its {{count}} open tickets will be resolved. Each requester is told their ticket is done.",
+    "resolveMessageOne": "“{{title}}” and its 1 open ticket will be resolved. The requester is told their ticket is done.",
+    "resolveConfirm": "Resolve everything",
+    "resolved": "“{{title}}” resolved",
+    "resolvedHeading": "This problem is closed",
+    "resolvedAt": "Resolved {{when}}.",
+    "created": "“{{title}}” created",
+    "createFailed": "Couldn't create the problem",
+    "actionFailed": "That didn't work",
+    "unlinkOne": "Unlink {{subject}}",
+    "unlinkHeading": "Unlink this ticket?",
+    "unlinkMessage": "“{{subject}}” goes back to being its own ticket. Nothing about it changes otherwise.",
+    "unlinkConfirm": "Unlink",
+    "unlinked": "“{{subject}}” unlinked",
+    "empty": "No problems yet",
+    "emptyBody": "When the same fault arrives on several tickets, group them here so one investigation covers all of them.",
+    "emptyTab": "Nothing in this tab",
+    "emptyTabBody": "Switch to All to see every problem, including the ones already resolved.",
+    "loadFailed": "Couldn't load problems",
+    "loadOneFailed": "Couldn't load this problem"
+  },
+  "chat": {
+    "title": "Live chat",
+    "subtitle": "{{count}} chats open",
+    "subtitleOne": "1 chat open",
+    "active": "Active ({{count}})",
+    "new": "New",
+    "waiting": "started {{time}} ago",
+    "you": "You",
+    "visitor": {
+      "title": "Chat with us",
+      "subtitle": "Ask your question and someone from the team will answer.",
+      "name": "Your name (optional)",
+      "email": "Email (optional)",
+      "emailHint": "Give us an email and we can follow up if the chat drops.",
+      "start": "Start chat",
+      "support": "Support",
+      "agentTyping": "Someone is typing…",
+      "connected": "Connected",
+      "reconnecting": "Reconnecting…",
+      "opener": "Say hello — the team will be with you shortly.",
+      "messageLabel": "Your message",
+      "messagePlaceholder": "Type a message and press Enter…",
+      "end": "End chat",
+      "endedHeading": "Chat ended",
+      "endedBody": "The conversation has been saved. If you left an email, you can reply to it any time.",
+      "reference": "Your reference is"
+    },
+    "visitorTyping": "Visitor is typing…",
+    "send": "Send",
+    "replyLabel": "Your reply",
+    "replyPlaceholder": "Type a reply and press Enter…",
+    "noMessages": "No messages yet.",
+    "end": "End → ticket",
+    "endHeading": "End this chat?",
+    "endMessage": "The transcript becomes a ticket and the visitor’s window closes. A chat cannot be reopened — follow up on the ticket instead.",
+    "endConfirm": "End and create ticket",
+    "ended": "Chat ended — transcript saved as a ticket",
+    "emptyQueue": "Nobody waiting",
+    "emptyQueueBody": "New chats appear here the moment a visitor starts one.",
+    "pickHeading": "Pick a chat",
+    "pickBody": "Choose someone from the list to read and answer their conversation.",
+    "loadFailed": "Couldn’t load chats",
+    "refresh": "Refresh",
+    "offlineHeading": "Live updates are off",
+    "offlineBody": "New messages will not appear on their own. Everything still sends and saves.",
+    "arrived": "New live chat waiting",
+    "arrivedNamed": "{{name}} started a live chat",
+    "open": "Open"
+  },
+  "teams": {
+    "title": "Departments",
+    "subtitle": "A ticket filed into a department is assigned round-robin among its members.",
+    "add": "Add department",
+    "addHeading": "New department",
+    "addMember": "Add to department",
+    "count": "{{count}} agents",
+    "countOne": "1 agent",
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "Billing",
+      "addAgent": "Add an agent",
+      "choose": "Choose an agent…"
+    },
+    "emptyWarning": "Nobody is in this department. Tickets routed here will not be assigned to anyone.",
+    "empty": "No departments yet",
+    "emptyBody": "Create one per area of work, then add the agents who handle it.",
+    "renameOne": "Rename {{name}}",
+    "deleteOne": "Delete {{name}}",
+    "removeMember": "Remove {{name}}",
+    "created": "{{name}} created",
+    "renamed": "Renamed to {{name}}",
+    "deleted": "{{name}} deleted",
+    "deleteHeading": "Delete this department?",
+    "deleteMessage": "“{{name}}” is removed and its tickets keep their current assignee. New tickets can no longer be routed to it.",
+    "loadFailed": "Couldn't load departments"
+  },
+  "announcements": {
+    "title": "Announcements",
+    "subtitle": "One email to every customer with an account. Guests are not included.",
+    "add": "New announcement",
+    "newHeading": "New announcement",
+    "save": "Save as draft",
+    "send": "Send",
+    "columns": {
+      "subject": "Subject",
+      "type": "Type",
+      "status": "Status",
+      "delivery": "Delivered"
+    },
+    "types": {
+      "unplanned_outage": "Unplanned outage",
+      "planned_outage": "Planned maintenance",
+      "resolved": "Resolved",
+      "general": "General"
+    },
+    "form": {
+      "type": "Type",
+      "subject": "Subject",
+      "subjectPlaceholder": "Checkout is currently unavailable",
+      "body": "Message",
+      "bodyPlaceholder": "What is happening, who it affects, and when you will next update them.",
+      "problem": "Link to a problem",
+      "noProblem": "Not linked",
+      "schedule": "Send at",
+      "scheduleHint": "Leave empty to keep it as a draft and send it by hand."
+    },
+    "draft": "Draft",
+    "scheduledFor": "Scheduled for {{when}}",
+    "sentAt": "Sent {{when}}",
+    "failed": "{{count}} failed",
+    "created": "Announcement saved as a draft",
+    "sent": "Sent to {{count}} customers",
+    "sendHeading": "Send this announcement now?",
+    "sendMessage": "“{{subject}}” goes to every customer with an account, immediately. It cannot be unsent or edited afterwards.",
+    "sendConfirm": "Send it",
+    "empty": "No announcements yet",
+    "emptyBody": "Use one to tell every customer about an outage, a maintenance window or a fix.",
+    "createFailed": "Couldn't save the announcement",
+    "loadFailed": "Couldn't load announcements"
+  },
+  "automation": {
+    "title": "Automation",
+    "subtitle": "Rules run inside every create and update, in order. A rule's own changes are never re-evaluated.",
+    "add": "New rule",
+    "newHeading": "New rule",
+    "editHeading": "Edit rule",
+    "everyTicket": "Every ticket",
+    "columns": {
+      "order": "#",
+      "rule": "Rule",
+      "trigger": "Runs on",
+      "enabled": "Enabled"
+    },
+    "triggers": {
+      "on_create": "Created",
+      "on_update": "Updated"
+    },
+    "fields": {
+      "priority": "Priority",
+      "status": "Status",
+      "channel": "Channel",
+      "category": "Category",
+      "subject": "Subject"
+    },
+    "ops": {
+      "equals": "is",
+      "not_equals": "is not",
+      "contains": "contains"
+    },
+    "actions": {
+      "set_priority": "Set priority",
+      "set_status": "Set status",
+      "assign_team": "Assign department",
+      "add_tag": "Add tag",
+      "add_note": "Add internal note"
+    },
+    "actionHints": {
+      "set_priority": "urgent",
+      "set_status": "pending",
+      "assign_team": "Billing",
+      "add_tag": "sev1",
+      "add_note": "Escalated automatically"
+    },
+    "form": {
+      "name": "Rule name",
+      "namePlaceholder": "Tag urgent tickets sev1",
+      "trigger": "Runs on",
+      "order": "Order",
+      "orderHint": "Lowest first. A later rule sees what an earlier one did.",
+      "conditions": "When",
+      "conditionsHint": "All conditions must match. There is no “any of these”.",
+      "noConditions": "With no conditions this runs on every ticket.",
+      "actions": "Then",
+      "field": "Field",
+      "operator": "Operator",
+      "value": "Value",
+      "action": "Action",
+      "addCondition": "Add condition",
+      "removeCondition": "Remove condition",
+      "addAction": "Add action",
+      "removeAction": "Remove action",
+      "enabled": "Rule is enabled"
+    },
+    "saved": "“{{name}}” saved",
+    "deleted": "“{{name}}” deleted",
+    "editOne": "Edit {{name}}",
+    "deleteOne": "Delete {{name}}",
+    "toggleOne": "Enable {{name}}",
+    "deleteHeading": "Delete this rule?",
+    "deleteMessage": "“{{name}}” stops running. Tickets it already changed are not reverted.",
+    "empty": "No rules yet",
+    "emptyBody": "Automate the triage nobody should have to remember — tagging, routing, priority.",
+    "saveFailed": "Couldn't save the rule",
+    "loadFailed": "Couldn't load rules"
+  },
+  "releases": {
+    "title": "Releases",
+    "subtitle": "What is going out, what has to happen for it, and who has done which part.",
+    "add": "New release",
+    "loadFailed": "Couldn't load releases",
+    "createFailed": "Couldn't create the release",
+    "actionFailed": "That didn't work",
+    "noDate": "No date yet",
+    "noManager": "Unassigned",
+    "untestedCount": "{{count}} untested",
+    "tabs": {
+      "open": "Upcoming",
+      "released": "Shipped",
+      "all": "All"
+    },
+    "columns": {
+      "release": "Release",
+      "scheduled": "Scheduled",
+      "manager": "Release manager",
+      "plan": "Plan",
+      "tested": "Tested",
+      "status": "Status"
+    },
+    "empty": {
+      "openHeading": "Nothing scheduled",
+      "openBody": "Create a release to plan the next deployment — the services going out, the steps to run and the tasks shipping with them.",
+      "releasedHeading": "Nothing has shipped yet",
+      "releasedBody": "Released and rolled-back plans stay here as a record of what was actually done.",
+      "allHeading": "No releases yet",
+      "allBody": "A release plan replaces the page somebody writes before every deployment — except every line can be ticked off, by name."
+    },
+    "newHeading": "New release",
+    "form": {
+      "version": "Version",
+      "versionPlaceholder": "2.14.0",
+      "versionHint": "Whatever the team already says out loud — a version, a date, a sprint number.",
+      "title": "Title",
+      "titlePlaceholder": "August maintenance",
+      "scheduled": "Scheduled for",
+      "scheduledHint": "Tentative. Nobody is held to it; it is there so the rest of the team can plan around it.",
+      "submit": "Create release",
+      "manager": "Release manager",
+      "rollback": "Rollback plan",
+      "rollbackHint": "Required before this release can be marked ready. It is the field everyone skips and the only one that matters when it goes wrong.",
+      "notes": "Other notes"
+    },
+    "settings": {
+      "open": "Task links",
+      "heading": "Task links",
+      "intro": "Set this once and everybody after you types a task number instead of hunting for a URL.",
+      "template": "Task URL template",
+      "templateHint": "Must contain {id}, which the task number replaces.",
+      "saved": "Task link template saved",
+      "saveFailed": "Couldn't save that"
+    },
+    "status": {
+      "planning": "Planning",
+      "ready": "Ready",
+      "inProgress": "Deploying",
+      "released": "Released",
+      "rolledBack": "Rolled back",
+      "cancelled": "Cancelled"
+    },
+    "run": {
+      "pending": "To do",
+      "inProgress": "In progress",
+      "done": "Done",
+      "failed": "Failed",
+      "skipped": "Skipped"
+    },
+    "test": {
+      "notTested": "Not tested",
+      "passed": "Passed",
+      "failed": "Failed",
+      "blocked": "Blocked",
+      "skipped": "Skipped"
+    },
+    "readiness": {
+      "heading": "Not ready to ship yet",
+      "noComponents": "No services have been added to this release.",
+      "noRollbackPlan": "There is no rollback plan.",
+      "failedItems": "{{count}} task(s) failed testing or are blocked.",
+      "untestedItems": "{{count}} task(s) have not been tested.",
+      "okHeading": "Ready when you are",
+      "okBody": "Every task is tested, the rollback plan is written and the services are listed."
+    },
+    "actions": {
+      "markReady": "Mark ready",
+      "start": "Start deployment",
+      "reopen": "Back to planning",
+      "markReleased": "Mark released",
+      "rollBack": "Rolled back"
+    },
+    "confirm": {
+      "releasedHeading": "Mark this release as done?",
+      "releasedBody": "The plan becomes a record after this — steps and tasks can no longer be edited, only verified on production.",
+      "rolledBackHeading": "Record a rollback?",
+      "rolledBackBody": "This says the release went out and had to be undone. It stays on the record, which is the point.",
+      "resolveHeading": "Resolve the linked tickets too?",
+      "resolveBody": "{{count}} open ticket(s) are linked to this release. Resolving them notifies each customer that their fix has shipped. This cannot be undone in one action.",
+      "resolveConfirm": "Resolve and notify",
+      "resolveSkip": "Just mark released",
+      "resolveDone": "Linked tickets resolved and customers notified"
+    },
+    "detail": {
+      "noTitle": "Release plan",
+      "back": "All releases",
+      "clone": "Start next release",
+      "components": "Services ({{count}})",
+      "summary": "Summary",
+      "activity": "Activity",
+      "activityEmpty": "Nothing has happened on this release yet.",
+      "rollback": "Rollback plan",
+      "rollbackMissing": "No rollback plan yet. This release cannot be marked ready without one.",
+      "notes": "Notes",
+      "started": "Started",
+      "releasedAt": "Released",
+      "editHeading": "Edit release",
+      "rollbackAdd": "Add a rollback plan"
+    },
+    "component": {
+      "add": "Add service",
+      "addHeading": "Add a service",
+      "editHeading": "Edit service",
+      "order": "Step {{n}} in the order",
+      "pipeline": "Pipeline",
+      "finishedAt": "finished {{when}}",
+      "edit": "Edit this service",
+      "remove": "Remove this service",
+      "service": "From the catalogue",
+      "serviceCustom": "Something else (type a name)",
+      "serviceHint": "Picking one fills in its name and pipeline link. The release keeps its own copy, so editing the catalogue later never rewrites this plan.",
+      "name": "Name",
+      "build": "Build",
+      "buildHint": "The tag, commit or build number actually going out.",
+      "pipelineUrl": "Pipeline link",
+      "pipelineHint": "The page somebody opens to run the deployment.",
+      "owner": "Who runs it",
+      "noOwner": "Nobody yet",
+      "removeHeading": "Remove this service?",
+      "removeBody": "Its steps go with it. Tasks filed under it stay on the release without a heading.",
+      "emptyHeading": "No services yet",
+      "emptyBody": "Add the services this release touches. Each one gets its own runbook and the tasks shipping with it."
+    },
+    "step": {
+      "add": "Add step",
+      "addHeading": "Add a step",
+      "kind": "Kind",
+      "kinds": {
+        "pipeline": "Run a pipeline",
+        "db_script": "Database script",
+        "env_change": "Configuration change",
+        "manual": "Manual step",
+        "verify": "Check it worked"
+      },
+      "title": "What has to be done",
+      "env": "Where",
+      "envPlaceholder": "staging + prod",
+      "url": "Link",
+      "urlHint": "The pipeline run page, the dashboard — whatever you would otherwise paste into chat.",
+      "body": "Details",
+      "bodyEnv": "Variable and where it is set",
+      "bodyPlaceholder": {
+        "pipeline": "Anything the person running it needs to know — parameters, the order of stages.",
+        "db_script": "Paste the SQL exactly as it should be run.",
+        "env_change": "TOKEN__KEY — Auth API, staging and prod. Value comes from the vault.",
+        "manual": "What to do, step by step.",
+        "verify": "What to open, and what it should say."
+      },
+      "secretHeading": "Names here, never values",
+      "secretBody": "Write down which variable changes and where — that is the part people forget. The value belongs in your vault: anything written here is one more copy to rotate and one more place it can leak from.",
+      "open": "Open",
+      "markDone": "Done",
+      "markFailed": "Mark as failed",
+      "skip": "Skip",
+      "undo": "Undo this tick",
+      "remove": "Remove this step",
+      "removeHeading": "Remove this step?",
+      "removeBody": "\"{{title}}\" will be deleted from the plan.",
+      "none": "No steps yet. Add the pipeline to run, the script to apply, the variable to set.",
+      "doneBy": "by {{who}}, {{when}}",
+      "outOfOrderHeading": "An earlier step is still open",
+      "outOfOrderBody": "Something above \"{{title}}\" has not been done yet. Ticking this anyway is fine — it will be recorded as out of order.",
+      "outOfOrderConfirm": "Tick it anyway"
+    },
+    "item": {
+      "heading": "Shipping with it ({{count}})",
+      "add": "Add task",
+      "addHeading": "Add a task",
+      "assign": "File under a service",
+      "assignHeading": "File this task under a service",
+      "key": "Task number",
+      "keyPlaceholder": "55335",
+      "keyHint": "Becomes a link automatically once an admin has set the task URL template.",
+      "title": "What it is",
+      "url": "Link",
+      "urlHint": "Only needed when the number does not fit the template.",
+      "component": "Service",
+      "noComponent": "None — release-wide",
+      "looseHeading": "Tasks not filed under a service",
+      "looseHint": "These still count towards testing. File them under a service so whoever deploys it knows what to check.",
+      "looseEmpty": "Every task is filed under a service.",
+      "test": "Test",
+      "verify": "On prod",
+      "testedBy": "tested by {{who}}, {{when}}",
+      "verifiedAs": "On prod: {{status}}",
+      "ticket": "Trackly ticket",
+      "ticketPlaceholder": "Search by number or subject",
+      "ticketHint": "Optional. Linking it is what lets the customer be told their fix shipped, and puts this release on their ticket.",
+      "ticketClear": "Unlink this ticket",
+      "ticketNoMatches": "No tickets match “{{query}}”"
+    },
+    "clone": {
+      "heading": "Start the next release",
+      "intro": "Copies the services and their repeatable steps. Tasks, ticks, build numbers, migrations and configuration changes do not carry over — last release’s script is not this release’s script.",
+      "submit": "Create it",
+      "created": "Release {{version}} created"
+    },
+    "activity": {
+      "created": "created this release",
+      "updated": "edited the release",
+      "statusChanged": "moved it",
+      "componentAdded": "added",
+      "componentRemoved": "removed",
+      "componentStatus": "set",
+      "stepAdded": "added a step",
+      "stepRemoved": "removed a step",
+      "stepDone": "ticked off",
+      "stepFailed": "marked as failed",
+      "stepOutOfOrder": "ticked out of order",
+      "itemAdded": "added",
+      "itemRemoved": "removed",
+      "itemTested": "tested",
+      "itemVerified": "verified on prod",
+      "ticketsResolved": "resolved linked tickets"
+    },
+    "notes": {
+      "open": "Release notes",
+      "heading": "Release notes",
+      "subject": "Subject",
+      "body": "Message",
+      "bodyHint": "Built from what actually shipped. Edit it — the plan is written for your team, the announcement is read by customers.",
+      "submit": "Save as draft",
+      "created": "Draft announcement created",
+      "defaultSubject": "What's new in {{version}}",
+      "draftOnlyHeading": "This saves a draft — it does not send",
+      "draftOnlyBody": "It appears under Announcements as unsent. Sending it to every customer stays a separate, deliberate action there."
     }
   }
 }

@@ -1,6 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  type ElementRef,
+  computed,
+  effect,
+  input,
+  viewChild,
+} from '@angular/core';
 import { TranslocoPipe } from '@jsverse/transloco';
-import { brandVars } from '@trackly/core';
+import { BRAND_TOKEN_PROPERTIES, brandTokens } from '@trackly/core';
 import { Icon } from '@trackly/ui';
 
 /**
@@ -15,7 +23,7 @@ import { Icon } from '@trackly/ui';
  * `widget_visitors` row and appear in that widget's own usage data.
  *
  * So it is a mock: no data, no request, and it repaints on every keystroke. It
- * uses the same {@link brandVars} the real panel does, so the colour an admin
+ * uses the same {@link brandTokens} the real panel does, so the colour an admin
  * sees here is the colour a customer gets, including the black-or-white text
  * decision.
  */
@@ -29,12 +37,15 @@ import { Icon } from '@trackly/ui';
         {{ 'admin.widget.preview' | transloco }}
       </p>
 
+      <!-- The brand tokens land on #stage, not on the card above it: they
+           override --border and --background too, and setting them any higher
+           would repaint this screen's own chrome in the tenant's colour. -->
+      <div #stage>
       <!-- Not interactive on purpose: it is a picture of the widget, and a
            preview whose buttons did nothing when clicked would be worse than one
            that plainly cannot be. -->
       <div
         class="mx-auto w-full max-w-[300px] overflow-hidden rounded-2xl border border-border bg-card shadow-lg"
-        [style]="brand()"
         aria-hidden="true"
       >
         <div class="bg-primary px-3.5 py-3 text-primary-foreground">
@@ -93,15 +104,14 @@ import { Icon } from '@trackly/ui';
       @if (!hideLauncher()) {
         <div class="mt-3 flex justify-end pr-2">
           <span
-            class="flex h-11 w-11 items-center justify-center rounded-full text-primary-foreground shadow-lg"
-            [style]="brand()"
-            [style.background]="colour()"
+            class="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg"
             aria-hidden="true"
           >
             <tk-icon name="message-square" [size]="20" />
           </span>
         </div>
       }
+      </div>
     </div>
   `,
 })
@@ -116,7 +126,20 @@ export class WidgetPreview {
   readonly showCloseButton = input(true);
   readonly hidePoweredBy = input(false);
 
-  protected readonly brand = computed(() => brandVars(this.colour()));
+  private readonly stage = viewChild.required<ElementRef<HTMLElement>>('stage');
+
+  // setProperty rather than a [style] binding: Angular's style binding does not
+  // reliably reach CSS custom properties, and a token that silently fails to
+  // apply looks exactly like a workspace that never configured a colour.
+  private readonly brandEffect = effect(() => {
+    const element = this.stage().nativeElement;
+    const tokens = brandTokens(this.colour());
+    for (const property of BRAND_TOKEN_PROPERTIES) {
+      const value = tokens?.[property];
+      if (value) element.style.setProperty(property, value);
+      else element.style.removeProperty(property);
+    }
+  });
 
   /** What the panel's title block would say to a visitor it has not met. */
   protected readonly headline = computed(() => this.greeting()?.trim() || this.name() || 'Support');

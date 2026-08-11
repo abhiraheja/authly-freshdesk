@@ -472,7 +472,7 @@ function orUndefined(values: string[]): string[] | undefined {
                         <span class="text-muted-foreground">—</span>
                       }
                     </td>
-                    <td class="hidden text-right text-meta text-muted-foreground md:table-cell">
+                    <td class="hidden col-right text-meta text-muted-foreground md:table-cell">
                       {{ ago(ticket.updatedAt) }}
                     </td>
                     <!-- Actions live in their own cell that swallows the click, so

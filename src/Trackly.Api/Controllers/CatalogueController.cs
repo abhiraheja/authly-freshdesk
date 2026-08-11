@@ -23,7 +23,7 @@ public class CatalogueController(AssetService assets, TicketFieldService fields)
 
     public record SaveServiceRequest(
         string? Name, string? Description, Guid? OwnerTeamId, bool ClearOwner,
-        int? SortOrder, bool? IsActive);
+        int? SortOrder, bool? IsActive, string? PipelineUrl = null);
 
     public record CreateFieldRequest(
         string Label, string Type, string? HelpText, string? Options,
@@ -119,7 +119,8 @@ public class CatalogueController(AssetService assets, TicketFieldService fields)
         [FromBody] SaveServiceRequest request, CancellationToken ct)
     {
         var created = await assets.CreateServiceAsync(
-            User.GetActor(), request.Name ?? "", request.Description, request.OwnerTeamId, ct);
+            User.GetActor(), request.Name ?? "", request.Description, request.OwnerTeamId,
+            request.PipelineUrl, ct);
         return StatusCode(StatusCodes.Status201Created, created);
     }
 
@@ -130,7 +131,8 @@ public class CatalogueController(AssetService assets, TicketFieldService fields)
     {
         var saved = await assets.UpdateServiceAsync(
             User.GetActor(), serviceId, request.Name, request.Description,
-            request.OwnerTeamId, request.ClearOwner, request.SortOrder, request.IsActive, ct);
+            request.OwnerTeamId, request.ClearOwner, request.SortOrder, request.IsActive,
+            request.PipelineUrl, ct);
         return saved is null ? NotFound() : Ok(saved);
     }
 

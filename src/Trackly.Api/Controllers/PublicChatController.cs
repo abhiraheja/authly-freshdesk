@@ -49,6 +49,17 @@ public class PublicChatController(ChatService chat, IHubContext<ChatHub> hub) : 
         if (posted is null) return NotFound(new { error = "Chat not found or already ended." });
 
         await hub.Clients.Group(ChatHub.SessionGroup(sessionId)).SendAsync("message", posted.Value.Message, ct);
+
+        // And to the workspace lobby, so agents who are NOT in this session hear
+        // about it. Without this an agent who answered once and navigated away
+        // never learns the visitor wrote back — the session group only reaches
+        // whoever has the conversation open. A separate event name from
+        // "message" because the payload is a nudge, not the thread: an agent
+        // watching the lobby has no business receiving message bodies for
+        // conversations they have not opened.
+        await hub.Clients.Group(ChatHub.Lobby(posted.Value.WorkspaceId))
+            .SendAsync("visitorMessage", new { sessionId }, ct);
+
         return Ok(posted.Value.Message);
     }
 

@@ -1516,6 +1516,23 @@ input[type='password']::-ms-clear {
 .table td.col-right {
   text-align: right;
 }
+/* A sortable heading is a <button> inside the <th>, and a button does not pick
+   up the header's uppercase, tracking or colour on its own — so a sortable
+   column rendered in sentence case next to shouting neighbours. It was reached
+   for with a `font-inherit` utility that does not exist in Tailwind or here, and
+   a class that emits nothing fails silently: the header just looked wrong.
+   Same reason as `.col-right` above — overriding a component class takes a
+   component class. */
+.table thead th button {
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+}
+.table thead th button:hover {
+  color: rgb(var(--foreground));
+}
 .table tbody tr {
   transition: background-color var(--motion-fast) var(--motion-ease);
 }

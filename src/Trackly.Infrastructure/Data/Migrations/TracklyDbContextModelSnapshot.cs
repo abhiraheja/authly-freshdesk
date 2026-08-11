@@ -501,6 +501,10 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("owner_team_id");
 
+                    b.Property<string>("PipelineUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("pipeline_url");
+
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer")
                         .HasColumnName("sort_order");
@@ -1671,6 +1675,365 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasDatabaseName("ix_problems_workspace_id_status");
 
                     b.ToTable("problems", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.Release", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<Guid>("CreatedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<Guid?>("ReleaseManagerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("release_manager_id");
+
+                    b.Property<DateTime?>("ReleasedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("released_at");
+
+                    b.Property<string>("RollbackPlan")
+                        .HasColumnType("text")
+                        .HasColumnName("rollback_plan");
+
+                    b.Property<DateTime?>("ScheduledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("scheduled_at");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("planning")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Title")
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Version")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("version");
+
+                    b.Property<Guid>("WorkspaceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("workspace_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_releases");
+
+                    b.HasIndex("CreatedBy")
+                        .HasDatabaseName("ix_releases_created_by");
+
+                    b.HasIndex("ReleaseManagerId")
+                        .HasDatabaseName("ix_releases_release_manager_id");
+
+                    b.HasIndex("WorkspaceId", "ScheduledAt")
+                        .HasDatabaseName("ix_releases_workspace_id_scheduled_at");
+
+                    b.HasIndex("WorkspaceId", "Status")
+                        .HasDatabaseName("ix_releases_workspace_id_status");
+
+                    b.ToTable("releases", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.ReleaseActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<Guid?>("ActorId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Detail")
+                        .HasColumnType("text")
+                        .HasColumnName("detail");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("release_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_release_activities");
+
+                    b.HasIndex("ActorId")
+                        .HasDatabaseName("ix_release_activities_actor_id");
+
+                    b.HasIndex("ReleaseId", "CreatedAt")
+                        .HasDatabaseName("ix_release_activities_release_id_created_at");
+
+                    b.ToTable("release_activities", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.ReleaseComponent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("BuildVersion")
+                        .HasColumnType("text")
+                        .HasColumnName("build_version");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("completed_at");
+
+                    b.Property<Guid?>("CompletedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("completed_by");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<Guid?>("OwnerId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("owner_id");
+
+                    b.Property<string>("PipelineUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("pipeline_url");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("release_id");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("sequence");
+
+                    b.Property<Guid?>("ServiceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("service_id");
+
+                    b.Property<DateTime?>("StartedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("started_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("pending")
+                        .HasColumnName("status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_release_components");
+
+                    b.HasIndex("CompletedBy")
+                        .HasDatabaseName("ix_release_components_completed_by");
+
+                    b.HasIndex("OwnerId")
+                        .HasDatabaseName("ix_release_components_owner_id");
+
+                    b.HasIndex("ServiceId")
+                        .HasDatabaseName("ix_release_components_service_id");
+
+                    b.HasIndex("ReleaseId", "Sequence")
+                        .HasDatabaseName("ix_release_components_release_id_sequence");
+
+                    b.ToTable("release_components", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.ReleaseStep", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Body")
+                        .HasColumnType("text")
+                        .HasColumnName("body");
+
+                    b.Property<Guid>("ComponentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("component_id");
+
+                    b.Property<DateTime?>("DoneAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("done_at");
+
+                    b.Property<Guid?>("DoneBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("done_by");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("manual")
+                        .HasColumnName("kind");
+
+                    b.Property<string>("Result")
+                        .HasColumnType("text")
+                        .HasColumnName("result");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("sequence");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("pending")
+                        .HasColumnName("status");
+
+                    b.Property<string>("TargetEnv")
+                        .HasColumnType("text")
+                        .HasColumnName("target_env");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<string>("Url")
+                        .HasColumnType("text")
+                        .HasColumnName("url");
+
+                    b.HasKey("Id")
+                        .HasName("pk_release_steps");
+
+                    b.HasIndex("DoneBy")
+                        .HasDatabaseName("ix_release_steps_done_by");
+
+                    b.HasIndex("ComponentId", "Sequence")
+                        .HasDatabaseName("ix_release_steps_component_id_sequence");
+
+                    b.ToTable("release_steps", (string)null);
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.ReleaseWorkItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ComponentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("component_id");
+
+                    b.Property<string>("ExternalKey")
+                        .HasColumnType("text")
+                        .HasColumnName("external_key");
+
+                    b.Property<string>("ExternalUrl")
+                        .HasColumnType("text")
+                        .HasColumnName("external_url");
+
+                    b.Property<Guid>("ReleaseId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("release_id");
+
+                    b.Property<int>("Sequence")
+                        .HasColumnType("integer")
+                        .HasColumnName("sequence");
+
+                    b.Property<string>("TestNotes")
+                        .HasColumnType("text")
+                        .HasColumnName("test_notes");
+
+                    b.Property<string>("TestStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("not_tested")
+                        .HasColumnName("test_status");
+
+                    b.Property<DateTime?>("TestedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("tested_at");
+
+                    b.Property<Guid?>("TestedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tested_by");
+
+                    b.Property<Guid?>("TicketId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("ticket_id");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("title");
+
+                    b.Property<DateTime?>("VerifiedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("verified_at");
+
+                    b.Property<Guid?>("VerifiedBy")
+                        .HasColumnType("uuid")
+                        .HasColumnName("verified_by");
+
+                    b.Property<string>("VerifyStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("not_tested")
+                        .HasColumnName("verify_status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_release_work_items");
+
+                    b.HasIndex("ComponentId")
+                        .HasDatabaseName("ix_release_work_items_component_id");
+
+                    b.HasIndex("TestedBy")
+                        .HasDatabaseName("ix_release_work_items_tested_by");
+
+                    b.HasIndex("TicketId")
+                        .HasDatabaseName("ix_release_work_items_ticket_id");
+
+                    b.HasIndex("VerifiedBy")
+                        .HasDatabaseName("ix_release_work_items_verified_by");
+
+                    b.HasIndex("ReleaseId", "Sequence")
+                        .HasDatabaseName("ix_release_work_items_release_id_sequence");
+
+                    b.ToTable("release_work_items", (string)null);
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.RewardGoal", b =>
@@ -3539,6 +3902,10 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("updated_at");
 
+                    b.Property<string>("WorkItemUrlTemplate")
+                        .HasColumnType("text")
+                        .HasColumnName("work_item_url_template");
+
                     b.HasKey("Id")
                         .HasName("pk_workspaces");
 
@@ -4238,6 +4605,155 @@ namespace Trackly.Infrastructure.Data.Migrations
                     b.Navigation("CreatedByUser");
 
                     b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.Release", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "CreatedByUser")
+                        .WithMany()
+                        .HasForeignKey("CreatedBy")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_releases_users_created_by");
+
+                    b.HasOne("Trackly.Core.Entities.User", "ReleaseManager")
+                        .WithMany()
+                        .HasForeignKey("ReleaseManagerId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_releases_users_release_manager_id");
+
+                    b.HasOne("Trackly.Core.Entities.Workspace", "Workspace")
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_releases_workspaces_workspace_id");
+
+                    b.Navigation("CreatedByUser");
+
+                    b.Navigation("ReleaseManager");
+
+                    b.Navigation("Workspace");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.ReleaseActivity", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "Actor")
+                        .WithMany()
+                        .HasForeignKey("ActorId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_release_activities_users_actor_id");
+
+                    b.HasOne("Trackly.Core.Entities.Release", "Release")
+                        .WithMany()
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_release_activities_releases_release_id");
+
+                    b.Navigation("Actor");
+
+                    b.Navigation("Release");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.ReleaseComponent", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.User", "CompletedByUser")
+                        .WithMany()
+                        .HasForeignKey("CompletedBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_release_components_users_completed_by");
+
+                    b.HasOne("Trackly.Core.Entities.User", "Owner")
+                        .WithMany()
+                        .HasForeignKey("OwnerId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_release_components_users_owner_id");
+
+                    b.HasOne("Trackly.Core.Entities.Release", "Release")
+                        .WithMany("Components")
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_release_components_releases_release_id");
+
+                    b.HasOne("Trackly.Core.Entities.BusinessService", "Service")
+                        .WithMany()
+                        .HasForeignKey("ServiceId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_release_components_business_services_service_id");
+
+                    b.Navigation("CompletedByUser");
+
+                    b.Navigation("Owner");
+
+                    b.Navigation("Release");
+
+                    b.Navigation("Service");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.ReleaseStep", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.ReleaseComponent", "Component")
+                        .WithMany("Steps")
+                        .HasForeignKey("ComponentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_release_steps_release_components_component_id");
+
+                    b.HasOne("Trackly.Core.Entities.User", "DoneByUser")
+                        .WithMany()
+                        .HasForeignKey("DoneBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_release_steps_users_done_by");
+
+                    b.Navigation("Component");
+
+                    b.Navigation("DoneByUser");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.ReleaseWorkItem", b =>
+                {
+                    b.HasOne("Trackly.Core.Entities.ReleaseComponent", "Component")
+                        .WithMany("WorkItems")
+                        .HasForeignKey("ComponentId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_release_work_items_release_components_component_id");
+
+                    b.HasOne("Trackly.Core.Entities.Release", "Release")
+                        .WithMany("WorkItems")
+                        .HasForeignKey("ReleaseId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_release_work_items_releases_release_id");
+
+                    b.HasOne("Trackly.Core.Entities.User", "TestedByUser")
+                        .WithMany()
+                        .HasForeignKey("TestedBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_release_work_items_users_tested_by");
+
+                    b.HasOne("Trackly.Core.Entities.Ticket", "Ticket")
+                        .WithMany()
+                        .HasForeignKey("TicketId")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_release_work_items_tickets_ticket_id");
+
+                    b.HasOne("Trackly.Core.Entities.User", "VerifiedByUser")
+                        .WithMany()
+                        .HasForeignKey("VerifiedBy")
+                        .OnDelete(DeleteBehavior.SetNull)
+                        .HasConstraintName("fk_release_work_items_users_verified_by");
+
+                    b.Navigation("Component");
+
+                    b.Navigation("Release");
+
+                    b.Navigation("TestedByUser");
+
+                    b.Navigation("Ticket");
+
+                    b.Navigation("VerifiedByUser");
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.RewardGoal", b =>
@@ -5039,6 +5555,20 @@ namespace Trackly.Infrastructure.Data.Migrations
             modelBuilder.Entity("Trackly.Core.Entities.Comment", b =>
                 {
                     b.Navigation("Mentions");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.Release", b =>
+                {
+                    b.Navigation("Components");
+
+                    b.Navigation("WorkItems");
+                });
+
+            modelBuilder.Entity("Trackly.Core.Entities.ReleaseComponent", b =>
+                {
+                    b.Navigation("Steps");
+
+                    b.Navigation("WorkItems");
                 });
 
             modelBuilder.Entity("Trackly.Core.Entities.SsoConnection", b =>

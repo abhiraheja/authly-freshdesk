@@ -61,6 +61,71 @@ export const IMPACT_TONE: Record<string, ToneLabel> = {
   minor: { tone: 'info', labelKey: 'impact.minor' },
 };
 
+/**
+ * A problem's own lifecycle — not a ticket's, and deliberately coloured for the
+ * question it answers: **do we know what is going on, and is it still going on?**
+ *
+ * `monitoring` is `primary` rather than a second green: the fix is in, but
+ * nobody has signed it off yet, and a green chip there is how a problem gets
+ * forgotten one step before the end.
+ */
+export const PROBLEM_TONE: Record<string, ToneLabel> = {
+  investigating: { tone: 'warning', labelKey: 'problems.status.investigating' },
+  identified: { tone: 'info', labelKey: 'problems.status.identified' },
+  monitoring: { tone: 'primary', labelKey: 'problems.status.monitoring' },
+  resolved: { tone: 'success', labelKey: 'problems.status.resolved' },
+};
+
+/**
+ * A release's own lifecycle.
+ *
+ * `ready` is `info` and not `success` on purpose: nothing has shipped yet, and a
+ * green chip on a release that is still sitting on the ground is how a plan gets
+ * mistaken for a deployment. Green is reserved for `released`.
+ *
+ * `rolled_back` is danger, `cancelled` is neutral — one is a scar and the other
+ * is a decision, and a board that colours them alike hides the only two rows
+ * worth reading afterwards.
+ */
+export const RELEASE_TONE: Record<string, ToneLabel> = {
+  planning: { tone: 'neutral', labelKey: 'releases.status.planning' },
+  ready: { tone: 'info', labelKey: 'releases.status.ready' },
+  in_progress: { tone: 'primary', labelKey: 'releases.status.inProgress' },
+  released: { tone: 'success', labelKey: 'releases.status.released' },
+  rolled_back: { tone: 'danger', labelKey: 'releases.status.rolledBack' },
+  cancelled: { tone: 'neutral', labelKey: 'releases.status.cancelled' },
+};
+
+/**
+ * Per-component and per-step execution state during the deployment.
+ *
+ * `skipped` is neutral rather than green: it settles the line without doing the
+ * work, and somebody reading the plan the next morning needs to see the
+ * difference at a glance.
+ */
+export const RELEASE_RUN_TONE: Record<string, ToneLabel> = {
+  pending: { tone: 'neutral', labelKey: 'releases.run.pending' },
+  in_progress: { tone: 'primary', labelKey: 'releases.run.inProgress' },
+  done: { tone: 'success', labelKey: 'releases.run.done' },
+  failed: { tone: 'danger', labelKey: 'releases.run.failed' },
+  skipped: { tone: 'neutral', labelKey: 'releases.run.skipped' },
+};
+
+/**
+ * Test and production-verification state on a work item.
+ *
+ * `blocked` is `warning` and not `neutral`: it means somebody tried and could
+ * not, which is a thing to go and fix before the release — untested is merely a
+ * thing nobody has picked up yet.
+ */
+export const RELEASE_TEST_TONE: Record<string, ToneLabel> = {
+  not_tested: { tone: 'neutral', labelKey: 'releases.test.notTested' },
+  passed: { tone: 'success', labelKey: 'releases.test.passed' },
+  failed: { tone: 'danger', labelKey: 'releases.test.failed' },
+  blocked: { tone: 'warning', labelKey: 'releases.test.blocked' },
+  skipped: { tone: 'neutral', labelKey: 'releases.test.skipped' },
+};
+
 export const ROLE_TONE: Record<string, ToneLabel> = {
   admin: { tone: 'primary', labelKey: 'role.admin' },
   agent: { tone: 'info', labelKey: 'role.agent' },

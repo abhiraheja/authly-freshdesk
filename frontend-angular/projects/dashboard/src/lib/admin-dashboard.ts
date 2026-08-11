@@ -279,14 +279,14 @@ import {
               <thead>
                 <tr>
                   <th scope="col">{{ 'dashboard.admin.columns.agent' | transloco }}</th>
-                  <th scope="col" class="text-right">{{ 'dashboard.admin.columns.resolved' | transloco }}</th>
-                  <th scope="col" class="text-right">{{ 'dashboard.admin.columns.open' | transloco }}</th>
-                  <th scope="col" class="text-right">{{ 'dashboard.admin.columns.overdue' | transloco }}</th>
-                  <th scope="col" class="text-right">{{ 'dashboard.admin.columns.tasks' | transloco }}</th>
-                  <th scope="col" class="text-right">{{ 'dashboard.admin.columns.firstResponse' | transloco }}</th>
-                  <th scope="col" class="text-right">{{ 'dashboard.admin.columns.sla' | transloco }}</th>
-                  <th scope="col" class="text-right">{{ 'dashboard.admin.columns.csat' | transloco }}</th>
-                  <th scope="col" class="text-right">{{ 'dashboard.admin.columns.points' | transloco }}</th>
+                  <th scope="col" class="col-right">{{ 'dashboard.admin.columns.resolved' | transloco }}</th>
+                  <th scope="col" class="col-right">{{ 'dashboard.admin.columns.open' | transloco }}</th>
+                  <th scope="col" class="col-right">{{ 'dashboard.admin.columns.overdue' | transloco }}</th>
+                  <th scope="col" class="col-right">{{ 'dashboard.admin.columns.tasks' | transloco }}</th>
+                  <th scope="col" class="col-right">{{ 'dashboard.admin.columns.firstResponse' | transloco }}</th>
+                  <th scope="col" class="col-right">{{ 'dashboard.admin.columns.sla' | transloco }}</th>
+                  <th scope="col" class="col-right">{{ 'dashboard.admin.columns.csat' | transloco }}</th>
+                  <th scope="col" class="col-right">{{ 'dashboard.admin.columns.points' | transloco }}</th>
                 </tr>
               </thead>
               <tbody>
@@ -318,22 +318,22 @@ import {
                           </span>
                         </span>
                       </td>
-                      <td class="text-right font-mono">{{ row.resolved }}</td>
-                      <td class="text-right font-mono">{{ row.openNow }}</td>
-                      <td class="text-right">
+                      <td class="col-right font-mono">{{ row.resolved }}</td>
+                      <td class="col-right font-mono">{{ row.openNow }}</td>
+                      <td class="col-right">
                         @if (row.overdueNow) {
                           <tk-badge tone="danger">{{ row.overdueNow }}</tk-badge>
                         } @else {
                           <span class="font-mono text-muted-foreground">0</span>
                         }
                       </td>
-                      <td class="text-right font-mono">{{ row.pendingTasks }}</td>
-                      <td class="text-right font-mono">{{ duration(row.avgFirstResponseMinutes) }}</td>
-                      <td class="text-right font-mono" [class]="attainmentClass(row)">
+                      <td class="col-right font-mono">{{ row.pendingTasks }}</td>
+                      <td class="col-right font-mono">{{ duration(row.avgFirstResponseMinutes) }}</td>
+                      <td class="col-right font-mono" [class]="attainmentClass(row)">
                         {{ percent(row.resolutionSlaAttainment) }}
                       </td>
-                      <td class="text-right font-mono">{{ row.avgCsat ?? '—' }}</td>
-                      <td class="text-right font-mono">{{ row.rewardPoints }}</td>
+                      <td class="col-right font-mono">{{ row.avgCsat ?? '—' }}</td>
+                      <td class="col-right font-mono">{{ row.rewardPoints }}</td>
                     </tr>
                   } @empty {
                     <tr>

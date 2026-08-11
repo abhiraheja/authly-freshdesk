@@ -200,8 +200,8 @@ import {
                 <th scope="col">{{ 'assets.columns.kind' | transloco }}</th>
                 <th scope="col">{{ 'assets.columns.location' | transloco }}</th>
                 <th scope="col">{{ 'assets.columns.holder' | transloco }}</th>
-                <th scope="col" class="text-right">{{ 'assets.columns.openTickets' | transloco }}</th>
-                <th scope="col" class="text-right">{{ 'assets.columns.allTickets' | transloco }}</th>
+                <th scope="col" class="col-right">{{ 'assets.columns.openTickets' | transloco }}</th>
+                <th scope="col" class="col-right">{{ 'assets.columns.allTickets' | transloco }}</th>
                 <th scope="col">{{ 'assets.columns.lastSeen' | transloco }}</th>
               </tr>
             </thead>
@@ -238,14 +238,14 @@ import {
                     </td>
                     <!-- Amber only when there is something open. A zero in a
                          warning colour teaches people to ignore the colour. -->
-                    <td class="text-right">
+                    <td class="col-right">
                       @if (asset.openTicketCount) {
                         <tk-badge tone="warning">{{ asset.openTicketCount }}</tk-badge>
                       } @else {
                         <span class="text-meta text-muted-foreground">0</span>
                       }
                     </td>
-                    <td class="text-right font-mono text-body">{{ asset.ticketCount }}</td>
+                    <td class="col-right font-mono text-body">{{ asset.ticketCount }}</td>
                     <td class="text-meta text-muted-foreground">
                       {{ asset.lastTicketAt ? formatted(asset.lastTicketAt) : ('assets.never' | transloco) }}
                     </td>

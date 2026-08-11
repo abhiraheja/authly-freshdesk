@@ -634,6 +634,272 @@ CREATE TABLE announcement_deliveries (
 
 ---
 
+## Release Plans — Shipping, as a Checklist
+
+The thing this replaces is a wiki page written before every deployment: the
+version, the tentative date, who is driving it, the services going out with the
+tasks in each, the migration to run, the variables to change, and a tick beside
+each service as it lands. Nearly every team writes one, and it is the cheapest
+thing to start and the first thing to fail.
+
+It does not fail because it is a document. It fails because it is **only** a
+document, and a deployment is a procedure — executed once, under time pressure,
+by several people at the same time. Four things break:
+
+1. **State lives in a page nobody is refreshing.** One person types "AuthV3 ✓";
+   the other three find out twenty minutes later. During the forty minutes when
+   it matters most, everyone is reading a stale copy.
+2. **Order is implied, not enforced.** The real dependency — *migration first,
+   deploy second, or the app boots and 500s* — lives in somebody's head.
+3. **Secrets end up in plaintext.** `TOKEN__KEY = ajsdn…` in a wiki is a
+   production secret in a system with no encryption and company-wide read
+   access. Invariant 3 exists because of exactly this.
+4. **Nothing survives afterwards.** The page is edited in place, or next month's
+   is copied from it, so "what did we change in env last time?" has no answer —
+   which is what turns a rollback into guesswork.
+
+Trackly's version is the same document, rendered top to bottom the same way, in
+which every line carries a **tick, a name and a timestamp**. One object, two
+readings: the document people wanted and the instrument the release is run from,
+which cannot drift apart because they are the same rows.
+
+### What it is made of
+
+| | |
+|---|---|
+| **Release** | version, tentative date, release manager, status, rollback plan, notes |
+| **Component** | one deployable thing — an API, a worker, a frontend. Picked from `business_services`, with its name and pipeline URL **snapshotted** |
+| **Step** | one runbook line: run a pipeline, run SQL, change a variable, do a thing by hand, check it worked |
+| **Work item** | one task shipping in this release — the scope **and** the test checklist |
+| **Activity** | append-only: who ticked what, when. Never edited |
+
+### The decisions worth defending
+
+**Components come from the service catalogue, not a second list of names.** The
+catalogue already knows who owns each service; reusing it means the status board
+and the release plan talk about the same "AuthV3" rather than two strings that
+merely look alike. The name and pipeline URL are **copied in**, never read
+through — a release is a record of what shipped, and renaming a service next
+year must not rewrite last year's plan.
+
+**A work item does two jobs, and that is the point.** It is the scope (what is
+in this release) *and* the test checklist (what somebody walks through before
+deploy). A wiki list cannot be the second one, because a line of text has
+exactly one state — written — so testing becomes a thing everybody agrees should
+happen and nobody's name is against.
+
+**Two verification passes, not one.** `test_status` is pre-deploy on staging and
+gates the release; `verify_status` is post-deploy on production and decides a
+rollback. They answer different questions and only one of them is asked while
+the site is on fire, so collapsing them into one column loses the second
+entirely.
+
+**An external reference AND an optional ticket.** Most teams track development
+work elsewhere (Azure DevOps, Jira) while Trackly holds the support ticket that
+reported the bug. Both are true at once. `work_item_url_template` on the
+workspace turns a bare `55335` into a link — set once, so nobody after that has
+to paste a URL, and an unlinked task number cannot be tested by anyone who did
+not write it.
+
+**Env changes are declared, never valued.** The step records the variable name
+and where it is set. The value is *absent* — not encrypted, absent. Trackly
+encrypts SMTP credentials because it must *use* them; it will never use your
+app's token key, and anything written here is one more copy to rotate and one
+more place to leak from. Structurally prevented: the form has no value field.
+
+**DB scripts are stored verbatim, with `done_by` and `done_at`.** A script is
+not a secret, and this is the single most valuable field in the feature, because
+"did anyone run it on prod?" is the 2am question.
+
+**Order is data, and out-of-order asks rather than blocks.** Steps carry a
+sequence and the API returns 409 `steps_out_of_order` when an earlier one is
+still open; `force: true` proceeds and writes `step_out_of_order` to the log. A
+rule that cannot be overridden is a rule that gets worked around outside the
+tool, where nothing is recorded. Same reasoning as the resolve gate.
+
+**A rollback plan is required to leave `planning`.** It is the field every team
+skips and the only one that matters on the night it goes wrong.
+
+**Clone copies the shape, never the record.** Components and their repeatable
+steps (`pipeline`, `manual`, `verify`) carry over. Ticks, build numbers, work
+items, `db_script` and `env_change` steps do not — last release's migration is
+not this release's migration, and a plan pre-filled with somebody else's SQL is
+worse than an empty one, because it looks filled in.
+
+**No approval gate.** A CAB step is the obvious next thing to add and the wrong
+thing to add first: every failure this feature exists to stop is "nobody knew",
+none is "nobody approved".
+
+### Lifecycle
+
+```
+planning ──▶ ready ──▶ in_progress ──▶ released
+    │          │            │              │
+    │          └──▶ planning│              ▼
+    └──▶ cancelled          └──▶ rolled_back ◀─┘
+```
+
+Both `ready` and `in_progress` run the readiness check, so skipping the label
+cannot skip the gate. Ticking the first step of a `ready` release starts it —
+somebody who has just run the first pipeline should not also have to remember a
+button. `released → rolled_back` stays open because a release can go bad hours
+later and the record has to be able to say so without editing history.
+
+```sql
+CREATE TABLE releases (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id       UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    version            TEXT NOT NULL,          -- "2.14.0", "2026-08-14", "Sprint 42"
+    title              TEXT,
+    status             TEXT NOT NULL DEFAULT 'planning',
+    scheduled_at       TIMESTAMPTZ,            -- tentative, by name and by nature
+    release_manager_id UUID REFERENCES users(id) ON DELETE SET NULL,
+    notes              TEXT,
+    rollback_plan      TEXT,                   -- required to leave planning
+    started_at         TIMESTAMPTZ,
+    released_at        TIMESTAMPTZ,
+    created_by         UUID NOT NULL REFERENCES users(id),
+    created_at         TIMESTAMPTZ DEFAULT now(),
+    updated_at         TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX ON releases (workspace_id, status);
+CREATE INDEX ON releases (workspace_id, scheduled_at);
+
+-- SET NULL on service_id, not CASCADE: retiring a service must not delete the
+-- record of the night it was deployed. `name` is the snapshot that keeps the
+-- row readable afterwards, and is also why service_id is nullable at all.
+CREATE TABLE release_components (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    release_id    UUID NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
+    service_id    UUID REFERENCES business_services(id) ON DELETE SET NULL,
+    name          TEXT NOT NULL,
+    build_version TEXT,
+    pipeline_url  TEXT,
+    owner_id      UUID REFERENCES users(id) ON DELETE SET NULL,
+    sequence      INTEGER NOT NULL,
+    status        TEXT NOT NULL DEFAULT 'pending',
+    started_at    TIMESTAMPTZ,
+    completed_at  TIMESTAMPTZ,
+    completed_by  UUID REFERENCES users(id) ON DELETE SET NULL,
+    notes         TEXT
+);
+CREATE INDEX ON release_components (release_id, sequence);
+
+-- `body` holds the SQL, the command, the instruction — verbatim. For
+-- kind = 'env_change' it holds the variable NAME and where it is set, and the
+-- UI has no field in which a value could be typed.
+CREATE TABLE release_steps (
+    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    component_id UUID NOT NULL REFERENCES release_components(id) ON DELETE CASCADE,
+    kind         TEXT NOT NULL DEFAULT 'manual',   -- pipeline|db_script|env_change|manual|verify
+    title        TEXT NOT NULL,
+    body         TEXT,
+    target_env   TEXT,
+    url          TEXT,
+    sequence     INTEGER NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'pending',  -- pending|done|failed|skipped
+    done_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    done_at      TIMESTAMPTZ,
+    result       TEXT
+);
+CREATE INDEX ON release_steps (component_id, sequence);
+
+-- Removing a component leaves its work items on the release rather than
+-- deleting them: the task is still shipping, it just lost its heading. Silently
+-- dropping scope is the one thing this feature exists to stop.
+CREATE TABLE release_work_items (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    release_id    UUID NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
+    component_id  UUID REFERENCES release_components(id) ON DELETE SET NULL,
+    external_key  TEXT,                             -- "55335"
+    external_url  TEXT,                             -- only when the template does not fit
+    ticket_id     UUID REFERENCES tickets(id) ON DELETE SET NULL,
+    title         TEXT NOT NULL,
+    test_status   TEXT NOT NULL DEFAULT 'not_tested',   -- pre-deploy, gates the release
+    tested_by     UUID REFERENCES users(id) ON DELETE SET NULL,
+    tested_at     TIMESTAMPTZ,
+    test_notes    TEXT,
+    verify_status TEXT NOT NULL DEFAULT 'not_tested',   -- post-deploy, decides a rollback
+    verified_by   UUID REFERENCES users(id) ON DELETE SET NULL,
+    verified_at   TIMESTAMPTZ,
+    sequence      INTEGER NOT NULL
+);
+CREATE INDEX ON release_work_items (release_id, sequence);
+CREATE INDEX ON release_work_items (ticket_id);   -- "which release is this ticket in?"
+
+CREATE TABLE release_activities (
+    id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    release_id UUID NOT NULL REFERENCES releases(id) ON DELETE CASCADE,
+    actor_id   UUID REFERENCES users(id) ON DELETE SET NULL,
+    action     TEXT NOT NULL,      -- verb code; the sentence is a translation key
+    detail     TEXT,               -- the step title, the task number, old → new
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+CREATE INDEX ON release_activities (release_id, created_at);
+
+ALTER TABLE workspaces ADD COLUMN work_item_url_template TEXT;   -- "…/_workitems/edit/{id}"
+ALTER TABLE business_services ADD COLUMN pipeline_url TEXT;      -- copied into a release
+```
+
+**Permissions.** Agents get the same verbs as admins, deliberately: the person
+who runs the pipeline for a service is the person who should tick it off, and
+making them ask an admin is how a checklist stops being ticked at all. Every
+mutation is written to the activity log with the actor's name, so the record
+provides the accountability rather than the permission wall. Only **deleting** a
+release is admin-only, and only while it has not shipped — anything that shipped
+is cancelled, never deleted.
+
+### Closing the support loop
+
+Everything above would be true of a standalone release tool. What Trackly has
+that a wiki, a Jira version and a ServiceNow change record all need an
+integration to get is the **ticket that reported the bug**, already in the same
+database. Four things fall out of that, and they are the reason a work item
+carries `ticket_id` at all.
+
+**The ticket says when its fix ships.** `tk-ticket-release-banner` sits above the
+ticket header — not in the Related tab — because it is the answer to a question
+the agent is about to be asked, and behind a tab it gets found after they have
+already gone to ask a developer. Live releases first; if there are none, only the
+newest finished one, so a ticket reopened across three releases shows the row
+that matters rather than three rows of history. Past tense once it has gone out:
+"shipping in 2.14" on a release from last week reads as a promise and is
+actually history.
+
+**Marking a release `released` offers to resolve them.** `ResolveTickets` on the
+status request, off by default, asked as a separate confirmation *after* the
+release confirmation and only when `OpenTicketCount > 0` — the question carries
+the number, because "are you sure?" without one cannot be answered. It mirrors
+`ProblemService.ResolveAsync` exactly, including bypassing the status workflow: a
+release landing is a decision about all of its tickets at once, and a transition
+rule that blocked one would leave the release shipped with a ticket open under
+it. Each ticket gets both activity entries a hand-made resolve writes, and the
+`Resolved` one names the release. Kept opt-in because shipping a fix and telling
+a customer are two decisions, and the second leaves the workspace.
+
+**Release notes become a draft announcement.** Built from the work items grouped
+by component, editable before saving, and saved **unsent** as a `general`
+announcement. The announcements screen is built around the gap between writing
+one and sending it; a shortcut from here that closed that gap would be a way to
+mail every customer in the workspace from a screen about deployments. Admin-only,
+matching the announcements API.
+
+**Live ticks over `ReleaseHub`.** `/hubs/releases`, group per release, joined
+only after confirming the release is in the caller's workspace — invariant 1
+applies to sockets exactly as to queries. Broadcast from `ReleasesController`'s
+`FoundAsync` helper rather than from each endpoint, because fifteen call sites
+each remembering to broadcast is fourteen chances to forget. The payload is the
+whole release, so a client that missed a message never has to reconstruct what it
+missed, and delivery is best-effort in a `try/catch`: the REST response is the
+source of truth and a socket nobody is listening on must not fail a write that
+already succeeded. GETs deliberately do not broadcast — a newly-joined client
+calling GET would otherwise repaint everybody else's screen for nothing.
+
+**Still deferred:** per-service step templates, a release calendar, and metrics
+(time-to-deploy, rollback rate).
+
+---
+
 ## Email Architecture
 
 **Key point: Trackly never runs its own SMTP server.** Sending and receiving are separate problems, both solved with hosted services plus a couple of DNS records or mailbox credentials.

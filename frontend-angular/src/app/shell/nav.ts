@@ -109,8 +109,11 @@ export const NAV: readonly NavGroup[] = [
   {
     labelKey: 'nav.groups.workspace',
     items: [
-      { labelKey: 'nav.items.liveChat', icon: 'messages-square', route: '/dashboard/chat' },
+      // The only count here that is pushed rather than fetched: a visitor is
+      // still sitting there, so the number has to move without a navigation.
+      { labelKey: 'nav.items.liveChat', icon: 'messages-square', route: '/dashboard/chat', countKey: 'chatWaiting' },
       { labelKey: 'nav.items.problems', icon: 'puzzle', route: '/dashboard/problems', countKey: 'openProblems' },
+      { labelKey: 'nav.items.releases', icon: 'rocket', route: '/dashboard/releases' },
       // The people, before the things: a support desk is about who is asking long
       // before it is about what they are asking on.
       { labelKey: 'nav.items.customers', icon: 'user-round', route: '/dashboard/customers', countKey: 'customers' },
@@ -164,13 +167,6 @@ export const NAV: readonly NavGroup[] = [
   },
 ];
 
-/** The customer portal's much shorter rail. */
-export const PORTAL_NAV: readonly NavGroup[] = [
-  {
-    labelKey: 'nav.groups.support',
-    items: [
-      { labelKey: 'nav.items.myTickets', icon: 'ticket', route: '/portal' },
-      { labelKey: 'nav.items.newTicket', icon: 'plus', route: '/portal/tickets/new' },
-    ],
-  },
-];
+// There is deliberately no portal rail here. `/portal` renders outside this
+// shell in `BrandedFrame` — a customer has two destinations, and 280px of
+// Trackly chrome to hold them would be the loudest thing on their page.

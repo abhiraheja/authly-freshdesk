@@ -55,6 +55,11 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
     public DbSet<UserIdentity> UserIdentities => Set<UserIdentity>();
     public DbSet<SsoLoginState> SsoLoginStates => Set<SsoLoginState>();
     public DbSet<Problem> Problems => Set<Problem>();
+    public DbSet<Release> Releases => Set<Release>();
+    public DbSet<ReleaseComponent> ReleaseComponents => Set<ReleaseComponent>();
+    public DbSet<ReleaseStep> ReleaseSteps => Set<ReleaseStep>();
+    public DbSet<ReleaseWorkItem> ReleaseWorkItems => Set<ReleaseWorkItem>();
+    public DbSet<ReleaseActivity> ReleaseActivities => Set<ReleaseActivity>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<TicketTag> TicketTags => Set<TicketTag>();
     public DbSet<Team> Teams => Set<Team>();
@@ -1031,6 +1036,89 @@ public class TracklyDbContext(DbContextOptions<TracklyDbContext> options) : DbCo
             e.HasOne(a => a.Comment).WithMany().HasForeignKey(a => a.CommentId)
                 .OnDelete(DeleteBehavior.Cascade);
             e.HasOne(a => a.UploadedByUser).WithMany().HasForeignKey(a => a.UploadedBy)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Release>(e =>
+        {
+            e.ToTable("releases");
+            // The list is always "this workspace, newest first, optionally by
+            // state" — one index answers both the board and the archive.
+            e.HasIndex(r => new { r.WorkspaceId, r.Status });
+            e.HasIndex(r => new { r.WorkspaceId, r.ScheduledAt });
+            e.Property(r => r.Status).HasDefaultValue(ReleaseStatus.Planning);
+            e.HasOne(r => r.Workspace).WithMany().HasForeignKey(r => r.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(r => r.ReleaseManager).WithMany().HasForeignKey(r => r.ReleaseManagerId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(r => r.CreatedByUser).WithMany().HasForeignKey(r => r.CreatedBy)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<ReleaseComponent>(e =>
+        {
+            e.ToTable("release_components");
+            e.HasIndex(c => new { c.ReleaseId, c.Sequence });
+            e.Property(c => c.Status).HasDefaultValue(ReleaseComponentStatus.Pending);
+            e.HasOne(c => c.Release).WithMany(r => r.Components).HasForeignKey(c => c.ReleaseId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // SetNull, not Cascade: retiring a service from the catalogue must
+            // not delete the record of the night it was deployed. The snapshotted
+            // Name is what keeps the row readable afterwards.
+            e.HasOne(c => c.Service).WithMany().HasForeignKey(c => c.ServiceId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(c => c.Owner).WithMany().HasForeignKey(c => c.OwnerId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(c => c.CompletedByUser).WithMany().HasForeignKey(c => c.CompletedBy)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ReleaseStep>(e =>
+        {
+            e.ToTable("release_steps");
+            e.HasIndex(s => new { s.ComponentId, s.Sequence });
+            e.Property(s => s.Status).HasDefaultValue(ReleaseStepStatus.Pending);
+            e.Property(s => s.Kind).HasDefaultValue(ReleaseStepKind.Manual);
+            e.HasOne(s => s.Component).WithMany(c => c.Steps).HasForeignKey(s => s.ComponentId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // SetNull rather than Restrict: an agent may leave the company, and
+            // deleting them must not be blocked by a two-year-old tick. The
+            // activity log keeps the name either way.
+            e.HasOne(s => s.DoneByUser).WithMany().HasForeignKey(s => s.DoneBy)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ReleaseWorkItem>(e =>
+        {
+            e.ToTable("release_work_items");
+            e.HasIndex(w => new { w.ReleaseId, w.Sequence });
+            // "Which release is this ticket going out in?" — asked from the
+            // ticket, so it needs its own index rather than a scan per release.
+            e.HasIndex(w => w.TicketId);
+            e.Property(w => w.TestStatus).HasDefaultValue(ReleaseTestStatus.NotTested);
+            e.Property(w => w.VerifyStatus).HasDefaultValue(ReleaseTestStatus.NotTested);
+            e.HasOne(w => w.Release).WithMany(r => r.WorkItems).HasForeignKey(w => w.ReleaseId)
+                .OnDelete(DeleteBehavior.Cascade);
+            // Removing a component leaves its work items on the release rather
+            // than deleting them: the task is still shipping, it just lost its
+            // heading. Silently dropping scope is the one thing this feature exists to stop.
+            e.HasOne(w => w.Component).WithMany(c => c.WorkItems).HasForeignKey(w => w.ComponentId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(w => w.Ticket).WithMany().HasForeignKey(w => w.TicketId)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(w => w.TestedByUser).WithMany().HasForeignKey(w => w.TestedBy)
+                .OnDelete(DeleteBehavior.SetNull);
+            e.HasOne(w => w.VerifiedByUser).WithMany().HasForeignKey(w => w.VerifiedBy)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<ReleaseActivity>(e =>
+        {
+            e.ToTable("release_activities");
+            e.HasIndex(a => new { a.ReleaseId, a.CreatedAt });
+            e.HasOne(a => a.Release).WithMany().HasForeignKey(a => a.ReleaseId)
+                .OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(a => a.Actor).WithMany().HasForeignKey(a => a.ActorId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
     }

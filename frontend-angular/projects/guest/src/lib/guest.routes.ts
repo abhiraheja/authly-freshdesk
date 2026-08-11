@@ -20,7 +20,7 @@ const placeholder = () => import('@trackly/ui').then((m) => m.ComingSoon);
 export const guestRoutes: Routes = [
   { path: 'submit', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.submitTicket', from: 'frontend/src/pages/public/SubmitPage.tsx', branded: true } },
   { path: 'kb', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.knowledgeBase', from: 'frontend/src/pages/public/PublicKbPage.tsx', branded: true } },
-  { path: 'chat', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.liveChat', from: 'frontend/src/pages/public/ChatPage.tsx', branded: true } },
+  { path: 'chat', loadComponent: () => import('./chat-visitor').then((m) => m.ChatVisitor) },
   { path: 'csat/:ticketId', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.rateSupport', from: 'frontend/src/pages/public/CsatPage.tsx', branded: true } },
   { path: 'tickets/:id', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.yourTicket', from: 'frontend/src/pages/public/GuestTicketPage.tsx', branded: true } },
   { path: 'invite/:token', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.acceptInvitation', from: 'frontend/src/pages/public/InviteAcceptPage.tsx', branded: true } },

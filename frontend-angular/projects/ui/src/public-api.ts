@@ -35,6 +35,8 @@ export * from './lib/overlay/modal';
 export * from './lib/overlay/confirm';
 export * from './lib/overlay/drawer';
 export * from './lib/overlay/dropdown';
+export * from './lib/branded/branded-frame';
+export * from './lib/chat/chat-thread';
 export * from './lib/page-header/page-header';
 export * from './lib/stat-card/stat-card';
 export * from './lib/table/table';

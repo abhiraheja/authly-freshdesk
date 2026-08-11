@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Trackly.Modules.Releases;
 using Trackly.Modules.Tickets;
 
 namespace Trackly.Api;
@@ -43,6 +44,14 @@ public class ApiExceptionFilter : IExceptionFilter
             {
                 error = e.Message,
                 warnings = e.Warnings,
+            }),
+            // Same shape and the same reasoning as above: well-formed request,
+            // answer is "confirm first". The code travels so the client can ask
+            // the right question instead of surfacing the English sentence.
+            ReleaseConfirmException e => new ConflictObjectResult(new
+            {
+                error = e.Message,
+                code = e.Code,
             }),
             ArgumentException e => new BadRequestObjectResult(new { error = e.Message }),
             UnauthorizedAccessException => new ObjectResult(new { error = "Forbidden." })

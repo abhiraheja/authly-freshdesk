@@ -98,7 +98,7 @@ const ROLES: readonly UserRole[] = ['agent', 'admin', 'customer'];
                   <th>{{ 'admin.members.signIn' | transloco }}</th>
                   <th>{{ 'admin.members.role' | transloco }}</th>
                   <th>{{ 'admin.members.lastActive' | transloco }}</th>
-                  <th class="text-right">{{ 'tickets.columns.actions' | transloco }}</th>
+                  <th class="col-right">{{ 'tickets.columns.actions' | transloco }}</th>
                 </tr>
               </thead>
               <tbody>

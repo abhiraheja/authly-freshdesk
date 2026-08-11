@@ -4,14 +4,34 @@ import type { Routes } from '@angular/router';
  * Mounted by the host at `/portal` — the signed-in **customer's** view of their
  * own tickets.
  *
- * These render inside the shell but are customer-facing: they wear the
- * workspace's branding and are always light (invariant 6). They must never show
- * a private note, an internal field, or another customer's ticket.
+ * These render **outside** the agent Shell, inside `PortalFrame`: they are
+ * customer-facing, so they wear the workspace's branding and are always light
+ * (invariant 6). A customer gets no Trackly mark, no command palette and no
+ * navigation rail — see `BrandedFrame` for why.
+ *
+ * One `path: ''` here, and it is the frame. That is the whole reason the frame
+ * can hold the branding for the visit instead of each screen refetching it.
  */
-const placeholder = () => import('@trackly/ui').then((m) => m.ComingSoon);
-
 export const portalRoutes: Routes = [
-  { path: '', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.myTickets', from: 'frontend/src/pages/portal/PortalTicketsPage.tsx' } },
-  { path: 'tickets/new', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.newTicket', from: 'frontend/src/pages/portal/NewTicketPage.tsx' } },
-  { path: 'tickets/:id', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.ticket', from: 'frontend/src/pages/portal/PortalTicketDetailPage.tsx' } },
+  {
+    path: '',
+    loadComponent: () => import('./portal-frame').then((m) => m.PortalFrame),
+    children: [
+      {
+        path: '',
+        loadComponent: () => import('./portal-tickets').then((m) => m.PortalTickets),
+      },
+      // The form before the detail: different paths, so the order is for the
+      // reader rather than for the matcher.
+      {
+        path: 'tickets/new',
+        loadComponent: () => import('./portal-ticket-new').then((m) => m.PortalTicketNew),
+      },
+      {
+        path: 'tickets/:id',
+        loadComponent: () => import('./portal-ticket-detail').then((m) => m.PortalTicketDetail),
+      },
+      { path: '**', redirectTo: '' },
+    ],
+  },
 ];

@@ -716,6 +716,16 @@ Append here as phases land, so nothing is missed later.
     instance** — the same single-instance guidance the IMAP/announcement workers
     already impose (§4). Cookie auth flows over the same-origin WS handshake, so
     keep the SPA and API same-origin (§5).
+  - **The SPA ships a SignalR client** (`@microsoft/signalr`, a runtime
+    dependency of `frontend-angular`). It is the only third-party runtime package
+    in the frontend; it is bundled, so it needs no CDN and no CSP exception
+    beyond the WebSocket connect-src to your own origin.
+  - **A blocked upgrade degrades, it does not break.** Messages are posted and
+    persisted over plain HTTP and only *delivered* over the socket, so a proxy
+    that refuses the upgrade leaves both sides working with no live updates —
+    the console shows a banner with a Refresh button and the visitor's window
+    shows an amber connection dot. Worth knowing before somebody debugs a
+    "broken" chat that is in fact a missing `proxy_set_header Upgrade`.
   - **Connector signing secrets** are per-workspace, AES-256-GCM encrypted (data,
     not env). Inbound uses `X-Trackly-Signature` (HMAC-SHA256 over the raw body);
     a provider-native relay (Slack/WhatsApp/Teams) translates the provider payload
@@ -797,3 +807,39 @@ Append here as phases land, so nothing is missed later.
     response times and CSAT by editing a query string.
   - Nothing is seeded. An install with no reward goals shows no scoreboard anywhere,
     which is the correct empty state rather than a configuration gap.
+
+- **Release plans** — no new config key, no secret, no external dependency. Two
+  things to know before this reaches production:
+  - **`release_steps.body` is stored in plaintext, on purpose.** It holds
+    migrations and shell commands, which are not secrets and are worthless if the
+    person running them has to retype them from memory. Configuration steps store
+    the variable **name** only — there is no field in the UI in which a value can
+    be typed — so no application secret is meant to reach this table. That is a
+    convention the product enforces structurally, not a database constraint: if
+    somebody pastes a connection string into a manual step, it is in the table.
+    Treat `release_steps` as readable by every agent, because it is.
+  - **`workspaces.work_item_url_template` is interpolated into an `href`.** It is
+    admin-only to write, must contain `{id}`, and the key is URL-escaped before
+    substitution. It is a link target, not markup — but it is also the one field
+    here that a non-admin's browser follows, so keep it admin-only if you ever move
+    the endpoint.
+  - **New SignalR hub at `/hubs/releases`**, and a matching SPA config key
+    `releaseHubPath` (`src/environments/*.ts` → `app.config.ts`). Anything in
+    front of the API that terminates or rewrites WebSockets — nginx, an ingress,
+    an Application Gateway — needs the same treatment `/hubs/chat` already has,
+    or release pages silently stop updating for everyone but the person clicking.
+    Unlike the IMAP poller this needs **no** single-instance constraint, but it
+    does need sticky sessions or a backplane behind more than one API replica:
+    the broadcast only reaches clients connected to the instance that handled the
+    write. Falling back to polling is not a problem — the REST response is the
+    source of truth and every tick still lands.
+  - **`POST /api/releases/{id}/status` with `resolveTickets: true` sends
+    customer email.** It resolves every linked open ticket and fires the
+    status-change notification for each, so it is the one release endpoint that
+    writes to people outside the workspace. It is opt-in per call and the SPA
+    asks separately, but if you script against this API, know that the flag is
+    the difference between a status change and a mail-out.
+  - Deleting a user is unaffected: every actor column on a release
+    (`done_by`, `tested_by`, `verified_by`, `completed_by`, `release_manager_id`,
+    `actor_id`) is `ON DELETE SET NULL`, so a two-year-old tick never blocks an
+    offboarding. `releases.created_by` is `RESTRICT`, matching `problems`.
