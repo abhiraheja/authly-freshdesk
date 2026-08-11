@@ -1,0 +1,321 @@
+<div class="mx-auto max-w-[900px]">
+  <h1 class="font-display text-page font-extrabold">{{ 'admin.branding.title' | transloco }}</h1>
+  <p class="mb-6 mt-1 text-body text-muted-foreground">{{ 'admin.branding.subtitle' | transloco }}</p>
+
+  <!-- Value first, skeleton last: reloading after a save must not swap the form
+       out from under whatever the admin is typing next. -->
+  @if (saved(); as record) {
+    <div class="space-y-4">
+      <!-- Said on the page, not buried in a doc: this record reaches far more
+           surfaces than the screen shows, and an admin changing a colour here
+           is also changing the colour of every email. -->
+      <tk-alert tone="info" [heading]="'admin.branding.scopeHeading' | transloco">
+        {{ 'admin.branding.scopeBody' | transloco }}
+      </tk-alert>
+
+      <!-- ─────────── Live preview ─────────── -->
+      <tk-card [heading]="'admin.branding.previewHeading' | transloco">
+        <p class="mb-3 text-meta text-muted-foreground">{{ 'admin.branding.previewHint' | transloco }}</p>
+
+        <div class="overflow-hidden rounded-xl border border-border">
+          <!-- Deliberately light regardless of the admin's own theme: this is
+               what a customer sees, and customer surfaces are always light
+               (invariant 6). The sign-in screen itself keeps dark mode — it is
+               staff-facing too — but a preview that followed the admin's theme
+               would show a page nobody is ever served. -->
+          <div class="grid bg-white sm:grid-cols-2">
+            <div class="flex flex-col gap-3 p-5">
+              <div class="flex items-center gap-2">
+                @if (logoUrl(); as url) {
+                  <img [src]="url" alt="" class="size-7 rounded-lg object-contain" />
+                } @else {
+                  <span
+                    class="grid size-7 place-items-center rounded-lg text-[11px] font-bold text-white"
+                    [style.background]="previewColour()"
+                  >
+                    {{ workspaceName().charAt(0) }}
+                  </span>
+                }
+                <span class="font-display text-[13px] font-extrabold tracking-tight text-slate-900">
+                  {{ workspaceName() }}
+                </span>
+              </div>
+
+              <div class="mt-4">
+                <p class="font-display text-[19px] font-extrabold leading-tight tracking-tight text-slate-900">
+                  {{ 'admin.branding.previewSignIn' | transloco: { name: workspaceName() } }}
+                </p>
+                <p class="mt-1 text-[12px] text-slate-500">
+                  {{ welcomeText() || ('admin.branding.previewWelcome' | transloco) }}
+                </p>
+              </div>
+
+              <div class="mt-3 space-y-2">
+                <span class="block h-8 rounded-lg border border-slate-200 bg-slate-50"></span>
+                <span class="block h-8 rounded-lg border border-slate-200 bg-slate-50"></span>
+                <span
+                  class="grid h-8 place-items-center rounded-lg text-[12px] font-semibold text-white"
+                  [style.background]="previewColour()"
+                >
+                  {{ 'login.signInAction' | transloco }}
+                </span>
+              </div>
+
+              @if (!hidePoweredBy() || footerText()) {
+                <p class="mt-auto pt-3 text-center text-[10px] text-slate-400">
+                  {{ footerText() || ('common.poweredBy' | transloco) }}
+                </p>
+              }
+            </div>
+
+            <!-- The panel, mirroring AuthLayout: artwork if one is set, the
+                 derived gradient otherwise. -->
+            <div class="relative hidden min-h-[220px] sm:block" [style.background]="previewPanel()">
+              @if (signInImageUrl(); as url) {
+                <img [src]="url" alt="" class="absolute inset-0 size-full object-cover" />
+                <span class="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent"></span>
+              }
+              <p
+                class="absolute inset-x-5 bottom-5 font-display text-[15px] font-extrabold leading-tight tracking-tight text-white"
+              >
+                {{ pageTitle() || ('admin.branding.previewPanel' | transloco: { name: workspaceName() }) }}
+              </p>
+            </div>
+          </div>
+        </div>
+      </tk-card>
+
+      <!-- ─────────── Logo ─────────── -->
+      <tk-card [heading]="'admin.branding.logoHeading' | transloco">
+        <p class="mb-3 text-meta text-muted-foreground">{{ logoLimit() }}</p>
+
+        <div class="flex flex-wrap items-center gap-4">
+          <span class="grid size-16 shrink-0 place-items-center rounded-xl border border-border bg-muted">
+            @if (logoUrl(); as url) {
+              <img [src]="url" [alt]="workspaceName()" class="size-full rounded-xl object-contain p-1.5" />
+            } @else {
+              <tk-icon name="image" [size]="20" class="text-muted-foreground" />
+            }
+          </span>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <label tkButton variant="outline" size="sm" class="cursor-pointer">
+              @if (uploadingLogo()) {
+                <tk-spinner [size]="15" />
+              } @else {
+                <tk-icon name="upload-cloud" [size]="15" />
+              }
+              {{ (record.hasLogo ? 'admin.branding.replaceLogo' : 'admin.branding.uploadLogo') | transloco }}
+              <input
+                type="file"
+                class="sr-only"
+                [accept]="logoAccept"
+                [disabled]="uploadingLogo()"
+                (change)="uploadLogo($event)"
+              />
+            </label>
+
+            @if (record.hasLogo) {
+              <button tkButton variant="ghost" size="sm" type="button" [disabled]="uploadingLogo()" (click)="removeLogo()">
+                {{ 'common.remove' | transloco }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- The one failure nobody can see from inside Trackly: with no absolute
+             API base URL there is no address a mail client can fetch, so emails
+             silently print the workspace name instead of the logo. -->
+        <p class="mt-4 flex gap-2 text-meta text-muted-foreground">
+          <tk-icon name="mail" [size]="14" class="mt-0.5 shrink-0" />
+          <span>{{ 'admin.branding.logoEmailNote' | transloco }}</span>
+        </p>
+      </tk-card>
+
+      <!-- ─────────── Sign-in image ─────────── -->
+      <tk-card [heading]="'admin.branding.imageHeading' | transloco">
+        <p class="mb-3 text-meta text-muted-foreground">{{ imageLimit() }}</p>
+
+        <div class="flex flex-wrap items-center gap-4">
+          <span class="grid h-16 w-28 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-muted">
+            @if (signInImageUrl(); as url) {
+              <img [src]="url" alt="" class="size-full object-cover" />
+            } @else {
+              <tk-icon name="image" [size]="20" class="text-muted-foreground" />
+            }
+          </span>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <label tkButton variant="outline" size="sm" class="cursor-pointer">
+              @if (uploadingImage()) {
+                <tk-spinner [size]="15" />
+              } @else {
+                <tk-icon name="upload-cloud" [size]="15" />
+              }
+              {{ (record.hasSignInImage ? 'admin.branding.replaceImage' : 'admin.branding.uploadImage') | transloco }}
+              <input
+                type="file"
+                class="sr-only"
+                [accept]="imageAccept"
+                [disabled]="uploadingImage()"
+                (change)="uploadSignInImage($event)"
+              />
+            </label>
+
+            @if (record.hasSignInImage) {
+              <button
+                tkButton
+                variant="ghost"
+                size="sm"
+                type="button"
+                [disabled]="uploadingImage()"
+                (click)="removeSignInImage()"
+              >
+                {{ 'common.remove' | transloco }}
+              </button>
+            }
+          </div>
+        </div>
+
+        <p class="mt-4 text-meta text-muted-foreground">{{ 'admin.branding.imageComposition' | transloco }}</p>
+      </tk-card>
+
+      @if (uploadError(); as message) {
+        <tk-alert tone="danger">{{ message }}</tk-alert>
+      }
+
+      <!-- ─────────── Colour ─────────── -->
+      <tk-card [heading]="'admin.branding.colourHeading' | transloco">
+        <tk-field
+          [label]="'admin.branding.colour' | transloco"
+          for="brand-colour"
+          [hint]="'admin.branding.colourHint' | transloco"
+          [error]="colourError()"
+        >
+          <div class="flex items-center gap-2">
+            <!-- The native picker and the hex box edit the same value. Neither
+                 alone is enough: a picker cannot take the hex from a brand
+                 guideline, and a hex box cannot be browsed. -->
+            <input
+              type="color"
+              class="size-10 shrink-0 cursor-pointer rounded-lg border border-border bg-card p-1"
+              [attr.aria-label]="'admin.branding.colour' | transloco"
+              [ngModel]="previewColour()"
+              (ngModelChange)="primaryColor.set($event)"
+            />
+            <input
+              tkInput
+              inset
+              id="brand-colour"
+              spellcheck="false"
+              autocomplete="off"
+              placeholder="#2563EB"
+              class="font-mono"
+              [ngModel]="primaryColor()"
+              (ngModelChange)="primaryColor.set($event)"
+            />
+          </div>
+        </tk-field>
+
+        <div class="mt-3 flex flex-wrap gap-2">
+          @for (swatch of swatches; track swatch) {
+            <button
+              type="button"
+              class="size-7 rounded-full border-2 border-border transition hover:scale-110"
+              [style.background]="swatch"
+              [attr.aria-label]="swatch"
+              (click)="primaryColor.set(swatch)"
+            ></button>
+          }
+        </div>
+      </tk-card>
+
+      <!-- ─────────── Words ─────────── -->
+      <tk-card [heading]="'admin.branding.copyHeading' | transloco">
+        <div class="space-y-4">
+          <tk-field
+            [label]="'admin.branding.pageTitle' | transloco"
+            for="brand-page-title"
+            [hint]="'admin.branding.pageTitleHint' | transloco"
+          >
+            <input
+              tkInput
+              inset
+              id="brand-page-title"
+              [placeholder]="workspaceName() + ' Support'"
+              [ngModel]="pageTitle()"
+              (ngModelChange)="pageTitle.set($event)"
+            />
+          </tk-field>
+
+          <tk-field
+            [label]="'admin.branding.welcomeText' | transloco"
+            for="brand-welcome"
+            [hint]="'admin.branding.welcomeTextHint' | transloco"
+          >
+            <input
+              tkInput
+              inset
+              id="brand-welcome"
+              [placeholder]="'admin.branding.previewWelcome' | transloco"
+              [ngModel]="welcomeText()"
+              (ngModelChange)="welcomeText.set($event)"
+            />
+          </tk-field>
+
+          <tk-field
+            [label]="'admin.branding.footerText' | transloco"
+            for="brand-footer"
+            [hint]="'admin.branding.footerTextHint' | transloco"
+          >
+            <input
+              tkInput
+              inset
+              id="brand-footer"
+              [ngModel]="footerText()"
+              (ngModelChange)="footerText.set($event)"
+            />
+          </tk-field>
+
+          <tk-switch [checked]="hidePoweredBy()" (checkedChange)="hidePoweredBy.set($event)" inputId="hide-powered-by">
+            {{ 'admin.branding.hidePoweredBy' | transloco }}
+          </tk-switch>
+          <p class="text-meta text-muted-foreground">{{ 'admin.branding.hidePoweredByHint' | transloco }}</p>
+        </div>
+      </tk-card>
+
+      @if (saveError(); as message) {
+        <tk-alert tone="danger">{{ message }}</tk-alert>
+      }
+
+      <tk-card flush>
+        <div class="flex flex-wrap items-center gap-3 p-4">
+          <button tkButton [disabled]="saving()" (click)="save()">
+            @if (saving()) {
+              <tk-spinner [size]="16" />
+            }
+            {{ 'common.save' | transloco }}
+          </button>
+          <!-- Where the one genuine per-widget override lives, so an admin
+               looking for "a different logo on the docs site" finds it. -->
+          <a class="text-meta font-semibold text-primary hover:underline" routerLink="/admin/widget">
+            {{ 'admin.branding.widgetLink' | transloco }}
+          </a>
+        </div>
+      </tk-card>
+    </div>
+  } @else if (branding.error()) {
+    <tk-alert tone="danger" [heading]="'admin.branding.loadFailed' | transloco">
+      {{ loadError() }}
+      <button type="button" class="ml-1 font-semibold underline" (click)="branding.reload()">
+        {{ 'common.retry' | transloco }}
+      </button>
+    </tk-alert>
+  } @else {
+    <div class="space-y-4">
+      <span tkSkeleton class="h-16 w-full"></span>
+      <span tkSkeleton class="h-64 w-full"></span>
+      <span tkSkeleton class="h-32 w-full"></span>
+    </div>
+  }
+</div>

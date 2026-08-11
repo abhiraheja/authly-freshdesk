@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource, signal 
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslocoPipe } from '@jsverse/transloco';
-import { AuthApi, PublicApi, SessionStore, errorMessage, homePathFor } from '@trackly/core';
+import { AuthApi, PublicApi, SessionStore, errorMessage, homePathFor, settled } from '@trackly/core';
 import { Alert, Button, Spinner } from '@trackly/ui';
 import { AuthLayout } from './auth-layout';
 
@@ -120,23 +120,26 @@ export class Verify {
   /**
    * The workspace's identity, with or without a slug on the link.
    *
-   * `PublicApi.branding` swallows its own failure and answers null rather than
-   * letting the resource enter the error state: `resource.value()` *throws* when
-   * it has an error, so a workspace that no longer resolves would take out the
-   * whole template — and this is the screen where that costs someone their way
-   * in. Branding is decoration; sign-in is not, and the two must not share a
-   * failure. The extra `.catch` here is belt and braces for the same reason.
+   * Three guards, all deliberate on a screen that must never fail to render:
+   * `PublicApi.branding` swallows its own failure, the loader catches anything
+   * that still escapes, and every read goes through `settled` — which is the
+   * only one of the three that survives a future refactor of the other two.
+   * `resource.value()` *throws* in the error state, so a workspace that no
+   * longer resolves would blank the whole template, and this is the screen where
+   * that costs someone their way in. Branding is decoration; sign-in is not.
    */
   private readonly branding = resource({
     params: () => ({ slug: this.workspaceSlug() }),
     loader: ({ params }) => this.publicApi.branding(params.slug).catch(() => null),
   });
 
-  protected readonly accent = computed(() => this.branding.value()?.primaryColor ?? null);
-  protected readonly brandName = computed(() => this.branding.value()?.workspaceName ?? 'Trackly');
-  protected readonly logoUrl = computed(() => this.branding.value()?.logoUrl ?? null);
-  protected readonly signInImageUrl = computed(() => this.branding.value()?.signInImageUrl ?? null);
-  protected readonly hidePoweredBy = computed(() => this.branding.value()?.hidePoweredBy ?? false);
+  private readonly loaded = settled(() => this.branding);
+
+  protected readonly accent = computed(() => this.loaded()?.primaryColor ?? null);
+  protected readonly brandName = computed(() => this.loaded()?.workspaceName ?? 'Trackly');
+  protected readonly logoUrl = computed(() => this.loaded()?.logoUrl ?? null);
+  protected readonly signInImageUrl = computed(() => this.loaded()?.signInImageUrl ?? null);
+  protected readonly hidePoweredBy = computed(() => this.loaded()?.hidePoweredBy ?? false);
 
   /** The only thing that spends the token, and only from a real click. */
   protected async confirm(): Promise<void> {
