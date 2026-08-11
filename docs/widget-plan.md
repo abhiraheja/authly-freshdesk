@@ -669,7 +669,7 @@ Each is independently shippable and leaves the existing widget working.
 | 4 ✅ | `/widget.js` rewritten: `initChatWidget`, open/close/identify, branded launcher, postMessage handshake, back-compat path | The snippet in § 7.1 works on a plain HTML page |
 | 5 ✅ | Angular customer surface `/widget/:token` (home, details form, thread, closed section) | Four states each, brand-coloured, light |
 | 6 ✅ | Angular admin `/admin/widget` list + Configuration/Branding/Integration tabs with live preview; `/admin/settings/branding` route and nav entry removed (§ 4.2) | React `WidgetPage.tsx` is no longer reachable and branding is editable in exactly one place |
-| 7 | Docs | § 11 |
+| 7 ✅ | Docs — the rework folded back into `trackly-plan.md`, the trust rule promoted to an invariant | § 11 |
 
 Phase 6 shipped with `scripts/verify-widget-phase6.ps1` — 19 assertions. The
 done-when's second half is checked from **both** ends, because "editable in
@@ -857,22 +857,37 @@ pre-reshape row and migrating forward: it gains a 12-char token, the workspace's
 name, and `is_active` / `show_widget_form` / `show_close_button` /
 `show_send_button` all **true**, so a live embed does not go dark on upgrade.
 
-## 11. Docs to update as phases land
+## 11. Docs — done ✅
 
-- **`docs/trackly-plan.md`** § Embeddable Widget & Integration Options — new
-  schema, the endpoint table, and the trust rule (§ 3.3), which belongs beside
-  the invariants rather than in a working file. Its **§ Branding** section needs
-  the § 4.2 split recorded too: the record stays workspace-level, the screen
-  moves, and the widget may override the colour.
-- **`docs/admin-guide.md`** — § 11 gets multiple widgets, the Configuration /
-  Branding / Integration tabs, what identity verification is for and how a
-  developer signs the JWT, and allowed domains. **§ 10 (branding) must be
-  rewritten to point at the widget screen**, and the "Admin ▾" nav table near the
-  end of the guide loses its Branding row — an admin following the current text
-  would look for a screen that no longer exists.
-- **`docs/go-live.md`** — the new public endpoints that must be reachable over
-  HTTPS, the secret-key rotation story, and the `frame-ancestors` caveat in
-  § 9.2.
+`docs/admin-guide.md` and `docs/go-live.md` were kept in step as phases 4–6
+landed, so phase 7 was mostly one large gap plus one promotion.
+
+- **`docs/trackly-plan.md` § Embeddable Widget & Integration Options — rewritten.**
+  This was the gap. It still described the pre-rework design: one widget per
+  workspace (`workspace_id … UNIQUE`), a `data-workspace="acme"` snippet, three
+  embed types and a `fields` JSONB — a reader taking the canonical plan at its
+  word would have built the wrong thing. It now carries the real schema of all
+  three tables, the public endpoint table, the CORS reasoning, the hub, and why
+  there is no stored `unread_count`. The legacy `embed_type` / `fields` / `theme`
+  columns are recorded as *kept deliberately* rather than quietly omitted, since
+  old snippets still round-trip through them.
+- **The trust rule is now invariant 10, in `CLAUDE.md`.** § 11 asked for it
+  "beside the invariants", and that is where the numbered list actually lives —
+  `trackly-plan.md` only ever cites them by number. It earned the promotion: it
+  is a security boundary of the same kind as invariant 5, it is enforced in two
+  places (`WidgetPublicService` and `WidgetHubRealtime`), and while it lived only
+  in this working file it was a design note rather than a rule.
+- **`docs/trackly-plan.md` § 6 Workspace Branding — repointed.** It named
+  `/admin/settings/branding`, a screen that no longer exists. Now records the
+  § 4.2 split: record stays workspace-level, screen moved to the widget's
+  Branding tab, colour is the one genuine per-widget override.
+- **`docs/admin-guide.md`** — already done. § 11 covers multiple widgets, the
+  three tabs, identity verification and allowed domains; § 10 points at the
+  widget screen; the "Admin ▾" table has no Branding row.
+- **`docs/go-live.md`** — already done. Public endpoints, secret-key rotation
+  with its no-overlap-window warning, and the `frame-ancestors` caveat (nginx
+  cannot know the per-widget list, so `allowed_origins` is the only enforcement
+  and an unlisted site gets an inert panel rather than no panel).
 
 ---
 

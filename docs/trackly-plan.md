@@ -1271,45 +1271,164 @@ CREATE TABLE notification_settings (
 
 ## Embeddable Widget & Integration Options
 
-> The widget is being reworked into a token-addressed, multi-widget surface that
-> creates contact records and shows a visitor their own conversation history.
-> See `docs/widget-plan.md` for the full design; fold it back into this section
-> as each phase lands.
+The widget is a **conversation surface**, not an embedded submit form. A visitor
+raises a conversation, an agent replies, and the visitor sees the reply in the
+same panel on their next visit — which means the widget has to know who it is
+talking to, and that single requirement is what shapes everything below.
 
-Admin configures at `/admin/widget`. Three embed types:
+Design detail and phase history live in `docs/widget-plan.md`. This section is
+the canonical record of what shipped.
 
-| Type | How it works |
-|------|-------------|
-| Floating button | `<script>` tag — renders button + overlay on any page |
-| Inline iframe | `<iframe>` snippet — renders form inline |
-| Direct link | Standalone URL — no code needed |
+### Many widgets per workspace
 
-Admin configures which fields to show/hide/require/pre-fill. Trackly generates the embed snippet automatically:
+A workspace runs as many widgets as it has places to embed one — a marketing
+site, a signed-in app, a staging environment — because each wants its own
+greeting, its own routing team, and above all its own revocable token. Each is
+addressed by a **public token**, never by a workspace slug:
 
 ```html
-<script
-  src="https://trackly.yourdomain.com/widget.js"
-  data-workspace="acme"
-  data-fields="name,email,subject,description"
-  data-theme="light"
-  data-user-name="Alice Smith"
-  data-user-email="alice@acme.com"
-></script>
+<script src="https://support.acme.com/widget.js" defer></script>
+<script>
+  initChatWidget({ token: 'wmz967mfehyt' });
+</script>
 ```
 
-Pre-filled fields can be hidden. The SSO button inside the widget initiates the workspace's configured provider. OTP is still triggered for pre-filled email unless the parent app passes a verified Trackly session token.
+The token sits in the page source of every embedding site, so it is treated as
+public: it *names* a widget and authorises nothing. Unguessability would buy
+nothing and readability buys a lot, so it is lowercase alphanumeric with the
+ambiguous glyphs removed — it survives being read aloud or retyped from a
+screenshot.
+
+The loader holds no credential at all. It creates the iframe, relays
+`postMessage`, and paints a launcher; the panel inside obtains its own
+server-issued visitor token. A script tag on a page Trackly does not control has
+nothing worth stealing.
+
+### The trust rule
+
+**This belongs with the invariants.** The panel shows a visitor their
+conversation history, so what counts as proof of identity is a security boundary,
+not a UX preference:
+
+- An **unverified** visitor sees only conversations raised **from that browser**
+  — scoped by `tickets.widget_visitor_id`.
+- A **verified** visitor sees everything belonging to their contact record —
+  scoped by `tickets.requester_id`, including tickets that never came through a
+  widget.
+
+A visitor becomes verified one of two ways: the embedding site's **server** signs
+a JWT with the widget's secret key, or the visitor confirms a code emailed to
+them. A typed-in email address is never enough — if it were, anyone could type a
+colleague's address and read their support history.
+
+Enforced server-side in `WidgetPublicService`, as two separate query builders
+(`OwnConversations` / `ContactConversations`) rather than one with a flag, so
+that reaching the wider scope requires having proved the wider claim.
+
+### Schema
 
 ```sql
+-- Reshaped: was one row per workspace, now one row per embed.
 CREATE TABLE widget_configs (
-    id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id UUID NOT NULL UNIQUE REFERENCES workspaces(id),
-    embed_type   TEXT NOT NULL DEFAULT 'floating',
-    fields       JSONB NOT NULL,
-    theme        TEXT NOT NULL DEFAULT 'light',
-    created_at   TIMESTAMPTZ DEFAULT now(),
-    updated_at   TIMESTAMPTZ DEFAULT now()
+    id            UUID PRIMARY KEY,
+    workspace_id  UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    public_token  TEXT NOT NULL UNIQUE,        -- addresses the widget; public
+    name          TEXT NOT NULL,
+    tagline       TEXT,
+    greeting      TEXT,
+    team_id       UUID REFERENCES teams(id) ON DELETE SET NULL,
+    primary_color TEXT,                        -- overrides workspace branding
+    -- Launch defaults; an embedding page may override any of them per page.
+    hide_launcher              BOOLEAN NOT NULL DEFAULT false,
+    launch_widget              BOOLEAN NOT NULL DEFAULT false,
+    show_widget_form           BOOLEAN NOT NULL DEFAULT true,
+    show_send_button           BOOLEAN NOT NULL DEFAULT true,
+    show_close_button          BOOLEAN NOT NULL DEFAULT true,
+    -- Identity + access
+    identity_verification_enabled BOOLEAN NOT NULL DEFAULT false,
+    secret_key_encrypted       TEXT,           -- AES-256-GCM (invariant 3)
+    require_email_verification BOOLEAN NOT NULL DEFAULT false,
+    allowed_origins            TEXT,           -- newline-separated; empty = any
+    is_active                  BOOLEAN NOT NULL DEFAULT true,
+    -- Legacy submit-form embed, still driving the Integration tab.
+    embed_type TEXT NOT NULL DEFAULT 'floating',  -- floating | inline | link
+    fields     TEXT NOT NULL,                     -- JSON: which fields to show
+    theme      TEXT NOT NULL DEFAULT 'light',     -- accepted and ignored
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
+
+-- One row per browser that has opened a widget. The panel's identity.
+CREATE TABLE widget_visitors (
+    id                 UUID PRIMARY KEY,
+    workspace_id       UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+    widget_id          UUID NOT NULL REFERENCES widget_configs(id) ON DELETE CASCADE,
+    visitor_token_hash TEXT NOT NULL UNIQUE,   -- SHA-256 (invariant 4)
+    user_id            UUID REFERENCES users(id) ON DELETE SET NULL,
+    external_id        TEXT,                   -- the host app's own user id
+    is_verified        BOOLEAN NOT NULL,
+    name  TEXT, email TEXT, phone TEXT,        -- claimed until is_verified
+    variables    JSONB NOT NULL,               -- arbitrary host-page context
+    created_at   TIMESTAMPTZ NOT NULL,
+    last_seen_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX ON widget_visitors (widget_id, external_id);
+CREATE INDEX ON widget_visitors (workspace_id, user_id);
+
+-- The unread badge, per visitor rather than per ticket: the same conversation
+-- is unread on the phone and read on the laptop, and both are correct.
+CREATE TABLE widget_conversation_reads (
+    visitor_id   UUID NOT NULL REFERENCES widget_visitors(id) ON DELETE CASCADE,
+    ticket_id    UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+    last_read_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (visitor_id, ticket_id)
+);
+
+ALTER TABLE tickets ADD COLUMN widget_visitor_id UUID
+    REFERENCES widget_visitors(id) ON DELETE SET NULL;
 ```
+
+No `unread_count` column anywhere: it is derived per request from
+`last_read_at`, because a stored counter has to be right in every path that
+creates a message and is silently wrong forever the first time one is missed. The
+read marker never moves backwards.
+
+`embed_type` / `fields` / `theme` are the pre-rework submit-form embed. They are
+kept, not dropped: old snippets still round-trip through the Integration tab.
+`theme` is accepted and ignored — customer-facing surfaces are always light
+(invariant 6).
+
+### Public API
+
+All anonymous, all under `/api/public/widget/{token}`, all resolving the
+workspace from the token server-side and never from a client-supplied slug
+(invariant 1). The visitor token rides in an `X-Trackly-Visitor` header.
+
+| Method | Path | |
+|---|---|---|
+| GET | `config` | Branding, greeting, launch defaults, `frameUrl`. Checks `allowed_origins` |
+| POST | `session` | Starts or resumes a visitor; accepts a signed identity JWT |
+| PATCH | `session` | Visitor supplies their own name/email/phone |
+| POST | `session/verify-email` (+ `/confirm`) | The emailed-code route to verified |
+| GET/POST | `conversations` | List (scoped by the trust rule) / create, `Channel = widget` |
+| GET | `conversations/{id}` | Thread. `is_internal` comments excluded (invariant 5) |
+| POST | `conversations/{id}/messages` | Reply |
+| POST | `conversations/{id}/read` | Stamps the read marker, clearing the badge |
+| GET/POST | `conversations/{id}/attachments…` | Existing `AttachmentService` limits |
+
+**CORS.** One policy, applied to this surface alone, allowing **any** origin. That
+is safe precisely because the surface carries no ambient authority: the visitor
+token is a header the caller must already hold, never a cookie, so a hostile page
+gains nothing it could not get with `curl`. The per-widget `allowed_origins` list
+is the real boundary and is checked server-side against the `Origin` header —
+a per-widget decision a CORS policy could not express.
+
+**Real-time.** A second SignalR hub, `/hubs/widget`, one group per visitor row,
+carrying a conversation id and nothing else — the panel re-fetches through the
+endpoints above, which is where the trust rule and the private-note filter
+already live, so nothing can leak down the socket that could not leak over HTTP.
+The panel keeps a slow poll as a fallback: the push fires on a *reply*, so a
+ticket resolved without a comment still needs one.
 
 ---
 
@@ -1481,7 +1600,21 @@ The same branding is applied to: the customer portal (`/portal`), the embeddable
 
 ### 6. Workspace Branding
 
-Configured at `/admin/settings/branding` (and during onboarding Step 3):
+Configured on the **Branding tab of `/admin/widget`** (and during onboarding
+Step 3). There is no `/admin/settings/branding` screen and no Branding row in the
+admin nav — the route redirects to the widget screen.
+
+The record stayed workspace-level; only the screen moved. Two doors into one
+record is a thing an admin has to hold in their head — "which of these wins?" —
+and there was never an answer, because there was only ever one row. The tab says
+so at the top, because a branding setting reached from a widget screen invites
+exactly the wrong assumption: this logo is on the sign-in page and in the header
+of every email Trackly sends, not just on that widget.
+
+The one genuine per-widget override is colour: `widget_configs.primary_color`
+beats `workspace_branding.primary_color` for that widget alone, and clearing it
+goes back to inheriting. Colour is the setting a marketing site and an in-app
+widget actually differ on; logo and copy are not.
 
 ```sql
 CREATE TABLE workspace_branding (
@@ -1565,7 +1698,8 @@ be paired with `borderColor: 'divider'` or it falls back to `currentColor`.
 | SSO callback | `/auth/callback` | No | All |
 | Customer portal | `/portal/tickets`, `/portal/tickets/new`, `/portal/tickets/:id` | Yes | `customer` |
 | Agent dashboard | `/dashboard/tickets`, `/dashboard/tickets/:id`, `/dashboard/problems` | Yes | `agent`, `admin` |
-| Admin settings | `/admin/users`, `/admin/settings/sso`, `/admin/settings/email`, `/admin/settings/branding`, `/admin/widget`, `/admin/announcements` | Yes | `admin` |
+| Admin settings | `/admin/users`, `/admin/settings/sso`, `/admin/settings/email`, `/admin/widget` (branding is a tab on it — `/admin/settings/branding` redirects here), `/admin/announcements` | Yes | `admin` |
+| Embedded widget panel | `/widget/:token` | No — its own visitor token | Anonymous |
 
 ---
 
@@ -1708,7 +1842,15 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | POST   | `/api/invitations` | Session | admin — invite agents by email |
 | POST   | `/api/invitations/accept` | None | Accept invite via token, create account |
 | GET    | `/api/public/workspaces/{slug}/branding` | None | Public, cacheable — branding for form/widget |
-| PUT    | `/api/admin/branding` | Session | admin — update logo, colour, portal title |
+| PUT    | `/api/admin/branding` | Session | admin — update logo, colour, portal title. Edited on the widget screen's Branding tab; the record is still workspace-level |
+| GET/POST | `/api/admin/widgets` | Session | admin — list / create. A workspace has many |
+| GET/PUT/DELETE | `/api/admin/widgets/{id}` | Session | admin — one widget |
+| POST   | `/api/admin/widgets/{id}/secret` | Session | admin — regenerate the identity-signing key. Returned **once**, no overlap window |
+| POST   | `/api/admin/widgets/{id}/verify-jwt` | Session | admin — does Trackly accept this token, and who does it say the visitor is |
+| GET/PUT | `/api/admin/widget` | Session | admin — the legacy single-widget submit-form config |
+| GET    | `/api/public/workspaces/{slug}/widget` | None | Public — the legacy embed's config |
+| GET    | `/widget.js` | None | The loader. Served from the API host, runs on the customer's site |
+| *      | `/api/public/widget/{token}/…` | Visitor token | The embedded panel's whole surface — 12 endpoints, listed with their reasoning under § Embeddable Widget & Integration Options rather than repeated here |
 | GET    | `/api/public/login-methods?workspace=` | None | Which native methods are on + the providers for this surface |
 | GET    | `/api/auth/sso?workspace=&connection=` | None | Start OIDC or OAuth 2.0 for one connection |
 | GET    | `/api/auth/sso/callback` | None | One callback for both — `state` says which connection |
@@ -3005,8 +3147,12 @@ Build in this order — each phase is independently shippable and testable:
 **Phase 6 — Remaining features**
 - Problems (group tickets under a root cause, bulk-resolve), broadcast
   announcements (typed outage emails, schedule + per-recipient delivery tracking),
-  embeddable widget (`/widget.js` floating/inline/link over the branded submit
-  form), agent dashboard stats endpoint (mockup 04).
+  embeddable widget, agent dashboard stats endpoint (mockup 04).
+- The widget shipped in this phase as a `/widget.js` embed over the branded
+  submit form, then was **reworked in full** (`docs/widget-plan.md`, seven
+  phases) into the token-addressed conversation surface described under
+  § Embeddable Widget & Integration Options. Read that section, not this line:
+  the submit-form embed survives only as the legacy columns it names.
 - The admin **email settings UI** (`/admin/settings/email`) — SMTP, interaction
   mode, inbound connector (parse webhook / IMAP), and notification toggles — was
   the one place the product wasn't UI-configurable after Phase 4; it was built as
