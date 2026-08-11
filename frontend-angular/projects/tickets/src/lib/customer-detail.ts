@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, effect, inject, input, re
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import {
-  STATUS_TONE,
+  settled,
+    STATUS_TONE,
   TicketsApi,
   errorMessage,
   valueOr,
@@ -63,7 +64,7 @@ import { CustomerForm } from './customer-form';
 
     <!-- Value first: see the note in ticket-detail. A reload must not swap the
          page for a skeleton and take the open edit dialog with it. -->
-    @if (customer.value(); as person) {
+    @if (loadedCustomer(); as person) {
       <div class="grid gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
         <div class="space-y-4">
           <tk-card>
@@ -241,6 +242,10 @@ export class CustomerDetail {
   });
 
   private readonly fieldKeys = resource({ loader: () => this.api.ticketOptions('customer_field') });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedCustomer = settled(() => this.customer);
+  protected readonly loadedTickets = settled(() => this.tickets);
   protected readonly suggestedKeys = computed(() => valueOr(this.fieldKeys, []).map((o) => o.label));
 
   protected readonly editing = signal(false);
@@ -251,13 +256,13 @@ export class CustomerDetail {
   protected readonly photoError = signal<string | undefined>(undefined);
 
   protected readonly errorText = computed(() => errorMessage(this.customer.error()));
-  protected readonly ticketList = computed(() => this.tickets.value()?.items ?? []);
+  protected readonly ticketList = computed(() => this.loadedTickets()?.items ?? []);
   protected readonly displayName = computed(() => {
-    const person = this.customer.value();
+    const person = this.loadedCustomer();
     return person?.name || person?.email || '—';
   });
   protected readonly since = computed(() => {
-    const created = this.customer.value()?.createdAt;
+    const created = this.loadedCustomer()?.createdAt;
     return created ? formatDateTime(created) : '—';
   });
 
@@ -268,7 +273,7 @@ export class CustomerDetail {
   });
 
   protected readonly fields = computed(() =>
-    Object.entries(this.customer.value()?.customFields ?? {}).map(([key, value]) => ({ key, value })),
+    Object.entries(this.loadedCustomer()?.customFields ?? {}).map(([key, value]) => ({ key, value })),
   );
 
   constructor() {
@@ -276,7 +281,7 @@ export class CustomerDetail {
     // seeded once it exists — hence an effect rather than a call in openEdit().
     effect(() => {
       const form = this.form();
-      const person = this.customer.value();
+      const person = this.loadedCustomer();
       if (form && person && this.editing()) form.setFields(person.customFields);
     });
   }

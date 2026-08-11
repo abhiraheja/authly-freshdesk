@@ -3,9 +3,10 @@ import { RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
-  PROBLEM_STATUSES,
+    PROBLEM_STATUSES,
   PROBLEM_TONE,
   PRIORITY_TONE,
+  settled,
   STATUS_TONE,
   TicketsApi,
   errorMessage,
@@ -67,7 +68,7 @@ import {
       {{ 'problems.title' | transloco }}
     </a>
 
-    @if (problem.value(); as data) {
+    @if (loadedProblem(); as data) {
       <tk-page-header [title]="data.title" [subtitle]="meta()">
         <span page-actions class="flex flex-wrap items-center gap-2">
           <tk-select
@@ -217,6 +218,9 @@ export class ProblemDetail {
     loader: ({ params }) => this.api.problem(params.id),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedProblem = settled(() => this.problem);
+
   protected readonly loadError = computed(() => errorMessage(this.problem.error()));
 
   /**
@@ -233,7 +237,7 @@ export class ProblemDetail {
     // The server is the authority: a failed write reloads, and either way the
     // select follows what the problem actually says.
     effect(() => {
-      const value = this.problem.value()?.status;
+      const value = this.loadedProblem()?.status;
       if (value) this.status.set(value);
     });
   }
@@ -248,7 +252,7 @@ export class ProblemDetail {
 
   protected readonly meta = computed(() => {
     this.lang();
-    const data = this.problem.value();
+    const data = this.loadedProblem();
     if (!data) return '';
     const owner = data.assignee?.name || data.assignee?.email;
     return owner
@@ -258,7 +262,7 @@ export class ProblemDetail {
 
   protected readonly linkedCount = computed(() => {
     this.lang();
-    const count = this.problem.value()?.tickets.length ?? 0;
+    const count = this.loadedProblem()?.tickets.length ?? 0;
     return this.transloco.translate(count === 1 ? 'problems.linkedOne' : 'problems.linkedCount', { count });
   });
 
@@ -293,7 +297,7 @@ export class ProblemDetail {
    * decision, so it goes through the same confirmation as the button.
    */
   protected async pickStatus(next: string): Promise<void> {
-    const current = this.problem.value()?.status ?? '';
+    const current = this.loadedProblem()?.status ?? '';
     if (!next || next === current) return;
 
     this.status.set(next);
@@ -317,7 +321,7 @@ export class ProblemDetail {
    * blocked one would leave the problem resolved with a ticket open underneath.
    */
   protected async resolveAll(): Promise<void> {
-    const data = this.problem.value();
+    const data = this.loadedProblem();
     if (!data) return;
 
     const open = data.tickets.filter((ticket) => !isTerminalCategory(ticket.statusCategory)).length;

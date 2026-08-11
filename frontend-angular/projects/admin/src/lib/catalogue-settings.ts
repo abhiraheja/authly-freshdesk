@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource, signal 
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  TICKET_FIELD_TYPES,
+  settled,
+    TICKET_FIELD_TYPES,
   TicketsApi,
   errorMessage,
   fieldHasOptions,
@@ -73,7 +74,7 @@ import {
         @switch (tab()) {
           <!-- ── Assets ─────────────────────────────────────────────────── -->
           @case ('assets') {
-            @if (assets.value()) {
+            @if (loadedAssets()) {
               <tk-card flush>
                 <ul class="divide-y divide-border">
                   @for (asset of assetList(); track asset.id) {
@@ -146,7 +147,7 @@ import {
 
           <!-- ── Services ───────────────────────────────────────────────── -->
           @case ('services') {
-            @if (services.value()) {
+            @if (loadedServices()) {
               <tk-card flush>
                 <ul class="divide-y divide-border">
                   @for (service of serviceList(); track service.id) {
@@ -231,7 +232,7 @@ import {
               <span>{{ 'admin.catalogue.fieldsHint' | transloco }}</span>
             </p>
 
-            @if (fields.value()) {
+            @if (loadedFields()) {
               <tk-card flush>
                 <ul class="divide-y divide-border">
                   @for (field of fieldList(); track field.id) {
@@ -362,6 +363,11 @@ export class CatalogueSettings {
   protected readonly services = resource({ loader: () => this.api.services(true) });
   protected readonly fields = resource({ loader: () => this.api.ticketFields(true) });
   private readonly teams = resource({ loader: () => this.api.teams() });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedAssets = settled(() => this.assets);
+  protected readonly loadedServices = settled(() => this.services);
+  protected readonly loadedFields = settled(() => this.fields);
 
   protected readonly assetList = computed(() => valueOr(this.assets, []));
   protected readonly serviceList = computed(() => valueOr(this.services, []));

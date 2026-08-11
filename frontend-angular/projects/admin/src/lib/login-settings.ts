@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, resource, signal } from '@angular/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { AdminApi, errorMessage, type EmailTestResult } from '@trackly/core';
+import { AdminApi, errorMessage, settled, type EmailTestResult } from '@trackly/core';
 import {
   Alert,
   Button,
@@ -31,7 +31,7 @@ import {
       <h1 class="font-display text-page font-extrabold">{{ 'admin.login.title' | transloco }}</h1>
       <p class="mb-6 mt-1 text-body text-muted-foreground">{{ 'admin.login.subtitle' | transloco }}</p>
 
-      @if (settings.value(); as saved) {
+      @if (loadedSettings(); as saved) {
         <div class="space-y-4">
           <tk-card [heading]="'admin.login.methods' | transloco">
             <div class="divide-y divide-border">
@@ -150,6 +150,9 @@ export class AdminLoginSettings {
 
   protected readonly settings = resource({ loader: () => this.api.loginSettings() });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedSettings = settled(() => this.settings);
+
   protected readonly busy = signal(false);
   protected readonly testing = signal(false);
   protected readonly testResult = signal<EmailTestResult | null>(null);
@@ -162,7 +165,7 @@ export class AdminLoginSettings {
    */
   private readonly otherWorkingMethods = computed(() => {
     if (this.settings.error()) return 0;
-    const saved = this.settings.value();
+    const saved = this.loadedSettings();
     if (!saved) return 0;
     return (saved.emailLoginEnabled && saved.emailWorks ? 1 : 0) + (saved.ssoActive ? 1 : 0);
   });
@@ -171,7 +174,7 @@ export class AdminLoginSettings {
 
   protected readonly canDisableEmail = computed(() => {
     if (this.settings.error()) return false;
-    const saved = this.settings.value();
+    const saved = this.loadedSettings();
     if (!saved) return false;
     return saved.passwordLoginEnabled || saved.ssoActive;
   });

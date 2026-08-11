@@ -9,7 +9,7 @@ import {
   signal,
 } from '@angular/core';
 import { Router } from '@angular/router';
-import { NotificationsApi, timeAgo, valueOr, type AppNotification } from '@trackly/core';
+import { NotificationsApi, settled, timeAgo, valueOr, type AppNotification } from '@trackly/core';
 import { Avatar, Button, Dropdown, Icon, Spinner, type IconName } from '@trackly/ui';
 
 /** Type → icon. A static lookup; an unknown type still gets a sensible glyph. */
@@ -80,7 +80,7 @@ const POLL_MS = 60_000;
             }
           </div>
 
-          @if (feed.isLoading() && !feed.value()) {
+          @if (feed.isLoading() && !loadedFeed()) {
             <p class="flex items-center justify-center gap-2 px-2.5 py-6 text-body text-muted-foreground">
               <tk-spinner [size]="16" />
               {{ 'common.loading' | transloco }}
@@ -148,6 +148,9 @@ export class NotificationBell {
     params: () => ({ opened: this.opened() }),
     loader: ({ params }) => (params.opened ? this.api.list() : Promise.resolve([])),
   });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedFeed = settled(() => this.feed);
 
   protected readonly list = computed(() => valueOr(this.feed, []));
 

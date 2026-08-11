@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, resource, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { AdminApi, errorMessage, valueOr, type BusinessDay } from '@trackly/core';
+import { AdminApi, errorMessage, settled, valueOr, type BusinessDay } from '@trackly/core';
 import {
   Alert,
   Badge,
@@ -78,7 +78,7 @@ interface DayRow {
     Switch,
   ],
   template: `
-    @if (hours.value()) {
+    @if (loadedHours()) {
       <tk-card [heading]="'admin.hours.title' | transloco">
         <div card-actions>
           <tk-switch
@@ -218,7 +218,7 @@ interface DayRow {
     <tk-card class="mt-5" [heading]="'admin.scorecard.title' | transloco">
       <p class="mb-3 text-meta text-muted-foreground">{{ 'admin.scorecard.hint' | transloco }}</p>
 
-      @if (scorecard.value(); as rows) {
+      @if (loadedScorecard(); as rows) {
         @if (rows.length) {
           <div class="overflow-x-auto">
             <table class="w-full min-w-[520px] border-collapse text-body">
@@ -283,6 +283,10 @@ export class BusinessHoursSettings {
   protected readonly hours = resource({ loader: () => this.api.businessHours() });
   protected readonly scorecard = resource({ loader: () => this.api.slaScorecard(30) });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedHours = settled(() => this.hours);
+  protected readonly loadedScorecard = settled(() => this.scorecard);
+
   protected readonly enabled = signal(false);
   protected readonly timeZone = signal('UTC');
   protected readonly rows = signal<Record<number, DayRow>>({});
@@ -291,11 +295,11 @@ export class BusinessHoursSettings {
   protected readonly holidayName = signal('');
 
   protected readonly loadError = computed(() => errorMessage(this.hours.error()));
-  protected readonly holidays = computed(() => this.hours.value()?.holidays ?? []);
+  protected readonly holidays = computed(() => this.loadedHours()?.holidays ?? []);
 
   constructor() {
     effect(() => {
-      const saved = this.hours.value();
+      const saved = this.loadedHours();
       if (!saved) return;
       // untracked: seeds from the server, so it must run when the server answers
       // and at no other time — otherwise every keystroke resets the form.

@@ -2,12 +2,13 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource, signal 
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  AnalyticsApi,
+    AnalyticsApi,
   REWARD_METRICS,
   REWARD_PERIODS,
   REWARD_TIERS,
   errorMessage,
   isPercentageMetric,
+  settled,
   type RewardGoal,
 } from '@trackly/core';
 import {
@@ -70,7 +71,7 @@ import {
             {{ 'common.retry' | transloco }}
           </button>
         </tk-alert>
-      } @else if (goals.value()) {
+      } @else if (loadedGoals()) {
         <tk-card flush [heading]="'admin.rewards.goals' | transloco">
           <ul class="divide-y divide-border">
             @for (goal of rows(); track goal.id) {
@@ -275,7 +276,10 @@ export class RewardSettings {
   /** Retired goals included: this is the screen where they are brought back. */
   protected readonly goals = resource({ loader: () => this.api.goals(true) });
 
-  protected readonly rows = computed(() => this.goals.value() ?? []);
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedGoals = settled(() => this.goals);
+
+  protected readonly rows = computed(() => this.loadedGoals() ?? []);
   protected readonly loadError = computed(() => errorMessage(this.goals.error()));
 
   protected readonly busy = signal(false);

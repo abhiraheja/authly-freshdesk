@@ -14,7 +14,7 @@ import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { EmailApi, errorMessage, type EmailTemplateDetail } from '@trackly/core';
+import { EmailApi, errorMessage, settled, type EmailTemplateDetail } from '@trackly/core';
 import {
   Alert,
   Badge,
@@ -83,7 +83,7 @@ interface Draft {
         {{ 'admin.templates.title' | transloco }}
       </a>
 
-      @if (data.value(); as template) {
+      @if (loadedData(); as template) {
         <div class="mb-5 flex flex-wrap items-start gap-x-3 gap-y-2">
           <div class="min-w-0 flex-1">
             <h1 class="font-display text-page font-extrabold">{{ template.name }}</h1>
@@ -199,7 +199,7 @@ interface Draft {
               <tk-tabs class="mb-3" [tabs]="tabs()" [(active)]="tab" panelId="tpl-preview" />
 
               <div id="tpl-preview" role="tabpanel" [attr.aria-labelledby]="'tab-' + tab()">
-                @if (preview.value(); as rendered) {
+                @if (loadedPreview(); as rendered) {
                   @if (rendered.error) {
                     <tk-alert tone="danger" [heading]="'admin.templates.previewFailed' | transloco">{{ rendered.error }}</tk-alert>
                   } @else {
@@ -378,6 +378,10 @@ export class AdminEmailTemplateForm {
     loader: ({ params }) => this.api.previewTemplate(params.key, params.draft),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedData = settled(() => this.data);
+  protected readonly loadedPreview = settled(() => this.preview);
+
   protected readonly loadError = computed(() => errorMessage(this.data.error()));
   protected readonly previewError = computed(() => errorMessage(this.preview.error()));
 
@@ -396,12 +400,12 @@ export class AdminEmailTemplateForm {
    * anything that survived.
    */
   protected readonly frame = computed<SafeHtml>(() =>
-    this.sanitizer.bypassSecurityTrustHtml(this.preview.value()?.html ?? ''),
+    this.sanitizer.bypassSecurityTrustHtml(this.loadedPreview()?.html ?? ''),
   );
 
   constructor() {
     effect(() => {
-      const template = this.data.value();
+      const template = this.loadedData();
       if (!template) return;
       this.hydrate(template);
     });

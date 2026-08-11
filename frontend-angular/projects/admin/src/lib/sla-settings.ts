@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, resource, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { AdminApi, PRIORITY_TONE, errorMessage, toneFor, valueOr } from '@trackly/core';
+import { AdminApi, PRIORITY_TONE, errorMessage, settled, toneFor, valueOr } from '@trackly/core';
 import {
   Alert,
   Badge,
@@ -56,7 +56,7 @@ const PRIORITIES = ['urgent', 'high', 'medium', 'low'] as const;
 
       <!-- Value first, skeleton last: a reload after saving must not swap the
            table out from under an admin who is still typing. -->
-      @if (policies.value()) {
+      @if (loadedPolicies()) {
         <tk-card>
           <div class="overflow-x-auto">
             <table class="w-full min-w-[480px] border-collapse">
@@ -155,6 +155,9 @@ export class SlaSettings {
   protected readonly priorities = PRIORITIES;
 
   protected readonly policies = resource({ loader: () => this.api.slaPolicies() });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedPolicies = settled(() => this.policies);
 
   /** Hours as typed, keyed by priority. '' is a real value: no target. */
   protected readonly firstResponse = signal<Record<string, string>>({});

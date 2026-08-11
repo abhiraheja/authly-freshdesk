@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource, signal 
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { TicketsApi, errorMessage, type CannedResponse } from '@trackly/core';
+import { TicketsApi, errorMessage, settled, type CannedResponse } from '@trackly/core';
 import {
   Alert,
   Button,
@@ -57,7 +57,7 @@ import {
       </button>
     </tk-page-header>
 
-    @if (responses.value()) {
+    @if (loadedResponses()) {
       <tk-card flush>
         <div class="overflow-x-auto">
           <table tkTable hover class="min-w-[640px]">
@@ -186,7 +186,10 @@ export class CannedResponses {
   protected readonly skeletonRows = [0, 1, 2, 3];
 
   protected readonly responses = resource({ loader: () => this.api.cannedResponses() });
-  protected readonly rows = computed(() => this.responses.value() ?? []);
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedResponses = settled(() => this.responses);
+  protected readonly rows = computed(() => this.loadedResponses() ?? []);
   protected readonly loadError = computed(() => errorMessage(this.responses.error()));
 
   protected readonly editorOpen = signal(false);

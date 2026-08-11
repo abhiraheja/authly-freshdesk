@@ -6,6 +6,7 @@ import {
   EmailApi,
   errorMessage,
   formatDateTime,
+  settled,
   type EmailMode,
   type EmailProvider,
   type EmailProviderKind,
@@ -81,7 +82,7 @@ type Capability = 'all' | 'send' | 'receive';
 
       <!-- Value first, skeleton last: a reload after saving must not pull the
            page out from under whatever is being edited next. -->
-      @if (data.value(); as saved) {
+      @if (loaded(); as saved) {
         <div class="space-y-4">
           <!-- The provider bounced the browser back here with a refusal. Shown
                as an alert rather than a toast: it arrives on a page load, and a
@@ -237,7 +238,7 @@ type Capability = 'all' | 'send' | 'receive';
             }
           </tk-card>
 
-          @if (config.value(); as cfg) {
+          @if (loadedConfig(); as cfg) {
             <tk-card [heading]="'admin.email.identity' | transloco">
               <div class="grid gap-4 sm:grid-cols-2">
                 <tk-field [label]="'admin.email.fromName' | transloco" for="from-name">
@@ -333,7 +334,7 @@ type Capability = 'all' | 'send' | 'receive';
             </tk-card>
           }
 
-          @if (notifications.value(); as notif) {
+          @if (loadedNotifications(); as notif) {
             <tk-card [heading]="'admin.email.notifications' | transloco" [subheading]="'admin.email.notificationsHint' | transloco">
               <div class="divide-y divide-border">
                 @for (toggle of notificationToggles; track toggle.key) {
@@ -457,11 +458,21 @@ export class AdminEmailSettings {
 
   protected readonly errorText = computed(() => errorMessage(this.data.error()));
 
+  /**
+   * `settled()` rather than reading `value()` behind a truthiness check: one
+   * expired session cookie was enough to blank this page, because `value()`
+   * throws in the error state and the throw escaped before the
+   * `@else if (data.error())` branch below could run.
+   */
+  protected readonly loaded = settled(() => this.data);
+  protected readonly loadedConfig = settled(() => this.config);
+  protected readonly loadedNotifications = settled(() => this.notifications);
+
   /** Built once here rather than in the template, which cannot read `window`. */
   protected readonly webhookUrl = `${window.location.origin}/api/email/inbound`;
 
   protected readonly visible = computed(() => {
-    const all = this.data.value()?.providers ?? [];
+    const all = this.loaded()?.providers ?? [];
     const filter = this.capability();
     if (filter === 'all') return all;
     return all.filter((p) => (filter === 'send' ? p.canSend : p.canReceive));
@@ -469,25 +480,25 @@ export class AdminEmailSettings {
 
   /** Only a provider that is configured *and* on can be given a job. */
   protected readonly senders = computed(() =>
-    (this.data.value()?.providers ?? []).filter((p) => p.canSend && p.configured && p.enabled),
+    (this.loaded()?.providers ?? []).filter((p) => p.canSend && p.configured && p.enabled),
   );
 
   protected readonly receivers = computed(() =>
-    (this.data.value()?.providers ?? []).filter((p) => p.canReceive && p.configured && p.enabled),
+    (this.loaded()?.providers ?? []).filter((p) => p.canReceive && p.configured && p.enabled),
   );
 
   constructor() {
     this.readConnectOutcome();
 
     effect(() => {
-      const saved = this.data.value();
+      const saved = this.loaded();
       if (!saved) return;
       this.sendingProvider.set(saved.sendingProvider ?? '');
       this.receivingProvider.set(saved.receivingProvider ?? '');
     });
 
     effect(() => {
-      const cfg = this.config.value();
+      const cfg = this.loadedConfig();
       if (!cfg) return;
       this.fromName.set(cfg.fromName ?? '');
       this.fromEmail.set(cfg.fromEmail ?? '');

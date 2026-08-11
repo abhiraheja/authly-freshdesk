@@ -15,7 +15,8 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  PRIORITY_TONE,
+    PRIORITY_TONE,
+  settled,
   STATUS_TONE,
   TicketsApi,
   UiPrefsStore,
@@ -823,7 +824,7 @@ export class TicketDetailPanel {
   }
 
   private readonly ai = resource({ loader: () => this.api.aiAvailable() });
-  protected readonly aiOn = computed(() => this.ai.value()?.available === true);
+  protected readonly aiOn = computed(() => this.loadedAi()?.available === true);
   protected readonly triage = signal<TriageSuggestion | null>(null);
   protected readonly analysing = signal(false);
   protected readonly recTone = computed(() => toneFor(PRIORITY_TONE, this.triage()?.priority));
@@ -849,6 +850,9 @@ export class TicketDetailPanel {
   protected readonly suggestedFieldKeys = computed(() => valueOr(this.fieldKeys, []).map((o) => o.label));
 
   protected readonly customers = resource({ loader: () => this.api.users('customer') });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedAi = settled(() => this.ai);
 
   /** "Name (email)" — one searchable string, and the email is what disambiguates. */
   private readonly customerOptions = computed(() =>

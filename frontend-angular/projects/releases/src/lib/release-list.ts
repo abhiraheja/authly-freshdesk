@@ -3,12 +3,13 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  RELEASE_TONE,
+    RELEASE_TONE,
   ReleasesApi,
   SessionStore,
   errorMessage,
   formatDate,
   fromQueryOr,
+  settled,
   toneFor,
   type ReleaseSummary,
 } from '@trackly/core';
@@ -84,7 +85,7 @@ import {
     <tk-tabs class="mb-4" [tabs]="tabs()" [active]="view()" (activeChange)="setView($event)" panelId="release-list" />
 
     <div id="release-list" role="region" [attr.aria-label]="'releases.title' | transloco">
-      @if (releases.value()) {
+      @if (loadedReleases()) {
         <tk-card flush>
           <div class="overflow-x-auto">
             <table tkTable class="min-w-[920px]">
@@ -262,7 +263,10 @@ export class ReleaseList {
     loader: ({ params }) => this.api.list(params.view === 'all' ? undefined : params.view),
   });
 
-  protected readonly rows = computed(() => this.releases.value() ?? []);
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedReleases = settled(() => this.releases);
+
+  protected readonly rows = computed(() => this.loadedReleases() ?? []);
   protected readonly loadError = computed(() => errorMessage(this.releases.error()));
 
   protected readonly busy = signal(false);

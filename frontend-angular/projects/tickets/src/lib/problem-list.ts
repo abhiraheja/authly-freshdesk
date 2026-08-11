@@ -4,7 +4,8 @@ import { Router, RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
-  PROBLEM_TONE,
+    PROBLEM_TONE,
+  settled,
   TicketsApi,
   errorMessage,
   fromQueryOr,
@@ -78,7 +79,7 @@ const LIVE = ['investigating', 'identified', 'monitoring'];
     <tk-tabs class="mb-4" [tabs]="tabs()" [active]="view()" (activeChange)="setView($event)" panelId="problem-list" />
 
     <div id="problem-list" role="region" [attr.aria-label]="'problems.title' | transloco">
-      @if (problems.value()) {
+      @if (loadedProblems()) {
         <tk-card flush>
           <div class="overflow-x-auto">
             <table tkTable hover class="min-w-[760px]">
@@ -212,7 +213,10 @@ export class ProblemList {
 
   protected readonly problems = resource({ loader: () => this.api.problems() });
 
-  private readonly all = computed(() => this.problems.value() ?? []);
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedProblems = settled(() => this.problems);
+
+  private readonly all = computed(() => this.loadedProblems() ?? []);
   private readonly live = computed(() => this.all().filter((p) => LIVE.includes(p.status)));
   private readonly closed = computed(() => this.all().filter((p) => !LIVE.includes(p.status)));
 

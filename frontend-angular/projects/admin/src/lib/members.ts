@@ -2,10 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource, signal 
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  AdminApi,
+    AdminApi,
   SessionStore,
   errorMessage,
   formatDateTime,
+  settled,
   type AddMemberResult,
   type Member,
   type UserRole,
@@ -70,7 +71,7 @@ const ROLES: readonly UserRole[] = ['agent', 'admin', 'customer'];
       <h1 class="font-display text-page font-extrabold">{{ 'admin.members.title' | transloco }}</h1>
       <p class="mb-6 mt-1 text-body text-muted-foreground">{{ 'admin.members.subtitle' | transloco }}</p>
 
-      @if (members.value(); as rows) {
+      @if (loadedMembers(); as rows) {
         <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
           <span class="text-meta text-muted-foreground">
             {{ 'admin.members.count' | transloco: { count: rows.length } }}
@@ -254,6 +255,9 @@ export class AdminMembers {
   protected readonly roles = ROLES;
   protected readonly members = resource({ loader: () => this.api.members() });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedMembers = settled(() => this.members);
+
   protected readonly myId = computed(() => this.session.user()?.id ?? '');
   protected readonly busyId = signal<string | null>(null);
 
@@ -276,7 +280,7 @@ export class AdminMembers {
    */
   protected readonly soleAdmin = computed(() => {
     if (this.members.error()) return false;
-    const rows = this.members.value();
+    const rows = this.loadedMembers();
     if (!rows) return false;
     return rows.filter((m) => m.role === 'admin' && m.isActive).length < 2;
   });

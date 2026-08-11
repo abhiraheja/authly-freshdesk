@@ -3,7 +3,8 @@ import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe } from '@jsverse/transloco';
 import {
-  PRIORITY_TONE,
+    PRIORITY_TONE,
+  settled,
   STATUS_TONE,
   TicketsApi,
   errorMessage,
@@ -75,30 +76,30 @@ import {
         [label]="'assets.stats.total' | transloco"
         icon="hard-drive"
         tone="primary"
-        [value]="summary.value()?.total"
+        [value]="loadedSummary()?.total"
       />
       <tk-stat-card
         [label]="'assets.stats.assigned' | transloco"
         icon="user-check"
         tone="info"
-        [value]="summary.value()?.assigned"
+        [value]="loadedSummary()?.assigned"
       />
       <tk-stat-card
         [label]="'assets.stats.unassigned' | transloco"
         icon="inbox"
         tone="neutral"
-        [value]="summary.value()?.unassigned"
+        [value]="loadedSummary()?.unassigned"
       />
       <!-- The one number here that is about today rather than about inventory. -->
       <tk-stat-card
         [label]="'assets.stats.inTrouble' | transloco"
         icon="alert-triangle"
         tone="warning"
-        [value]="summary.value()?.inTrouble"
+        [value]="loadedSummary()?.inTrouble"
       />
     </div>
 
-    @if (summary.value(); as totals) {
+    @if (loadedSummary(); as totals) {
       @if (totals.total) {
         <div class="mb-4 grid gap-3 lg:grid-cols-3">
           <tk-card [heading]="'assets.byKind' | transloco">
@@ -206,7 +207,7 @@ import {
               </tr>
             </thead>
             <tbody>
-              @if (assets.isLoading() && !assets.value()) {
+              @if (assets.isLoading() && !loadedAssets()) {
                 @for (row of skeletonRows; track row) {
                   <tr><td colspan="7"><span tkSkeleton class="block h-5 w-full"></span></td></tr>
                 }
@@ -301,7 +302,7 @@ import {
 
         <h3 class="mb-2 text-body font-bold">{{ 'assets.history' | transloco }}</h3>
 
-        @if (history.value(); as tickets) {
+        @if (loadedHistory(); as tickets) {
           @if (tickets.length) {
             <ul class="divide-y divide-border">
               @for (ticket of tickets; track ticket.id) {
@@ -364,7 +365,7 @@ export class AssetRegister {
     loader: ({ params }) => this.api.assets(params.q || undefined, params.retired),
   });
 
-  protected readonly rows = computed(() => this.assets.value() ?? []);
+  protected readonly rows = computed(() => this.loadedAssets() ?? []);
   protected readonly loadError = computed(() => errorMessage(this.assets.error()));
   protected readonly searching = computed(() => this.q().trim().length > 0);
 
@@ -381,6 +382,11 @@ export class AssetRegister {
     params: () => ({ id: this.chosen()?.id ?? '' }),
     loader: ({ params }) => (params.id ? this.api.assetTickets(params.id) : Promise.resolve([])),
   });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedSummary = settled(() => this.summary);
+  protected readonly loadedAssets = settled(() => this.assets);
+  protected readonly loadedHistory = settled(() => this.history);
 
   protected readonly historyError = computed(() => errorMessage(this.history.error()));
 

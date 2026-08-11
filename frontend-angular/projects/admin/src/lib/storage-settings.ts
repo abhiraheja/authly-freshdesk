@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, resource, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { AdminApi, errorMessage, formatDateTime, type StorageProvider } from '@trackly/core';
+import { AdminApi, errorMessage, formatDateTime, settled, type StorageProvider } from '@trackly/core';
 import {
   Alert,
   Button,
@@ -54,7 +54,7 @@ import {
 
       <!-- Value first, skeleton last: reloading after a save must not swap the
            form out from under whatever the admin is typing next. -->
-      @if (config.value(); as saved) {
+      @if (loadedConfig(); as saved) {
         <div class="space-y-4">
           <tk-card [heading]="'admin.storage.provider' | transloco">
             <tk-radio-group [(value)]="provider" [ariaLabel]="'admin.storage.provider' | transloco">
@@ -263,6 +263,9 @@ export class AdminStorageSettings {
 
   protected readonly config = resource({ loader: () => this.api.storage() });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedConfig = settled(() => this.config);
+
   protected readonly provider = signal<StorageProvider>('local');
   protected readonly azureContainer = signal('');
   protected readonly gcsBucket = signal('');
@@ -303,7 +306,7 @@ export class AdminStorageSettings {
   protected readonly errorText = computed(() => errorMessage(this.config.error()));
 
   protected readonly verifiedAt = computed(() => {
-    const at = this.config.value()?.lastVerifiedAt;
+    const at = this.loadedConfig()?.lastVerifiedAt;
     return at ? formatDateTime(at) : '';
   });
 
@@ -316,7 +319,7 @@ export class AdminStorageSettings {
     // Guarded rather than read straight: resource.value() throws while the
     // resource is in its error state, and this is read from the template.
     if (this.config.error()) return false;
-    const saved = this.config.value();
+    const saved = this.loadedConfig();
     if (!saved) return false;
     return (
       this.provider() !== saved.provider ||
@@ -346,7 +349,7 @@ export class AdminStorageSettings {
     // Seeds the form from the server, and re-seeds after a save so the
     // "configured" hints and the dirty check are measured against fresh truth.
     effect(() => {
-      const saved = this.config.value();
+      const saved = this.loadedConfig();
       if (!saved) return;
       this.provider.set(saved.provider);
       this.azureContainer.set(saved.azureContainer ?? '');

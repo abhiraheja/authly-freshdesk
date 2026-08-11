@@ -12,11 +12,12 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  RELEASE_STEP_KINDS,
+    RELEASE_STEP_KINDS,
   RELEASE_TEST_TONE,
   RELEASE_TONE,
   ReleasesApi,
   SessionStore,
+  settled,
   TicketsApi,
   WorkspaceOpsApi,
   errorMessage,
@@ -692,7 +693,7 @@ export class ReleaseDetail {
   private readonly agents = resource({ loader: () => this.tickets.agents() });
   private readonly services = resource({ loader: () => this.tickets.services() });
 
-  protected readonly release = computed(() => this.detail.value() ?? null);
+  protected readonly release = computed(() => this.loadedDetail() ?? null);
   protected readonly loadError = computed(() => errorMessage(this.detail.error()));
   protected readonly agentList = computed(() => valueOr<UserSummary[]>(this.agents, []));
   protected readonly serviceList = computed(() =>
@@ -810,8 +811,12 @@ export class ReleaseDetail {
         : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 6 }),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedDetail = settled(() => this.detail);
+  protected readonly loadedTicketSearch = settled(() => this.ticketSearch);
+
   protected readonly ticketSearching = computed(() => this.ticketSearch.isLoading());
-  protected readonly ticketMatches = computed(() => this.ticketSearch.value()?.items ?? []);
+  protected readonly ticketMatches = computed(() => this.loadedTicketSearch()?.items ?? []);
 
   protected readonly cloneOpen = signal(false);
   protected readonly draftCloneVersion = signal('');

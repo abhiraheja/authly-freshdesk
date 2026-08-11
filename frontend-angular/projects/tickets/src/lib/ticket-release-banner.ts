@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, resource } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
-import { RELEASE_TONE, ReleasesApi, formatDate, toneFor, type ReleaseSummary } from '@trackly/core';
+import { RELEASE_TONE, ReleasesApi, formatDate, settled, toneFor, type ReleaseSummary } from '@trackly/core';
 import { Badge, Icon } from '@trackly/ui';
 
 /** Shipped states, in the order a reader cares about them. */
@@ -60,6 +60,9 @@ export class TicketReleaseBanner {
     loader: ({ params }) => this.api.forTicket(params.id),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedData = settled(() => this.data);
+
   /**
    * Live releases first, and only the newest finished one.
    *
@@ -68,7 +71,7 @@ export class TicketReleaseBanner {
    * only question being asked.
    */
   protected readonly releases = computed(() => {
-    const all = this.data.value() ?? [];
+    const all = this.loadedData() ?? [];
     const live = all.filter((release) => !DONE.has(release.status));
     return live.length ? live : all.slice(0, 1);
   });

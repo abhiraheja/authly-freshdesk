@@ -2,9 +2,10 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource, signal 
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import {
-  AnalyticsApi,
+    AnalyticsApi,
   IMPACT_TONE,
   PRIORITY_TONE,
+  settled,
   STATUS_TONE,
   errorMessage,
   timeAgo,
@@ -416,7 +417,7 @@ import {
               {{ 'dashboard.admin.manageGoals' | transloco }}
             </a>
           </div>
-          @if (awards.value(); as list) {
+          @if (loadedAwards(); as list) {
             @if (list.length) {
               <ul class="divide-y divide-border">
                 @for (award of list; track award.id) {
@@ -476,7 +477,11 @@ export class AdminDashboard {
 
   protected readonly awards = resource({ loader: () => this.api.awards(undefined, 12) });
 
-  protected readonly data = computed(() => this.overview.value());
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedOverview = settled(() => this.overview);
+  protected readonly loadedAwards = settled(() => this.awards);
+
+  protected readonly data = computed(() => this.loadedOverview());
   protected readonly loadError = computed(() => errorMessage(this.overview.error()));
 
   protected readonly leaderboard = computed(() => this.data()?.leaderboard ?? []);

@@ -12,11 +12,12 @@ import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
-  ChatApi,
+    ChatApi,
   PublicApi,
   SessionStore,
   errorMessage,
   fromQuery,
+  settled,
   type ChatMessage,
   type HubConnection,
 } from '@trackly/core';
@@ -72,10 +73,10 @@ interface StoredSession {
   template: `
     <tk-branded-frame
       [brandName]="brandName()"
-      [logoUrl]="branding.value()?.logoUrl ?? null"
+      [logoUrl]="loadedBranding()?.logoUrl ?? null"
       [accent]="accent()"
-      [footerText]="branding.value()?.footerText ?? ''"
-      [hidePoweredBy]="branding.value()?.hidePoweredBy ?? false"
+      [footerText]="loadedBranding()?.footerText ?? ''"
+      [hidePoweredBy]="loadedBranding()?.hidePoweredBy ?? false"
       [maxWidth]="560"
     >
       @switch (phase()) {
@@ -198,8 +199,11 @@ export class ChatVisitor {
     loader: ({ params }) => this.publicApi.branding(params.slug || 'default'),
   });
 
-  protected readonly brandName = computed(() => this.branding.value()?.workspaceName ?? '');
-  protected readonly accent = computed(() => this.branding.value()?.primaryColor ?? null);
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedBranding = settled(() => this.branding);
+
+  protected readonly brandName = computed(() => this.loadedBranding()?.workspaceName ?? '');
+  protected readonly accent = computed(() => this.loadedBranding()?.primaryColor ?? null);
 
   protected readonly phase = signal<'start' | 'chatting' | 'ended'>('start');
   protected readonly name = signal('');

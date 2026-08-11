@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource, signal 
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { EmailApi, errorMessage, formatDateTime, type EmailTemplateSummary } from '@trackly/core';
+import { EmailApi, errorMessage, formatDateTime, settled, type EmailTemplateSummary } from '@trackly/core';
 import {
   Alert,
   Badge,
@@ -65,7 +65,7 @@ import {
 
       <!-- Value first, skeleton last: a reload after a reset must not pull the
            list out from under the next click. -->
-      @if (data.value(); as all) {
+      @if (loadedData(); as all) {
         @if (all.length === 0) {
           <tk-card>
             <tk-empty-state
@@ -201,6 +201,9 @@ export class AdminEmailTemplates {
 
   protected readonly data = resource({ loader: () => this.api.templates() });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedData = settled(() => this.data);
+
   /** Blank means the signed-in admin's own address — the server fills it in. */
   protected readonly testTo = signal('');
   protected readonly busy = signal<string | null>(null);
@@ -208,8 +211,8 @@ export class AdminEmailTemplates {
 
   protected readonly errorText = computed(() => errorMessage(this.data.error()));
 
-  protected readonly layout = computed(() => this.data.value()?.find((t) => t.isLayout) ?? null);
-  protected readonly messages = computed(() => (this.data.value() ?? []).filter((t) => !t.isLayout));
+  protected readonly layout = computed(() => this.loadedData()?.find((t) => t.isLayout) ?? null);
+  protected readonly messages = computed(() => (this.loadedData() ?? []).filter((t) => !t.isLayout));
 
   protected at(value: string): string {
     return formatDateTime(value);

@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, resource, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TicketsApi, errorMessage, valueOr, type TicketOption } from '@trackly/core';
+import { TicketsApi, errorMessage, settled, valueOr, type TicketOption } from '@trackly/core';
 import {
   Alert,
   Badge,
@@ -56,7 +56,7 @@ import {
 
       <!-- Value first, skeleton last: every write reloads, and swapping the list
            for a skeleton each time would make reordering flicker once per click. -->
-      @if (panels.value()) {
+      @if (loadedPanels()) {
         <tk-card flush>
           <ul class="divide-y divide-border">
             @for (panel of list(); track panel.id; let index = $index, last = $last) {
@@ -158,6 +158,9 @@ export class TicketLayoutSettings {
   protected readonly panels = resource({
     loader: () => this.api.ticketOptions('ticket_panel', true),
   });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedPanels = settled(() => this.panels);
 
   protected readonly busy = signal(false);
   protected readonly renaming = signal<string | null>(null);

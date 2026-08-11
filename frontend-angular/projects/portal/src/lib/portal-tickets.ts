@@ -3,7 +3,8 @@ import { Router, RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
-  STATUS_TONE,
+  settled,
+    STATUS_TONE,
   TicketsApi,
   errorMessage,
   fromQueryOr,
@@ -67,7 +68,7 @@ const PAGE_SIZE = 100;
     <tk-tabs class="mb-4" [tabs]="tabs()" [active]="view()" (activeChange)="setView($event)" panelId="portal-tickets" />
 
     <div id="portal-tickets" role="region" [attr.aria-label]="'portal.tickets.title' | transloco">
-      @if (tickets.value()) {
+      @if (loadedTickets()) {
         @if (truncated()) {
           <p class="mb-3 text-meta text-muted-foreground">
             {{ 'portal.tickets.truncated' | transloco: { shown: loaded(), total: total() } }}
@@ -151,10 +152,13 @@ export class PortalTickets {
     loader: () => this.api.list({ pageSize: PAGE_SIZE }),
   });
 
-  private readonly all = computed(() => this.tickets.value()?.items ?? []);
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedTickets = settled(() => this.tickets);
+
+  private readonly all = computed(() => this.loadedTickets()?.items ?? []);
   protected readonly anyTickets = computed(() => this.all().length > 0);
   protected readonly loaded = computed(() => this.all().length);
-  protected readonly total = computed(() => this.tickets.value()?.total ?? 0);
+  protected readonly total = computed(() => this.loadedTickets()?.total ?? 0);
 
   /**
    * One page is all a portal fetches, so say so when there is more.

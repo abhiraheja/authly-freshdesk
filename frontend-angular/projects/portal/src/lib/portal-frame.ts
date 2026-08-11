@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, resource, signal } from '@angular/core';
 import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
-import { PublicApi, SessionStore } from '@trackly/core';
+import { PublicApi, SessionStore, settled } from '@trackly/core';
 import { Avatar, BrandedFrame, ConfirmHost, Icon, Toaster } from '@trackly/ui';
 
 /**
@@ -23,10 +23,10 @@ import { Avatar, BrandedFrame, ConfirmHost, Icon, Toaster } from '@trackly/ui';
   template: `
     <tk-branded-frame
       [brandName]="brandName()"
-      [logoUrl]="branding.value()?.logoUrl ?? null"
+      [logoUrl]="loadedBranding()?.logoUrl ?? null"
       [accent]="accent()"
-      [footerText]="branding.value()?.footerText ?? ''"
-      [hidePoweredBy]="branding.value()?.hidePoweredBy ?? false"
+      [footerText]="loadedBranding()?.footerText ?? ''"
+      [hidePoweredBy]="loadedBranding()?.hidePoweredBy ?? false"
     >
       <div frame-actions class="relative flex items-center gap-1">
         <!-- Chat first: it is the faster of the two, and somebody who wanted a
@@ -119,12 +119,15 @@ export class PortalFrame {
     loader: ({ params }) => (params.slug ? this.publicApi.branding(params.slug) : Promise.resolve(null)),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedBranding = settled(() => this.branding);
+
   /** The session's workspace name covers the gap while branding is in flight. */
   protected readonly brandName = computed(
-    () => this.branding.value()?.workspaceName || this.session.workspace()?.name || '',
+    () => this.loadedBranding()?.workspaceName || this.session.workspace()?.name || '',
   );
 
-  protected readonly accent = computed(() => this.branding.value()?.primaryColor ?? null);
+  protected readonly accent = computed(() => this.loadedBranding()?.primaryColor ?? null);
 
   /** Carried onto `/chat`, which is anonymous and cannot read the session. */
   protected readonly slug = computed(() => this.session.workspace()?.slug ?? '');

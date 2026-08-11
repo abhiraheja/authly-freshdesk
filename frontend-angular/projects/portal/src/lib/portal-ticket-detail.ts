@@ -3,8 +3,9 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import {
-  ATTACHMENT_ACCEPT,
+    ATTACHMENT_ACCEPT,
   MAX_ATTACHMENT_BYTES,
+  settled,
   STATUS_TONE,
   SessionStore,
   TicketsApi,
@@ -77,7 +78,7 @@ import {
       {{ 'portal.tickets.title' | transloco }}
     </a>
 
-    @if (ticket.value(); as data) {
+    @if (loadedTicket(); as data) {
       <tk-card flush>
         <header class="flex flex-wrap items-start justify-between gap-3 border-b border-border px-5 py-4 sm:px-6">
           <div class="min-w-0">
@@ -170,7 +171,7 @@ import {
             </article>
           }
 
-          @if (commentList.isLoading() && !commentList.value()) {
+          @if (commentList.isLoading() && !loadedCommentList()) {
             <div class="flex gap-3">
               <span tkSkeleton class="mt-5 size-[34px] shrink-0 rounded-full"></span>
               <span tkSkeleton class="block h-16 w-2/3 rounded-2xl"></span>
@@ -264,6 +265,10 @@ export class PortalTicketDetail {
     loader: ({ params }) => this.api.attachments(params.id),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedTicket = settled(() => this.ticket);
+  protected readonly loadedCommentList = settled(() => this.commentList);
+
   /**
    * `valueOr` on both: the thread is worth reading even if one of the two
    * secondary lists failed, and a throwing `value()` inside a template takes the
@@ -299,7 +304,7 @@ export class PortalTicketDetail {
   }
 
   protected statusTone() {
-    return toneFor(STATUS_TONE, this.ticket.value()?.statusCategory);
+    return toneFor(STATUS_TONE, this.loadedTicket()?.statusCategory);
   }
 
   protected number(): string {
@@ -307,7 +312,7 @@ export class PortalTicketDetail {
   }
 
   protected opened(): string {
-    const created = this.ticket.value()?.createdAt;
+    const created = this.loadedTicket()?.createdAt;
     return created ? formatDateTime(created) : '';
   }
 

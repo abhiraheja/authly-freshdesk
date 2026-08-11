@@ -11,7 +11,7 @@ import {
   signal,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { TicketsApi, errorMessage, valueOr, type TicketLink } from '@trackly/core';
+import { TicketsApi, errorMessage, settled, valueOr, type TicketLink } from '@trackly/core';
 import {
   Alert,
   Button,
@@ -80,7 +80,7 @@ const KIND_ICON: Record<string, IconName> = {
             {{ 'common.retry' | transloco }}
           </button>
         </tk-alert>
-      } @else if (links.isLoading() && !links.value()) {
+      } @else if (links.isLoading() && !loadedLinks()) {
         <span tkSkeleton class="h-12 w-full"></span>
       } @else {
         <ul class="space-y-2">
@@ -191,6 +191,9 @@ export class TicketLinksCard {
     params: () => ({ id: this.ticketId() }),
     loader: ({ params }) => this.api.ticketLinks(params.id),
   });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedLinks = settled(() => this.links);
 
   constructor() {
     let seen = this.version();

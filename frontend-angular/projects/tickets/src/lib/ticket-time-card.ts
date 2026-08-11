@@ -12,7 +12,8 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
-  SessionStore,
+    SessionStore,
+  settled,
   TicketsApi,
   errorMessage,
   formatDateTime,
@@ -83,7 +84,7 @@ import {
             {{ 'common.retry' | transloco }}
           </button>
         </tk-alert>
-      } @else if (entries.isLoading() && !entries.value()) {
+      } @else if (entries.isLoading() && !loadedEntries()) {
         <span tkSkeleton class="h-16 w-full"></span>
       } @else {
         <ul class="space-y-3">
@@ -198,6 +199,9 @@ export class TicketTimeCard {
     params: () => ({ id: this.ticketId() }),
     loader: ({ params }) => this.api.timeEntries(params.id),
   });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedEntries = settled(() => this.entries);
 
   constructor() {
     let seen = this.version();

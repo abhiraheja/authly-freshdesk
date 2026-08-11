@@ -3,8 +3,9 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  IMPACT_LEVELS,
+    IMPACT_LEVELS,
   SessionStore,
+  settled,
   TicketsApi,
   errorMessage,
   type Tone,
@@ -64,7 +65,7 @@ const IMPACT_TONE: Record<string, Tone> = {
     <section class="mb-6">
       <h3 class="mb-2 text-body font-bold">{{ 'tickets.assets.title' | transloco }}</h3>
 
-      @if (assets.value(); as list) {
+      @if (loadedAssets(); as list) {
         @if (list.length) {
           <ul class="mb-3 divide-y divide-border">
             @for (asset of list; track asset.id) {
@@ -153,7 +154,7 @@ const IMPACT_TONE: Record<string, Tone> = {
       <h3 class="mb-1 text-body font-bold">{{ 'tickets.services.title' | transloco }}</h3>
       <p class="mb-2 text-meta text-muted-foreground">{{ 'tickets.services.hint' | transloco }}</p>
 
-      @if (impacted.value(); as list) {
+      @if (loadedImpacted(); as list) {
         @if (list.length) {
           <ul class="mb-3 divide-y divide-border">
             @for (row of list; track row.id) {
@@ -289,6 +290,12 @@ export class TicketAssets {
     loader: ({ params }) => (params.q.length > 1 ? this.api.assets(params.q) : Promise.resolve([])),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedAssets = settled(() => this.assets);
+  protected readonly loadedImpacted = settled(() => this.impacted);
+  protected readonly loadedCatalogue = settled(() => this.catalogue);
+  protected readonly loadedAssetSearch = settled(() => this.assetSearch);
+
   protected readonly searching = computed(() => this.assetSearch.isLoading());
   protected readonly impactError = computed(() => errorMessage(this.impacted.error()));
 
@@ -300,7 +307,7 @@ export class TicketAssets {
    * gets the ordinary empty picker, not a message telling an admin to go and
    * build one.
    */
-  protected readonly catalogueEmpty = computed(() => this.catalogue.value()?.length === 0);
+  protected readonly catalogueEmpty = computed(() => this.loadedCatalogue()?.length === 0);
 
   /**
    * Only an admin can act on the message, so only an admin gets the link.
@@ -312,13 +319,13 @@ export class TicketAssets {
 
   /** Already attached is not a result — offering it again is a click that does nothing. */
   protected readonly assetMatches = computed(() => {
-    const on = new Set((this.assets.value() ?? []).map((a) => a.id));
-    return (this.assetSearch.value() ?? []).filter((a) => !on.has(a.id));
+    const on = new Set((this.loadedAssets() ?? []).map((a) => a.id));
+    return (this.loadedAssetSearch() ?? []).filter((a) => !on.has(a.id));
   });
 
   protected readonly addableServices = computed(() => {
-    const on = new Set((this.impacted.value() ?? []).map((s) => s.id));
-    return (this.catalogue.value() ?? []).filter((s) => !on.has(s.id));
+    const on = new Set((this.loadedImpacted() ?? []).map((s) => s.id));
+    return (this.loadedCatalogue() ?? []).filter((s) => !on.has(s.id));
   });
 
   protected levelTone(level: string): Tone {

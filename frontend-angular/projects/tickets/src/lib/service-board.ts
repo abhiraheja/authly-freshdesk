@@ -2,8 +2,9 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource, signal 
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import {
-  IMPACT_TONE,
+    IMPACT_TONE,
   PRIORITY_TONE,
+  settled,
   STATUS_TONE,
   TicketsApi,
   errorMessage,
@@ -101,7 +102,7 @@ import {
           {{ 'common.retry' | transloco }}
         </button>
       </tk-alert>
-    } @else if (services.isLoading() && !services.value()) {
+    } @else if (services.isLoading() && !loadedServices()) {
       <div class="grid gap-3 md:grid-cols-2">
         @for (row of skeletonRows; track row) {
           <span tkSkeleton class="block h-24 w-full rounded-xl"></span>
@@ -187,7 +188,7 @@ import {
 
         <h3 class="mb-2 text-body font-bold">{{ 'services.reportedBy' | transloco }}</h3>
 
-        @if (tickets.value(); as list) {
+        @if (loadedTickets(); as list) {
           @if (list.length) {
             <ul class="divide-y divide-border">
               @for (ticket of list; track ticket.id) {
@@ -258,7 +259,7 @@ export class ServiceBoard {
    * whatever happens to be alphabetically first.
    */
   protected readonly rows = computed(() =>
-    [...(this.services.value() ?? [])].sort(
+    [...(this.loadedServices() ?? [])].sort(
       (a, b) =>
         RANK[a.worstLevel ?? 'ok'] - RANK[b.worstLevel ?? 'ok'] ||
         b.openTicketCount - a.openTicketCount ||
@@ -275,7 +276,7 @@ export class ServiceBoard {
    * a confident `0 down` that is only true because nothing has arrived yet.
    */
   protected readonly counts = computed(() => {
-    const list = this.services.value();
+    const list = this.loadedServices();
     if (!list) return undefined;
     return {
       total: list.length,
@@ -294,6 +295,10 @@ export class ServiceBoard {
     params: () => ({ id: this.chosen()?.id ?? '' }),
     loader: ({ params }) => (params.id ? this.api.serviceTickets(params.id) : Promise.resolve([])),
   });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedServices = settled(() => this.services);
+  protected readonly loadedTickets = settled(() => this.tickets);
 
   protected readonly ticketsError = computed(() => errorMessage(this.tickets.error()));
 

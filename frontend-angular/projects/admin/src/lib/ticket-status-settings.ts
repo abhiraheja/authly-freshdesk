@@ -2,7 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource, signal 
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  STATUS_CATEGORIES,
+  settled,
+    STATUS_CATEGORIES,
   STATUS_TONE,
   TicketsApi,
   errorMessage,
@@ -80,7 +81,7 @@ import { StatusWorkflow } from './status-workflow';
       <div id="statuses-panel" role="tabpanel" [attr.aria-labelledby]="'tab-' + tab()">
         @switch (tab()) {
           @case ('workflow') {
-            @if (statuses.value()) {
+            @if (loadedStatuses()) {
               <tk-admin-status-workflow [statuses]="active()" />
             } @else {
               <span tkSkeleton class="h-80 w-full"></span>
@@ -90,7 +91,7 @@ import { StatusWorkflow } from './status-workflow';
           @default {
             <!-- Value first, skeleton last: every write reloads, and swapping in
                  a skeleton each time would make the list jump on every click. -->
-            @if (statuses.value()) {
+            @if (loadedStatuses()) {
               <p class="mb-4 flex items-start gap-2 text-meta text-muted-foreground">
                 <tk-icon name="info" [size]="14" class="mt-0.5 shrink-0" />
                 <span>{{ 'admin.statuses.categoryHint' | transloco }}</span>
@@ -283,6 +284,9 @@ export class TicketStatusSettings {
   protected readonly statuses = resource({
     loader: () => this.api.ticketStatuses(true),
   });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedStatuses = settled(() => this.statuses);
 
   protected readonly tab = signal('statuses');
   protected readonly busy = signal(false);

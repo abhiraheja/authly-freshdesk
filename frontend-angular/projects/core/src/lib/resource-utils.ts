@@ -1,3 +1,5 @@
+import { computed, type Signal } from '@angular/core';
+
 /**
  * The value of a resource, or a fallback when it has none.
  *
@@ -21,4 +23,37 @@ export function valueOr<T>(
 ): NonNullable<T> {
   if (ref.error()) return fallback;
   return (ref.value() ?? fallback) as NonNullable<T>;
+}
+
+/**
+ * The resource's value once it has settled, or `undefined` — never a throw.
+ *
+ * For the resource a screen *is* about, where the fallback is a branch rather
+ * than a value:
+ *
+ * ```html
+ * @if (loaded(); as ticket) { … } @else if (res.error()) { …retry… } @else { …skeleton… }
+ * ```
+ *
+ * Written the obvious way — `@if (res.value(); as ticket)` — that error branch is
+ * unreachable. `value()` throws in the error state (Angular's `ResourceValueError`),
+ * and a throw while evaluating an `@if` condition escapes change detection and
+ * takes the whole render down, so one failed request blanks the page instead of
+ * showing the message written for exactly that case. `defaultValue` does not help;
+ * it is not consulted once the resource has settled into an error.
+ *
+ * Reads `error()` first so `value()` is only touched when it is safe to touch.
+ *
+ * Takes a **thunk**, not the resource: `settled(() => this.ticket)`. A class field
+ * that read `this.ticket` eagerly would have to be declared after the resource it
+ * wraps, and field order is a silent trap — get it wrong and you capture
+ * `undefined` with no error until the screen renders.
+ */
+export function settled<T>(
+  ref: () => { value: () => T | undefined; error: () => unknown },
+): Signal<T | undefined> {
+  return computed(() => {
+    const res = ref();
+    return res.error() ? undefined : res.value();
+  });
 }

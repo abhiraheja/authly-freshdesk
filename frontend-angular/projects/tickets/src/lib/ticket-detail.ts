@@ -14,9 +14,10 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  ATTACHMENT_ACCEPT,
+    ATTACHMENT_ACCEPT,
   MAX_ATTACHMENT_BYTES,
   PRIORITY_TONE,
+  settled,
   STATUS_TONE,
   SessionStore,
   TicketsApi,
@@ -150,7 +151,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
          piece of state inside it, including an open dialog the agent was
          halfway through filling in. The skeleton is for the first load only,
          which is exactly "there is no value yet". -->
-    @if (ticket.value(); as data) {
+    @if (loadedTicket(); as data) {
       <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div class="min-w-0 space-y-4">
           <!-- Above the header, because it changes whether the header's Resolve
@@ -581,7 +582,7 @@ const CHANNEL_ICON: Record<string, IconName> = {
         [status]="resolveCategory()"
         [saving]="resolveSaving()"
         [error]="resolveError()"
-        [preview]="preview.value() ?? null"
+        [preview]="loadedPreview() ?? null"
         [previewLoading]="preview.isLoading()"
         (confirmed)="applyResolution($event)"
       />
@@ -655,13 +656,13 @@ export class TicketDetail {
 
   /** Tone comes from the category; the words come from the workspace. */
   protected readonly statusTone = computed(() =>
-    toneFor(STATUS_TONE, this.ticket.value()?.statusCategory),
+    toneFor(STATUS_TONE, this.loadedTicket()?.statusCategory),
   );
-  protected readonly statusLabel = computed(() => this.ticket.value()?.statusName ?? '');
+  protected readonly statusLabel = computed(() => this.loadedTicket()?.statusName ?? '');
 
   /** Resolved or closed — the work is over. */
   protected readonly finished = computed(() =>
-    isTerminalCategory(this.ticket.value()?.statusCategory ?? ''),
+    isTerminalCategory(this.loadedTicket()?.statusCategory ?? ''),
   );
 
   /**
@@ -672,7 +673,7 @@ export class TicketDetail {
    * the next set of legal moves depends on where it just landed.
    */
   private readonly reachableStatuses = resource({
-    params: () => ({ from: this.ticket.value()?.status ?? '' }),
+    params: () => ({ from: this.loadedTicket()?.status ?? '' }),
     loader: ({ params }) =>
       params.from ? this.api.reachableStatuses(params.from) : Promise.resolve([]),
   });
@@ -744,9 +745,9 @@ export class TicketDetail {
    * request that has to reflect literally any change.
    */
   protected readonly activityVersion = signal(0);
-  protected readonly priorityTone = computed(() => toneFor(PRIORITY_TONE, this.ticket.value()?.priority));
+  protected readonly priorityTone = computed(() => toneFor(PRIORITY_TONE, this.loadedTicket()?.priority));
   protected readonly channelIcon = computed(
-    () => CHANNEL_ICON[this.ticket.value()?.channel?.toLowerCase() ?? ''] ?? 'globe',
+    () => CHANNEL_ICON[this.loadedTicket()?.channel?.toLowerCase() ?? ''] ?? 'globe',
   );
 
   /**
@@ -755,17 +756,17 @@ export class TicketDetail {
    * customer", and hunting amber bubbles out of a long thread is the slow way.
    */
   protected readonly visibleComments = computed(() => {
-    const all = this.comments.value() ?? [];
+    const all = this.loadedComments() ?? [];
     if (this.threadTab() === 'notes') return all.filter((comment) => comment.isInternal);
     return all;
   });
 
-  protected readonly allAttachments = computed(() => this.toItems(this.attachments.value() ?? []));
+  protected readonly allAttachments = computed(() => this.toItems(this.loadedAttachments() ?? []));
 
   protected readonly threadTabs = computed<TabItem[]>(() => {
     this.lang();
-    const notes = (this.comments.value() ?? []).filter((comment) => comment.isInternal).length;
-    const ticket = this.ticket.value();
+    const notes = (this.loadedComments() ?? []).filter((comment) => comment.isInternal).length;
+    const ticket = this.loadedTicket();
     return [
       { id: 'conversation', label: this.transloco.translate('tickets.detail.tabConversation') },
       { id: 'notes', label: this.transloco.translate('tickets.detail.tabNotes'), count: notes || undefined },
@@ -816,7 +817,7 @@ export class TicketDetail {
    * and one that interrupts a standup.
    */
   protected readonly attachedChips = computed(() => {
-    const ticket = this.ticket.value();
+    const ticket = this.loadedTicket();
     if (!ticket) return [];
 
     const chips: { key: string; icon: IconName; labelKey: string; count: number; tone: string }[] = [];
@@ -877,7 +878,7 @@ export class TicketDetail {
 
   /** Only files hung off the ticket itself; a comment renders its own. */
   protected readonly ticketAttachments = computed(() =>
-    this.toItems((this.attachments.value() ?? []).filter((file) => file.commentId === null)),
+    this.toItems((this.loadedAttachments() ?? []).filter((file) => file.commentId === null)),
   );
 
   /**
@@ -890,7 +891,7 @@ export class TicketDetail {
    */
   private readonly commentAttachments = computed(() => {
     const byComment = new Map<string, AttachmentItem[]>();
-    for (const comment of this.comments.value() ?? [])
+    for (const comment of this.loadedComments() ?? [])
       byComment.set(comment.id, this.toItems(comment.attachments));
     return byComment;
   });
@@ -903,7 +904,7 @@ export class TicketDetail {
     // The server is the authority on status: automation can move a ticket on
     // its own, and a failed write reloads. Either way the select follows.
     effect(() => {
-      const status = this.ticket.value()?.status;
+      const status = this.loadedTicket()?.status;
       if (status) this.statusValue.set(status);
     });
   }
@@ -920,12 +921,12 @@ export class TicketDetail {
   }
 
   protected readonly requesterName = computed(() => {
-    const t = this.ticket.value();
+    const t = this.loadedTicket();
     return t?.requester?.name || t?.requester?.email || t?.guestName || t?.guestEmail || 'Guest';
   });
 
-  protected readonly opened = computed(() => timeAgo(this.ticket.value()?.createdAt ?? ''));
-  protected readonly createdAt = computed(() => formatDateTime(this.ticket.value()?.createdAt ?? ''));
+  protected readonly opened = computed(() => timeAgo(this.loadedTicket()?.createdAt ?? ''));
+  protected readonly createdAt = computed(() => formatDateTime(this.loadedTicket()?.createdAt ?? ''));
   /**
    * Says who will read it, in the field they are about to type into.
    *
@@ -992,6 +993,12 @@ export class TicketDetail {
   /** Read from the template: an empty menu has to say WHY it is empty. */
   protected readonly canned = resource({ loader: () => this.api.cannedResponses() });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedTicket = settled(() => this.ticket);
+  protected readonly loadedComments = settled(() => this.comments);
+  protected readonly loadedAttachments = settled(() => this.attachments);
+  protected readonly loadedPreview = settled(() => this.preview);
+
   /**
    * The workspace's snippets, for the ⚡ button.
    *
@@ -1057,7 +1064,7 @@ export class TicketDetail {
    * and the whole point is to save that conversation.
    */
   protected flagTitle(): string {
-    const ticket = this.ticket.value();
+    const ticket = this.loadedTicket();
     if (!ticket?.flaggedAt) return this.transloco.translate('tickets.flag.flag');
     return ticket.flagReason
       ? `${this.transloco.translate('tickets.flag.flagged')}: ${ticket.flagReason}`
@@ -1216,7 +1223,7 @@ export class TicketDetail {
   protected async escalate(): Promise<void> {
     const options = await this.api.ticketOptions('priority');
     const top = options.at(-1);
-    if (top && top.value !== this.ticket.value()?.priority) {
+    if (top && top.value !== this.loadedTicket()?.priority) {
       await this.update({ priority: top.value });
     }
   }
@@ -1314,7 +1321,7 @@ export class TicketDetail {
   /** Cancelled or dismissed: put the select back on the server's value. */
   protected onResolveClosed(open: boolean): void {
     if (open) return;
-    const status = this.ticket.value()?.status;
+    const status = this.loadedTicket()?.status;
     if (status) this.statusValue.set(status);
   }
 

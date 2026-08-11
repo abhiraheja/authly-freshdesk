@@ -14,7 +14,8 @@ import { FormsModule } from '@angular/forms';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  PRIORITY_TONE,
+    PRIORITY_TONE,
+  settled,
   STATUS_TONE,
   SessionStore,
   TicketsApi,
@@ -219,7 +220,7 @@ function orUndefined(values: string[]): string[] | undefined {
         >
           <tk-option value="" [label]="'tickets.allAssignees' | transloco" />
           <tk-option [value]="unassignedValue" [label]="'tickets.unassigned' | transloco" />
-          @for (agent of agents.value() ?? []; track agent.id) {
+          @for (agent of loadedAgents() ?? []; track agent.id) {
             <tk-option [value]="agent.id" [label]="agent.name || agent.email || ''" />
           }
         </tk-select>
@@ -266,7 +267,7 @@ function orUndefined(values: string[]): string[] | undefined {
       @if (selectedCount()) {
         <tk-ticket-bulk-bar
           [count]="selectedCount()"
-          [agents]="agents.value() ?? []"
+          [agents]="loadedAgents() ?? []"
           [busy]="bulkBusy()"
           [canDelete]="isAdmin()"
           (commanded)="onBulk($event)"
@@ -503,7 +504,7 @@ function orUndefined(values: string[]): string[] | undefined {
                             <tk-icon name="user-plus" [size]="16" />
                           </button>
                           <div dropdown-menu class="max-h-72 w-56 overflow-y-auto text-left">
-                            @for (agent of agents.value() ?? []; track agent.id) {
+                            @for (agent of loadedAgents() ?? []; track agent.id) {
                               <button
                                 type="button"
                                 class="menu-item"
@@ -615,7 +616,7 @@ function orUndefined(values: string[]): string[] | undefined {
 
     <tk-drawer [(open)]="filtersOpen" [heading]="'tickets.filters.heading' | transloco">
       <tk-ticket-facets
-        [facets]="facets.value()"
+        [facets]="loadedFacets()"
         [loading]="facets.isLoading()"
         [selected]="selectedFacets()"
         (toggled)="onFacet($event)"
@@ -691,7 +692,7 @@ export class TicketList {
   });
 
   protected readonly channelOptions = computed(() =>
-    (this.channels.value() ?? []).map((option) => ({
+    (this.loadedChannels() ?? []).map((option) => ({
       value: option.value,
       label: option.label,
     })),
@@ -863,6 +864,12 @@ export class TicketList {
         : Promise.resolve(undefined),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedAgents = settled(() => this.agents);
+  protected readonly loadedChannels = settled(() => this.channels);
+  protected readonly loadedTickets = settled(() => this.tickets);
+  protected readonly loadedFacets = settled(() => this.facets);
+
   protected openFilters(): void {
     this.facetsWanted.set(true);
     this.filtersOpen.set(true);
@@ -884,8 +891,8 @@ export class TicketList {
     return total || null;
   });
 
-  protected readonly rows = computed(() => this.tickets.value()?.items ?? []);
-  protected readonly total = computed(() => this.tickets.value()?.total ?? 0);
+  protected readonly rows = computed(() => this.loadedTickets()?.items ?? []);
+  protected readonly total = computed(() => this.loadedTickets()?.total ?? 0);
   protected readonly errorText = computed(() => errorMessage(this.tickets.error()));
 
   // ── Selection ─────────────────────────────────────────────────────────────

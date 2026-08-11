@@ -12,9 +12,10 @@ import { Router } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
-  ChatApi,
+    ChatApi,
   ChatPresence,
   errorMessage,
+  settled,
   timeAgo,
   type ChatMessage,
   type ChatSession,
@@ -91,7 +92,7 @@ import {
           {{ 'chat.active' | transloco: { count: sessions().length } }}
         </p>
 
-        @if (list.value()) {
+        @if (loadedList()) {
           <div class="max-h-[28rem] overflow-y-auto lg:max-h-[calc(100vh-19rem)]">
             @for (session of sessions(); track session.id) {
               <button
@@ -213,6 +214,9 @@ export class ChatConsole {
   /** The first load. Live arrivals are folded into `extra` rather than refetched. */
   protected readonly list = resource({ loader: () => this.api.sessions() });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedList = settled(() => this.list);
+
   /**
    * Sessions the hub told us about, and ones it told us have ended.
    *
@@ -226,7 +230,7 @@ export class ChatConsole {
   protected readonly sessions = computed(() => {
     const seen = new Set<string>();
     const ended = this.finished();
-    return [...(this.list.value() ?? []), ...this.arrived()].filter((session) => {
+    return [...(this.loadedList() ?? []), ...this.arrived()].filter((session) => {
       if (ended.has(session.id) || seen.has(session.id)) return false;
       seen.add(session.id);
       return true;

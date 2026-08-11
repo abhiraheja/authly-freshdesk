@@ -13,7 +13,7 @@ import { Router, RouterLink, RouterOutlet } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, type Event as RouterEvent } from '@angular/router';
 import { filter, map, startWith } from 'rxjs';
-import { ChatPresence, SessionStore, TicketsApi, errorMessage } from '@trackly/core';
+import { ChatPresence, SessionStore, TicketsApi, errorMessage, settled } from '@trackly/core';
 import { ThemeService } from '@trackly/core';
 import {
   Avatar,
@@ -121,6 +121,9 @@ export class Shell {
     loader: () => this.api.stats().catch(() => null),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedStats = settled(() => this.stats);
+
   /**
    * The saved-view numbers, plus the one that does not come from `/stats`.
    *
@@ -129,7 +132,7 @@ export class Shell {
    * up without the agent going anywhere. Same lookup table, two sources.
    */
   protected readonly counts = computed<Readonly<Record<string, number>>>(() => ({
-    ...((this.stats.value() as unknown as Record<string, number> | null) ?? {}),
+    ...((this.loadedStats() as unknown as Record<string, number> | null) ?? {}),
     chatWaiting: this.chat.waiting(),
   }));
 

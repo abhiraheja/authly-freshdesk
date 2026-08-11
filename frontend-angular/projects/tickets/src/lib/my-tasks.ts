@@ -3,7 +3,8 @@ import { Router, RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
-  PRIORITY_TONE,
+    PRIORITY_TONE,
+  settled,
   STATUS_TONE,
   SessionStore,
   TicketsApi,
@@ -146,7 +147,7 @@ import {
               </tr>
             </thead>
             <tbody>
-              @if (tasks.isLoading() && !tasks.value()) {
+              @if (tasks.isLoading() && !loadedTasks()) {
                 @for (row of skeletonRows; track row) {
                   <tr>
                     <td colspan="5"><span tkSkeleton class="block h-5 w-full"></span></td>
@@ -275,7 +276,10 @@ export class MyTasks {
       }),
   });
 
-  protected readonly rows = computed(() => this.tasks.value() ?? []);
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedTasks = settled(() => this.tasks);
+
+  protected readonly rows = computed(() => this.loadedTasks() ?? []);
   protected readonly loadError = computed(() => errorMessage(this.tasks.error()));
 
   /** Whether the empty list is empty because of a filter or because there is nothing. */

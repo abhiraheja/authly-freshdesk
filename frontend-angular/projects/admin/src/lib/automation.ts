@@ -2,10 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, inject, resource, signal 
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  AUTOMATION_ACTIONS,
+    AUTOMATION_ACTIONS,
   AUTOMATION_FIELDS,
   AUTOMATION_OPS,
   AUTOMATION_TRIGGERS,
+  settled,
   WorkspaceOpsApi,
   errorMessage,
   type AutomationAction,
@@ -81,7 +82,7 @@ import {
       </button>
     </tk-page-header>
 
-    @if (rules.value()) {
+    @if (loadedRules()) {
       <tk-card flush>
         <div class="overflow-x-auto">
           <table tkTable hover class="min-w-[880px]">
@@ -348,7 +349,10 @@ export class Automation {
   protected readonly actionTypes = AUTOMATION_ACTIONS;
 
   protected readonly rules = resource({ loader: () => this.api.automationRules() });
-  protected readonly rows = computed(() => this.rules.value() ?? []);
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedRules = settled(() => this.rules);
+  protected readonly rows = computed(() => this.loadedRules() ?? []);
   protected readonly loadError = computed(() => errorMessage(this.rules.error()));
 
   protected readonly busy = signal(false);

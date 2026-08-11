@@ -3,7 +3,8 @@ import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { toSignal } from '@angular/core/rxjs-interop';
 import {
-  ANNOUNCEMENT_TYPES,
+    ANNOUNCEMENT_TYPES,
+  settled,
   TicketsApi,
   WorkspaceOpsApi,
   errorMessage,
@@ -81,7 +82,7 @@ const TYPE_TONE: Record<string, Tone> = {
       </button>
     </tk-page-header>
 
-    @if (announcements.value()) {
+    @if (loadedAnnouncements()) {
       <tk-card flush>
         <div class="overflow-x-auto">
           <table tkTable class="min-w-[820px]">
@@ -254,7 +255,10 @@ export class Announcements {
   protected readonly announcements = resource({ loader: () => this.api.announcements() });
   private readonly problems = resource({ loader: () => this.tickets.problems() });
 
-  protected readonly rows = computed(() => this.announcements.value() ?? []);
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedAnnouncements = settled(() => this.announcements);
+
+  protected readonly rows = computed(() => this.loadedAnnouncements() ?? []);
   protected readonly problemList = computed(() => valueOr(this.problems, [] as ProblemSummary[]));
   protected readonly loadError = computed(() => errorMessage(this.announcements.error()));
 

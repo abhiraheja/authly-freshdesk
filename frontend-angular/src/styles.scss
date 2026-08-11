@@ -1057,6 +1057,13 @@ select.input-sm {
    and from assistive tech), so focus, the space key, form submission and the
    correct role all still come from the browser. Only the visuals are ours. */
 .control {
+  /* Not decoration — this is the containing block for the clipped input below.
+     Without it the input's containing block is the initial containing block, so
+     it is anchored to the document and does NOT move when `<main>` scrolls. It
+     then sits wherever it landed at scrollTop 0, and because clicking a label
+     focuses its control, and focusing scrolls that control into view, every
+     click on a switch or checkbox scrolled the pane back to the top. */
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 0.625rem;
@@ -1070,6 +1077,11 @@ select.input-sm {
 }
 .control-input {
   position: absolute;
+  /* Pinned to the label rather than left at its flex static position, so "scroll
+     the focused control into view" is always a no-op: the box it scrolls to is
+     inside the control the user just clicked. */
+  top: 0;
+  left: 0;
   width: 1px;
   height: 1px;
   padding: 0;

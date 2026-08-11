@@ -15,9 +15,10 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  AuthApi,
+    AuthApi,
   PublicApi,
   SessionStore,
+  settled,
   ThemeService,
   errorMessage,
   homePathFor,
@@ -62,7 +63,7 @@ type Phase = 'email' | 'code';
   template: `
     <tk-auth-layout
       [brandName]="brandName()"
-      [logoUrl]="branding.value()?.logoUrl ?? null"
+      [logoUrl]="loadedBranding()?.logoUrl ?? null"
       [accent]="accent()"
       [panelTitle]="panelTitleKey() | transloco"
       [panelBody]="'login.panel.body' | transloco"
@@ -255,7 +256,7 @@ type Phase = 'email' | 'code';
       }
 
       <ng-container auth-footer>
-        @if (accent() && !branding.value()?.hidePoweredBy) {
+        @if (accent() && !loadedBranding()?.hidePoweredBy) {
           <span>{{ 'common.poweredBy' | transloco }}</span>
         }
       </ng-container>
@@ -286,8 +287,8 @@ export class Login {
       params.slug ? this.publicApi.branding(params.slug) : Promise.resolve(null),
   });
 
-  protected readonly accent = computed(() => this.branding.value()?.primaryColor ?? null);
-  protected readonly brandName = computed(() => this.branding.value()?.workspaceName ?? 'Trackly');
+  protected readonly accent = computed(() => this.loadedBranding()?.primaryColor ?? null);
+  protected readonly brandName = computed(() => this.loadedBranding()?.workspaceName ?? 'Trackly');
 
   /**
    * Which methods to offer.
@@ -302,8 +303,12 @@ export class Login {
     loader: ({ params }) => this.auth.loginMethods(params.slug),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedBranding = settled(() => this.branding);
+  protected readonly loadedMethods = settled(() => this.methods);
+
   /** Already filtered for this surface by the server — render them all. */
-  protected readonly providers = computed(() => this.methods.value()?.ssoProviders ?? []);
+  protected readonly providers = computed(() => this.loadedMethods()?.ssoProviders ?? []);
 
   protected readonly phase = signal<Phase>('email');
   protected readonly email = signal('');
@@ -329,8 +334,8 @@ export class Login {
    * does not appear a beat after the form — a field that pops in under the
    * cursor is worse than one that turns out to be unnecessary.
    */
-  protected readonly passwordAvailable = computed(() => this.methods.value()?.passwordLoginEnabled ?? true);
-  protected readonly emailAvailable = computed(() => this.methods.value()?.emailLoginEnabled ?? true);
+  protected readonly passwordAvailable = computed(() => this.loadedMethods()?.passwordLoginEnabled ?? true);
+  protected readonly emailAvailable = computed(() => this.loadedMethods()?.emailLoginEnabled ?? true);
 
   /**
    * Whether the email form is worth showing at all. Both native methods can be
@@ -350,7 +355,7 @@ export class Login {
 
   /** One key per whole sentence; the workspace name travels as a parameter. */
   protected readonly headlineKey = computed(() =>
-    this.branding.value()?.workspaceName ? 'login.signInTo' : 'login.signIn',
+    this.loadedBranding()?.workspaceName ? 'login.signInTo' : 'login.signIn',
   );
 
   /**
@@ -359,7 +364,7 @@ export class Login {
    */
   protected readonly subhead = computed(() => {
     this.lang();
-    return this.branding.value()?.welcomeText || this.transloco.translate('login.welcomeBack');
+    return this.loadedBranding()?.welcomeText || this.transloco.translate('login.welcomeBack');
   });
 
   protected readonly panelTitleKey = computed(() => 'login.panel.signInTitle');

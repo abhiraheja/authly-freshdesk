@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, resource } from '@angular/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TicketsApi, errorMessage, formatDateTime, valueOr, type TicketActivity } from '@trackly/core';
+import { TicketsApi, errorMessage, formatDateTime, settled, valueOr, type TicketActivity } from '@trackly/core';
 import { Alert, Avatar, Icon, SkeletonDirective, type IconName } from '@trackly/ui';
 
 /**
@@ -58,7 +58,7 @@ const FALLBACK = { icon: 'circle' as IconName, tint: 'text-muted-foreground', pa
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [TranslocoPipe, Alert, Avatar, Icon, SkeletonDirective],
   template: `
-    @if (feed.value(); as entries) {
+    @if (loadedFeed(); as entries) {
       @if (entries.length) {
         <ol class="activity-feed">
           @for (entry of entries; track entry.id) {
@@ -138,6 +138,9 @@ export class TicketActivityFeed {
     params: () => ({ id: this.ticketId(), v: this.version() }),
     loader: ({ params }) => this.api.ticketActivity(params.id),
   });
+
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedFeed = settled(() => this.feed);
 
   protected readonly loadError = computed(() => errorMessage(this.feed.error()));
 

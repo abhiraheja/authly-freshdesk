@@ -1,7 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, inject, resource, signal, viewChild } from '@angular/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  SsoApi,
+  settled,
+    SsoApi,
   errorMessage,
   formatDateTime,
   type SsoCatalogueEntry,
@@ -61,7 +62,7 @@ import { SsoConnectionForm } from './sso-connection-form';
       <h1 class="font-display text-page font-extrabold">{{ 'admin.sso.title' | transloco }}</h1>
       <p class="mb-6 mt-1 text-body text-muted-foreground">{{ 'admin.sso.subtitle' | transloco }}</p>
 
-      @if (settings.value(); as saved) {
+      @if (loadedSettings(); as saved) {
         <div class="space-y-4">
           <tk-card [heading]="'admin.sso.connections' | transloco" flush>
             @if (saved.connections.length) {
@@ -195,6 +196,9 @@ export class AdminSsoSettings {
 
   protected readonly settings = resource({ loader: () => this.api.settings() });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedSettings = settled(() => this.settings);
+
   protected readonly drawerOpen = signal(false);
   protected readonly editingEntry = signal<SsoCatalogueEntry | null>(null);
   protected readonly editingConnection = signal<SsoConnection | null>(null);
@@ -215,7 +219,7 @@ export class AdminSsoSettings {
   }
 
   protected edit(connection: SsoConnection): void {
-    const entry = this.settings.value()?.catalogue.find((c) => c.provider === connection.provider);
+    const entry = this.loadedSettings()?.catalogue.find((c) => c.provider === connection.provider);
     if (!entry) return;
     this.editingConnection.set(connection);
     this.editingEntry.set(entry);

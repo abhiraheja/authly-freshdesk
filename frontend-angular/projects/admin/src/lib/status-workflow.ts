@@ -10,7 +10,7 @@ import {
   untracked,
 } from '@angular/core';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TicketsApi, errorMessage, type StatusTransition, type TicketStatus } from '@trackly/core';
+import { TicketsApi, errorMessage, settled, type StatusTransition, type TicketStatus } from '@trackly/core';
 import { Alert, Button, Card, Checkbox, Icon, SkeletonDirective, Spinner, ToastService } from '@trackly/ui';
 
 /** The "from anywhere" row. Not an id — the server stores null for it. */
@@ -49,7 +49,7 @@ const key = (from: string, to: string) => `${from}>${to}`;
   template: `
     <p class="mb-4 text-body text-muted-foreground">{{ 'admin.workflow.intro' | transloco }}</p>
 
-    @if (workflow.value()) {
+    @if (loadedWorkflow()) {
       @if (cells().size === 0) {
         <tk-alert tone="warning" class="mb-4">{{ 'admin.workflow.emptyWarning' | transloco }}</tk-alert>
       } @else if (unreachable().length) {
@@ -167,6 +167,9 @@ export class StatusWorkflow {
 
   protected readonly workflow = resource({ loader: () => this.api.workflow() });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedWorkflow = settled(() => this.workflow);
+
   /** Ticked cells, as `from>to` keys. `from` is a status id or `ANY`. */
   protected readonly cells = signal<ReadonlySet<string>>(new Set());
   /** What the server last gave us, to tell an edit from a reload. */
@@ -183,7 +186,7 @@ export class StatusWorkflow {
 
   constructor() {
     effect(() => {
-      const transitions = this.workflow.value();
+      const transitions = this.loadedWorkflow();
       if (!transitions) return;
       // untracked: this seeds the grid from the server, so it must run when the
       // server answers and at no other time. Tracking `statuses` would let a

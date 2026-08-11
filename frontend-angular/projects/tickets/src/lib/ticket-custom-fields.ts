@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, effect, inject, input, resource, signal, untracked } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TicketsApi, errorMessage, fieldHasOptions, type TicketFieldAnswer } from '@trackly/core';
+import { TicketsApi, errorMessage, fieldHasOptions, settled, type TicketFieldAnswer } from '@trackly/core';
 import {
   Alert,
   Badge,
@@ -55,7 +55,7 @@ import {
     Spinner,
   ],
   template: `
-    @if (fields.value(); as list) {
+    @if (loadedFields(); as list) {
       @if (list.length) {
         <div class="space-y-4">
           @for (field of list; track field.id) {
@@ -181,6 +181,9 @@ export class TicketCustomFields {
     loader: ({ params }) => this.api.ticketFieldAnswers(params.id),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedFields = settled(() => this.fields);
+
   /** What is on screen, keyed by field id. */
   protected readonly draft = signal<Record<string, string>>({});
   /** What the server last sent, to tell an edit from a reload. */
@@ -188,7 +191,7 @@ export class TicketCustomFields {
 
   constructor() {
     effect(() => {
-      const list = this.fields.value();
+      const list = this.loadedFields();
       if (!list) return;
       // untracked: this seeds from the server, so it must run when the server
       // answers and at no other time — tracking `draft` would reset every

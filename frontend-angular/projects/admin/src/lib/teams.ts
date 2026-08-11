@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, resource, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TicketsApi, errorMessage, valueOr, type Team, type UserSummary } from '@trackly/core';
+import { TicketsApi, errorMessage, settled, valueOr, type Team, type UserSummary } from '@trackly/core';
 import {
   Alert,
   Avatar,
@@ -77,7 +77,7 @@ import {
         }
       </tk-card>
 
-      @if (teams.value()) {
+      @if (loadedTeams()) {
         @for (team of rows(); track team.id) {
           <tk-card [heading]="team.name" [subheading]="memberCount(team)">
             <span card-actions class="flex items-center gap-1">
@@ -208,7 +208,10 @@ export class Teams {
   protected readonly teams = resource({ loader: () => this.api.teams() });
   private readonly agents = resource({ loader: () => this.api.agents() });
 
-  protected readonly rows = computed(() => this.teams.value() ?? []);
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedTeams = settled(() => this.teams);
+
+  protected readonly rows = computed(() => this.loadedTeams() ?? []);
   protected readonly loadError = computed(() => errorMessage(this.teams.error()));
 
   protected readonly draftName = signal('');

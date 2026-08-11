@@ -12,7 +12,7 @@ import {
 import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe } from '@jsverse/transloco';
-import { ATTACHMENT_ACCEPT, MAX_ATTACHMENT_BYTES, TicketsApi, errorMessage } from '@trackly/core';
+import { ATTACHMENT_ACCEPT, MAX_ATTACHMENT_BYTES, TicketsApi, errorMessage, settled } from '@trackly/core';
 import {
   Alert,
   Button,
@@ -283,17 +283,25 @@ export class TicketNew {
   private readonly teams = resource({ loader: () => this.api.teams() });
   private readonly customers = resource({ loader: () => this.api.users('customer') });
 
-  protected readonly teamList = computed(() => this.teams.value() ?? []);
-  protected readonly categoryList = computed(() => this.categories.value() ?? []);
-  protected readonly priorityOptions = computed(() => this.priorities.value() ?? []);
-  protected readonly channelOptions = computed(() => this.channels.value() ?? []);
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedCategories = settled(() => this.categories);
+  protected readonly loadedPriorities = settled(() => this.priorities);
+  protected readonly loadedChannels = settled(() => this.channels);
+  protected readonly loadedTagCatalogue = settled(() => this.tagCatalogue);
+  protected readonly loadedTeams = settled(() => this.teams);
+  protected readonly loadedCustomers = settled(() => this.customers);
+
+  protected readonly teamList = computed(() => this.loadedTeams() ?? []);
+  protected readonly categoryList = computed(() => this.loadedCategories() ?? []);
+  protected readonly priorityOptions = computed(() => this.loadedPriorities() ?? []);
+  protected readonly channelOptions = computed(() => this.loadedChannels() ?? []);
 
   /**
    * "Name (email)" reads as one searchable string, and the email is what makes
    * two people called Priya distinguishable.
    */
   private readonly customerOptions = computed(() =>
-    (this.customers.value() ?? []).map((user) => ({
+    (this.loadedCustomers() ?? []).map((user) => ({
       id: user.id,
       label: user.name ? `${user.name} (${user.email ?? ''})`.replace(' ()', '') : (user.email ?? user.id),
     })),
@@ -309,7 +317,7 @@ export class TicketNew {
 
   /** Most-used first: the tag someone wants is far likelier to be a common one. */
   protected readonly tagNames = computed(() =>
-    [...(this.tagCatalogue.value() ?? [])]
+    [...(this.loadedTagCatalogue() ?? [])]
       .sort((a, b) => b.ticketCount - a.ticketCount || a.name.localeCompare(b.name))
       .map((tag) => tag.name),
   );

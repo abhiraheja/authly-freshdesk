@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, input, resource, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
-import { TicketsApi, errorMessage, formatDate, type TicketTask, type UserSummary } from '@trackly/core';
+import { TicketsApi, errorMessage, formatDate, settled, type TicketTask, type UserSummary } from '@trackly/core';
 import {
   Alert,
   Avatar,
@@ -55,7 +55,7 @@ import {
         }
       </h3>
 
-      @if (tasks.value(); as list) {
+      @if (loadedTasks(); as list) {
         @if (list.length) {
           <ul class="mb-3 divide-y divide-border">
             @for (task of list; track task.id) {
@@ -144,7 +144,7 @@ import {
       <h3 class="mb-1 text-body font-bold">{{ 'tickets.responders.title' | transloco }}</h3>
       <p class="mb-2 text-meta text-muted-foreground">{{ 'tickets.responders.hint' | transloco }}</p>
 
-      @if (responders.value(); as list) {
+      @if (loadedResponders(); as list) {
         @if (list.length) {
           <ul class="mb-3 divide-y divide-border">
             @for (responder of list; track responder.agent.id) {
@@ -245,15 +245,19 @@ export class TicketTasks {
     loader: ({ params }) => this.api.ticketResponders(params.id),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedTasks = settled(() => this.tasks);
+  protected readonly loadedResponders = settled(() => this.responders);
+
   protected readonly taskError = computed(() => errorMessage(this.tasks.error()));
 
   protected readonly openCount = computed(
-    () => (this.tasks.value() ?? []).filter((t) => !t.completedAt).length,
+    () => (this.loadedTasks() ?? []).filter((t) => !t.completedAt).length,
   );
 
   /** Nobody already on the ticket — offering them again is a no-op that reads as a bug. */
   protected readonly addableAgents = computed(() => {
-    const on = new Set((this.responders.value() ?? []).map((r) => r.agent.id));
+    const on = new Set((this.loadedResponders() ?? []).map((r) => r.agent.id));
     return this.agents().filter((a) => !on.has(a.id));
   });
 

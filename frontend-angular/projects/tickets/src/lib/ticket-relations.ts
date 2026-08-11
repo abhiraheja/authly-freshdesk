@@ -14,8 +14,9 @@ import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  PRIORITY_TONE,
+    PRIORITY_TONE,
   RELATION_KINDS,
+  settled,
   STATUS_TONE,
   TicketsApi,
   errorMessage,
@@ -210,7 +211,7 @@ const EFFECT_CLASS: Record<RelationEffect, string> = {
       }
     }
 
-    @if (relations.value(); as list) {
+    @if (loadedRelations(); as list) {
       @if (list.length) {
         <ul class="divide-y divide-border">
           @for (relation of list; track relation.id) {
@@ -352,7 +353,7 @@ export class TicketRelations {
   protected readonly problemId = signal('');
 
   private readonly problems = resource({ loader: () => this.api.problems() });
-  protected readonly problemList = computed(() => this.problems.value() ?? []);
+  protected readonly problemList = computed(() => this.loadedProblems() ?? []);
 
   constructor() {
     effect(() => {
@@ -408,13 +409,18 @@ export class TicketRelations {
         : Promise.resolve({ items: [], total: 0, page: 1, pageSize: 8 }),
   });
 
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedProblems = settled(() => this.problems);
+  protected readonly loadedRelations = settled(() => this.relations);
+  protected readonly loadedSearch = settled(() => this.search);
+
   protected readonly searching = computed(() => this.search.isLoading());
   protected readonly loadError = computed(() => errorMessage(this.relations.error()));
 
   /** The ticket you are on, and anything already linked, are not results. */
   protected readonly matches = computed(() => {
-    const linked = new Set((this.relations.value() ?? []).map((r) => r.ticketId));
-    return (this.search.value()?.items ?? []).filter(
+    const linked = new Set((this.loadedRelations() ?? []).map((r) => r.ticketId));
+    return (this.loadedSearch()?.items ?? []).filter(
       (t) => t.id !== this.ticketId() && !linked.has(t.id),
     );
   });

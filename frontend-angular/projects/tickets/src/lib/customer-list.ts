@@ -3,7 +3,8 @@ import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-  SessionStore,
+    SessionStore,
+  settled,
   TicketsApi,
   errorMessage,
   formatDate,
@@ -79,21 +80,21 @@ import { CustomerForm } from './customer-form';
         [label]="'customers.stats.total' | transloco"
         icon="users"
         tone="primary"
-        [value]="summary.value()?.total"
+        [value]="loadedSummary()?.total"
       />
       <tk-stat-card
         [label]="'customers.stats.signedIn' | transloco"
         icon="user-check"
         tone="success"
-        [value]="summary.value()?.signedIn"
+        [value]="loadedSummary()?.signedIn"
       />
       <!-- The actionable one: they have raised tickets and never found the portal.
            Clicking it filters the list down to exactly those people. -->
       <tk-stat-card
         [label]="'customers.stats.neverSignedIn' | transloco"
         icon="user-x"
-        [tone]="(summary.value()?.neverSignedInWithTickets ?? 0) > 0 ? 'warning' : 'success'"
-        [value]="summary.value()?.neverSignedInWithTickets"
+        [tone]="(loadedSummary()?.neverSignedInWithTickets ?? 0) > 0 ? 'warning' : 'success'"
+        [value]="loadedSummary()?.neverSignedInWithTickets"
         clickable
         routerLink="/dashboard/customers"
         [queryParams]="{ signedIn: 'no' }"
@@ -102,7 +103,7 @@ import { CustomerForm } from './customer-form';
         [label]="'customers.stats.withOpen' | transloco"
         icon="folder-open"
         tone="info"
-        [value]="summary.value()?.withOpenTickets"
+        [value]="loadedSummary()?.withOpenTickets"
       />
     </div>
 
@@ -184,7 +185,7 @@ import { CustomerForm } from './customer-form';
               </tr>
             </thead>
             <tbody>
-              @if (customers.isLoading() && !customers.value()) {
+              @if (customers.isLoading() && !loadedCustomers()) {
                 @for (row of skeletonRows; track row) {
                   <tr><td colspan="7"><span tkSkeleton class="block h-5 w-full"></span></td></tr>
                 }
@@ -337,8 +338,12 @@ export class CustomerList {
       }),
   });
 
-  protected readonly rows = computed(() => this.customers.value()?.items ?? []);
-  protected readonly total = computed(() => this.customers.value()?.total ?? 0);
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedSummary = settled(() => this.summary);
+  protected readonly loadedCustomers = settled(() => this.customers);
+
+  protected readonly rows = computed(() => this.loadedCustomers()?.items ?? []);
+  protected readonly total = computed(() => this.loadedCustomers()?.total ?? 0);
   protected readonly pageNumber = computed(() => Number(this.page()) || 1);
   protected readonly loadError = computed(() => errorMessage(this.customers.error()));
 

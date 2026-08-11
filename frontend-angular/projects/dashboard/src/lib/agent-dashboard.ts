@@ -2,10 +2,11 @@ import { ChangeDetectionStrategy, Component, computed, inject, input, resource }
 import { RouterLink } from '@angular/router';
 import { TranslocoPipe } from '@jsverse/transloco';
 import {
-  AnalyticsApi,
+    AnalyticsApi,
   PRIORITY_TONE,
   errorMessage,
   isPercentageMetric,
+  settled,
   toneFor,
   type RewardProgress,
 } from '@trackly/core';
@@ -258,7 +259,7 @@ import {
             <div card-actions>
               <span class="text-meta font-bold text-muted-foreground">{{ badges }}</span>
             </div>
-            @if (awards.value(); as list) {
+            @if (loadedAwards(); as list) {
               <ul class="flex flex-wrap gap-2">
                 @for (award of list; track award.id) {
                   <li
@@ -309,7 +310,11 @@ export class AgentDashboard {
     loader: ({ params }) => this.api.awards(params.agent, 24),
   });
 
-  protected readonly data = computed(() => this.overview.value());
+  /** Never `.value()` directly: it throws in the error state and blanks the page. */
+  protected readonly loadedOverview = settled(() => this.overview);
+  protected readonly loadedAwards = settled(() => this.awards);
+
+  protected readonly data = computed(() => this.loadedOverview());
   protected readonly loadError = computed(() => errorMessage(this.overview.error()));
 
   protected readonly priorities = computed(() => this.data()?.byPriority ?? []);
