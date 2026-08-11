@@ -326,7 +326,8 @@ public class WidgetPublicService(
 
         await mailer.SendAsync(widget.WorkspaceId, email, visitor.Name, "guest_otp", new()
         {
-            ["otp"] = $"{code[..3]} {code[3..]}",
+            // Unbroken — see the note in AuthService.SendMagicLinkAsync.
+            ["otp"] = code,
             ["expiry_minutes"] = ((int)OtpLifetime.TotalMinutes).ToString(),
         }, ct);
         return true;

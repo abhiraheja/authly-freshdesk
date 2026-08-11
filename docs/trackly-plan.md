@@ -282,12 +282,23 @@ The second native method, alongside email + password. It reuses the same email-t
    (single row, both hashes stored, 10-minute expiry, single-use)
 3. Email sent: "Sign in to Acme Support"
      [ Sign in → {App:FrontendBaseUrl}/auth/verify?token=…&workspace=default ]
-     "or enter this code: 482 913"
+     "or enter this code: 482913"      ← unbroken, see below
 4a. User clicks the link → lands on a "Confirm sign-in" page →
     clicks the button (POST consumes the token)
 4b. Or types the 6-digit code on the device where they started
 5. Trackly issues a session (30 days) → redirect to portal/dashboard
 ```
+
+**The code is never split into groups, and the mail never letter-spaces it.**
+"482 913" reads better and behaves worse. A one-time code's job is to get *out*
+of the mail and into a field, and the two things that carry it are a
+double-click-and-copy and the mail client's own "copy code" / autofill chip —
+and that chip looks for a bare run of six digits. A space suppressed the one
+affordance that would have made copying unnecessary, and, because the input is
+`maxlength`-bounded, a pasted "482 913" was truncated by the browser before any
+handler could strip it: five digits, no error, nothing happens. Same rule for
+`guest_otp` and the widget's email verification. The verify endpoints still
+strip whitespace, which now only covers someone typing the space by hand.
 
 Design decisions:
 

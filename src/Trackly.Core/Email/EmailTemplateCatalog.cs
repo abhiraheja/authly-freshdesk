@@ -86,10 +86,38 @@ public static class EmailTemplateCatalog
           </table>
           """;
 
+    /// <summary>
+    /// A one-time code, built to be taken *out* of the mail.
+    ///
+    /// <para>
+    /// There is no copy button here and there cannot be one: every mail client
+    /// strips JavaScript, so nothing in an email can reach the clipboard. What
+    /// is available is three things, and this block uses all of them.
+    /// </para>
+    /// <para>
+    /// <b>No spacing, ever.</b> Not a literal space in the value, not
+    /// <c>letter-spacing</c> in the CSS. The mail client's own "copy code" chip
+    /// and the phone's autofill both look for a bare run of six digits, so
+    /// anything sitting between them is the difference between a code the device
+    /// offers to fill in and a code the reader has to retype. Monospace at 26px
+    /// is what makes it legible; the spacing was not.
+    /// </para>
+    /// <para>
+    /// <b><c>user-select:all</c></b> — a single click selects the whole code
+    /// rather than one digit, which is as close to a copy button as email gets.
+    /// Honoured by Apple Mail and the webmail clients; ignored harmlessly by the
+    /// rest, who fall back to double-click, which works because the code is one
+    /// unbroken word.
+    /// </para>
+    /// <para>
+    /// <b>Its own line, adjacent to the word "code"</b> in the sentence above it
+    /// — that adjacency is half of what the client-side detectors match on.
+    /// </para>
+    /// </summary>
     private static string Code(string variable) =>
         $$$"""
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 20px;">
-            <tr><td bgcolor="#F1F5F9" style="border-radius:6px;padding:14px 22px;font-family:'Courier New',Courier,monospace;font-size:26px;letter-spacing:5px;color:#0F172A;">{{{variable}}}</td></tr>
+            <tr><td bgcolor="#F1F5F9" style="border-radius:6px;padding:14px 22px;font-family:'Courier New',Courier,monospace;font-size:26px;font-weight:bold;color:#0F172A;-webkit-user-select:all;-moz-user-select:all;-ms-user-select:all;user-select:all;">{{{variable}}}</td></tr>
           </table>
           """;
 

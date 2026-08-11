@@ -60,7 +60,8 @@ public class GuestService(
 
         await mailer.SendAsync(workspace.Id, email, toName: null, "guest_otp", new()
         {
-            ["otp"] = $"{code[..3]} {code[3..]}",
+            // Unbroken — see the note in AuthService.SendMagicLinkAsync.
+            ["otp"] = code,
             ["expiry_minutes"] = ((int)OtpLifetime.TotalMinutes).ToString(),
         }, ct);
 

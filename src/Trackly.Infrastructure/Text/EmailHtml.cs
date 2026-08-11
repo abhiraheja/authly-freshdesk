@@ -49,6 +49,16 @@ public static partial class EmailHtml
                  })
             sanitizer.AllowedAttributes.Add(attribute);
 
+        // The library's default CSS allowlist covers unprefixed properties only,
+        // so it silently dropped the `-webkit-` form of `user-select` — and that
+        // is the one Apple Mail needs. `user-select:all` is what makes a one-time
+        // code select in a single click, which is the closest thing to a copy
+        // button an email can have, so losing it the first time an admin saved a
+        // template would have been an invisible regression in the OTP mails.
+        foreach (var property in new[]
+                 { "-webkit-user-select", "-moz-user-select", "-ms-user-select" })
+            sanitizer.AllowedCssProperties.Add(property);
+
         sanitizer.AllowedSchemes.Clear();
         sanitizer.AllowedSchemes.Add("http");
         sanitizer.AllowedSchemes.Add("https");
