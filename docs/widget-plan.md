@@ -389,6 +389,13 @@ filter already live, so nothing can leak down the socket that could not leak ove
 HTTP. `Origin` is not re-checked on the handshake — the visitor token was issued
 over an origin-checked POST and is the thing being trusted.
 
+Both credentials travel in the **query string** rather than a header, which is
+not a shortcut: `new WebSocket()` cannot set request headers, so the
+`X-Trackly-Visitor` header the REST calls use is unavailable on a handshake. The
+socket is same-origin despite the widget being an embed — the panel document is
+served by Trackly and merely *displayed* inside the host page's iframe — so the
+widget CORS policy is not involved in it at all.
+
 Every one of these authenticates by the visitor token in a header, resolves the
 workspace from `{token}` (never from a client-supplied slug), and is written so
 that dropping the visitor-token filter fails a test rather than leaking.
@@ -712,13 +719,38 @@ Three decisions the build forced:
   it throws out of change detection first. On an iframe that failure mode is a
   blank white box with no way to tell broken from loading, so the config is two
   plain signals.
-- **Polling, not SignalR — for now.** The hub landed in phase 3 and the panel
-  still uses the documented fallback: the list every 20s (which is what feeds the
-  launcher badge, so it runs even while the panel is shut) and the open thread
-  every 10s. Adding `@microsoft/signalr` is a new runtime dependency in every
-  customer-facing bundle, and it belongs to the change that ports live chat,
-  which needs the client anyway. Until then the badge is at most twenty seconds
-  late, which is the difference the fallback exists to cover.
+- **SignalR, with polling as the fallback it was always described as.** Phase 5
+  shipped on the poll alone, because `@microsoft/signalr` was a new runtime
+  dependency in a customer-facing bundle and it belonged to the change that ports
+  live chat. That change has since landed on `main`, so the client is already
+  there and the panel now connects to `/hubs/widget`. Measured end to end, an
+  agent's reply reaches an open panel in ~300ms rather than up to 20s.
+
+  Three things about the wiring are deliberate:
+
+  - **The poll does not go away, it slows down.** With the socket up the list
+    still refreshes every 120s and the thread not at all. That is not belt and
+    braces — the push fires from `NotificationService.OnReplyAsync`, so it fires
+    on a *reply*. An agent who resolves or closes a ticket without commenting
+    moves a status the panel shows, and nothing pushes. Two minutes bounds how
+    wrong that can get, at a sixth of the old request volume. With the socket
+    down the old 20s/10s cadence comes straight back.
+  - **The connection is keyed on the visitor token, not opened once at boot.**
+    Verifying an email can hand back a different token, and the hub resolves its
+    group from whichever token opened the socket — a connection left on the old
+    one would keep looking live while listening to the wrong visitor.
+  - **Nothing is rendered about it.** No connection dot, no "reconnecting"
+    banner. A visitor cannot act on a hub being down, and Trackly's operational
+    state does not belong on somebody else's storefront. The flag exists only to
+    choose the cadence above.
+
+  One structural consequence, worth knowing before someone moves it back:
+  `WidgetVisitorStore` had to leave `widget.api.ts` for its own file.
+  `widgetVisitorInterceptor` needs the store, the interceptors are reached from
+  `provideTracklyCore`, and that is eager in every app — so while the store sat
+  beside `WidgetApi`, importing SignalR into `WidgetApi` put ~56kB of it in the
+  initial bundle of every screen in Trackly. Measured, not guessed: `main` went
+  13.96kB → 70.32kB and back to 12.75kB after the split.
 
 The visitor token lives in `localStorage` keyed **per widget token**, and rides
 on `X-Trackly-Visitor` through an interceptor scoped to `/api/public/widget/`
@@ -748,6 +780,21 @@ Two smaller decisions:
 - **The loader holds no credential.** § 7.2's `visitorId` step is gone; the frame
   owns the server-issued token. A loader with nothing to steal is a loader that
   can safely be a plain script tag on a page Trackly does not control.
+
+The move to SignalR added two more probes, deliberately split by what they can
+prove. `scripts/widget-realtime-probe.mjs` drives the hub through the same client
+the panel ships — resolved out of `frontend-angular/node_modules` rather than
+re-declared, so it exercises negotiate and transport fallback rather than a
+protocol somebody wrote down — and asserts delivery, the conversation id, that an
+**internal note pushes nothing** (invariant 5, over the socket this time), and
+that a second visitor's connection sees none of it (§ 3.3).
+`scripts/widget-realtime-browser-probe.mjs` proves the other half in a real
+Chrome: the panel opens the socket, and an agent's reply lands on screen in a
+window far shorter than the fallback poll could explain.
+
+Phase 3 had only asserted that `/hubs/widget` *negotiates*. That proves the hub
+is mapped and nothing about delivery — which was harmless while the panel polled,
+and is the whole contract now that it does not.
 
 Phase 3 shipped with `scripts/verify-widget-phase3.ps1` — 62 assertions. The
 done-when is taken apart directly: two browsers on one widget, **both claiming

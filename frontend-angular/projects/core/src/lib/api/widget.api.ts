@@ -1,5 +1,7 @@
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import { HubConnectionBuilder, LogLevel, type HubConnection } from '@microsoft/signalr';
 import { ApiService } from './api.service';
+import { TRACKLY_CONFIG } from '../core.config';
 
 // ---- Wire types ------------------------------------------------------------
 // These mirror the DTOs in src/Trackly.Modules/Widgets. Keep them in step.
@@ -102,51 +104,6 @@ export interface WidgetConversationCreated {
 }
 
 /**
- * The visitor token for the widget currently on screen.
- *
- * A service rather than a parameter on every call, because it is also what the
- * HTTP interceptor needs — the header has to be attached without every call site
- * remembering to. Persisted per widget token: two widgets on one site are two
- * different visitors, and sharing a token between them would let one widget read
- * the other's conversations.
- *
- * Only the raw token lives here. The server stores its SHA-256 (invariant 4).
- */
-@Injectable({ providedIn: 'root' })
-export class WidgetVisitorStore {
-  private readonly _token = signal<string | null>(null);
-  readonly token = this._token.asReadonly();
-
-  private key = '';
-
-  /** Points the store at a widget and loads any token this browser already has. */
-  use(widgetToken: string): void {
-    this.key = `trackly.widget.${widgetToken}`;
-    this._token.set(read(this.key));
-  }
-
-  set(token: string | null): void {
-    this._token.set(token);
-    if (!this.key) return;
-    try {
-      if (token) localStorage.setItem(this.key, token);
-      else localStorage.removeItem(this.key);
-    } catch {
-      // Private browsing, or storage disabled. The session still works for as
-      // long as the frame is alive; it just will not survive a reload.
-    }
-  }
-}
-
-function read(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-/**
  * The embedded panel's API — anonymous, addressed by the widget's public token.
  *
  * No method takes a workspace: the server resolves it from the token
@@ -156,6 +113,8 @@ function read(key: string): string | null {
 @Injectable({ providedIn: 'root' })
 export class WidgetApi {
   private readonly api = inject(ApiService);
+  // `runtime`, not `config` — `config()` below is an endpoint on this class.
+  private readonly runtime = inject(TRACKLY_CONFIG);
 
   private base(widgetToken: string): string {
     return `/api/public/widget/${encodeURIComponent(widgetToken)}`;
@@ -235,5 +194,35 @@ export class WidgetApi {
     return this.api.url(
       `${this.base(widgetToken)}/conversations/${conversationId}/attachments/${attachmentId}`,
     );
+  }
+
+  // ── Real-time ───────────────────────────────────────────────────────────────
+
+  /**
+   * A hub connection, not yet started.
+   *
+   * Both credentials travel in the query string because that is what
+   * `WidgetHub.OnConnectedAsync` reads, and because a WebSocket handshake cannot
+   * carry the `X-Trackly-Visitor` header the REST calls use — there is no way to
+   * set a request header on `new WebSocket()`.
+   *
+   * Same-origin despite the widget being an embed: the panel document is served
+   * by Trackly and only *displayed* in the host page's iframe, so the socket
+   * never crosses an origin and the widget CORS policy is not involved.
+   *
+   * `withAutomaticReconnect` is the whole point of preferring this to a poll — a
+   * widget sits open on a laptop lid that closes, and a socket that gave up on
+   * the first drop would be worse than the interval it replaced.
+   */
+  connect(widgetToken: string, visitorToken: string): HubConnection {
+    const query =
+      `?widget=${encodeURIComponent(widgetToken)}` +
+      `&visitorToken=${encodeURIComponent(visitorToken)}`;
+
+    return new HubConnectionBuilder()
+      .withUrl(`${this.runtime.apiBaseUrl}${this.runtime.widgetHubPath}${query}`)
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Warning)
+      .build();
   }
 }

@@ -15,4 +15,6 @@ export interface Environment {
   readonly chatHubPath: string;
   /** SignalR release hub path — live ticks while a deployment is being run. */
   readonly releaseHubPath: string;
+  /** SignalR widget hub path — agent replies pushed into an embedded panel. */
+  readonly widgetHubPath: string;
 }

@@ -3,7 +3,10 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 import { toApiError } from './api-error';
-import { WidgetVisitorStore } from './widget.api';
+// From the store's own module, never through `widget.api`: this file is reached
+// eagerly from `provideTracklyCore`, and importing the API client here would put
+// its dependencies — SignalR among them — in every app's initial bundle.
+import { WidgetVisitorStore } from './widget-visitor.store';
 
 /**
  * Sends the session cookie with every API call.

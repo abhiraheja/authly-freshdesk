@@ -7,4 +7,5 @@ export const environment: Environment = {
   apiBaseUrl: '',
   chatHubPath: '/hubs/chat',
   releaseHubPath: '/hubs/releases',
+  widgetHubPath: '/hubs/widget',
 };

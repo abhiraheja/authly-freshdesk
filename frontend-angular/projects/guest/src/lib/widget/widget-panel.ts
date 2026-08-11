@@ -19,6 +19,7 @@ import {
   WidgetVisitorStore,
   brandTokens,
   errorMessage,
+  type HubConnection,
   type WidgetConversation,
   type WidgetPublicConfig,
   type WidgetSession,
@@ -32,10 +33,23 @@ import { WidgetThread } from './widget-thread';
 
 type View = 'home' | 'details' | 'thread';
 
-/** How often the list is refreshed. The unread badge is only ever this stale. */
+/**
+ * Cadence while the hub is **down**. The unread badge is only ever this stale,
+ * which is the number the socket is there to improve on.
+ */
 const LIST_POLL_MS = 20_000;
 /** The open thread refreshes faster — someone is looking at it. */
 const THREAD_POLL_MS = 10_000;
+/**
+ * Cadence while the hub is **up**, list only.
+ *
+ * Not zero, and this is a deliberate cost. The push fires from
+ * `NotificationService.OnReplyAsync` — that is, on a *reply* — so an agent who
+ * resolves or closes a ticket without saying anything moves a status the panel
+ * would otherwise show wrongly until the visitor reloaded the page. Two minutes
+ * is 1/6th of the traffic the old poll generated and still bounds that error.
+ */
+const LIVE_LIST_POLL_MS = 120_000;
 
 /**
  * The embedded panel (docs/widget-plan.md § 8.1) — one frame, four views, and
@@ -221,6 +235,13 @@ export class WidgetPanel {
   protected readonly session = signal<WidgetSession | null>(null);
   protected readonly identityWarning = signal<string | null>(null);
 
+  /**
+   * Is the hub delivering? Never rendered — a visitor cannot act on it, and a
+   * "reconnecting" chip on somebody's storefront is Trackly's problem leaking
+   * onto their page. It exists to pick the polling cadence, nothing else.
+   */
+  private readonly live = signal(false);
+
   // ---- View ----------------------------------------------------------------
 
   protected readonly view = signal<View>('home');
@@ -273,6 +294,18 @@ export class WidgetPanel {
     effect(() => {
       const total = this.conversations().reduce((sum, c) => sum + c.unreadCount, 0);
       this.bridge.reportUnread(total);
+    });
+
+    // Keyed on the visitor token, not run once after boot: verifying an email
+    // can hand back a *different* token, and the hub's group is resolved from
+    // whichever token opened the socket. A connection left on the old one would
+    // keep reporting while quietly listening to the wrong visitor.
+    effect(() => {
+      const visitorToken = this.visitor.token();
+      untracked(() => {
+        if (visitorToken) this.connect(visitorToken);
+        else this.disconnect();
+      });
     });
 
     this.startPolling();
@@ -474,22 +507,81 @@ export class WidgetPanel {
     return null;
   }
 
+  // ---- Real-time -----------------------------------------------------------
+  // `/hubs/widget`, one group per visitor row (plan § 9.1). The socket carries a
+  // conversation id and nothing else: everything the panel then shows comes back
+  // through the REST endpoints, which is where the trust rule and the
+  // private-note filter live. A push that carried message bodies would be a
+  // second place those two rules have to be right.
+
+  private connection: HubConnection | null = null;
+
+  private connect(visitorToken: string): void {
+    this.disconnect();
+
+    const connection = this.api.connect(this.token(), visitorToken);
+    this.connection = connection;
+
+    connection.on('conversation', (event: { conversationId?: string }) => {
+      // The list always: it feeds the launcher badge, which has to move whether
+      // or not the panel is even open.
+      void this.reloadList();
+      if (event?.conversationId && event.conversationId === this.activeId()) {
+        void this.reloadThread();
+      }
+    });
+
+    connection.onreconnected(() => {
+      this.live.set(true);
+      // Anything that happened while the socket was down was pushed to nobody.
+      // Re-syncing on reconnect is what makes the gap invisible.
+      void this.reloadList();
+      if (this.activeId()) void this.reloadThread();
+    });
+    connection.onreconnecting(() => this.live.set(false));
+    connection.onclose(() => this.live.set(false));
+
+    connection.start().then(
+      () => this.live.set(true),
+      // No banner, no dot. A visitor is not the person who can fix a hub, and
+      // the panel keeps working — `live` simply stays false, which puts the
+      // intervals below back on their old cadence.
+      () => this.live.set(false),
+    );
+  }
+
+  private disconnect(): void {
+    const connection = this.connection;
+    this.connection = null;
+    void connection?.stop().catch(() => {});
+  }
+
   // ---- Polling -------------------------------------------------------------
-  // The documented fallback for the SignalR hub (plan § 10, phase 3). The list
-  // polls even while the panel is closed, because that is what feeds the
-  // launcher's badge; the thread only polls while it is the view on screen.
+  // Now the fallback it was always documented as, rather than the mechanism.
+  // The list still polls even while the panel is shut, because that is what
+  // feeds the launcher's badge; the thread only polls while it is the view on
+  // screen, and only while the socket is down — a live socket already tells us
+  // the moment that thread changes.
 
   private startPolling(): void {
-    const list = setInterval(() => void this.reloadList(), LIST_POLL_MS);
-    const thread = setInterval(() => {
-      if (this.view() === 'thread' && this.activeId() && this.bridge.visible()) {
+    let sinceList = 0;
+    const tick = setInterval(() => {
+      const live = this.live();
+
+      sinceList += THREAD_POLL_MS;
+      if (sinceList >= (live ? LIVE_LIST_POLL_MS : LIST_POLL_MS)) {
+        sinceList = 0;
+        void this.reloadList();
+      }
+
+      if (!live && this.view() === 'thread' && this.activeId() && this.bridge.visible()) {
         void this.reloadThread();
       }
     }, THREAD_POLL_MS);
 
     inject(DestroyRef).onDestroy(() => {
-      clearInterval(list);
-      clearInterval(thread);
+      clearInterval(tick);
+      this.disconnect();
     });
   }
 }
