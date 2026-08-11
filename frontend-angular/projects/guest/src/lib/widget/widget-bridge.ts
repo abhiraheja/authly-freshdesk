@@ -135,9 +135,31 @@ export class WidgetBridge {
     if (!this.framed) return;
     const message: Record<string, unknown> = { source: FRAME, type };
     if (payload) message['payload'] = payload;
-    // '*' only for `ready`, which is the message that teaches us the origin and
-    // carries nothing worth intercepting.
-    window.parent.postMessage(message, this.hostOrigin ?? '*');
+    // '*' for `ready`, which is the message that teaches us the origin and
+    // carries nothing worth intercepting — and for an opaque embedder, below.
+    window.parent.postMessage(message, this.targetOrigin());
+  }
+
+  /**
+   * The `targetOrigin` argument for a message back to the host.
+   *
+   * An **opaque** embedder — a page opened from `file://`, or one inside a
+   * sandboxed iframe — reports `event.origin` as the string `"null"`, and
+   * `"null"` is not a legal target origin: `postMessage` throws `SyntaxError`
+   * rather than simply not delivering. Thrown from `reportUnread` inside an
+   * effect, that took out change detection and left the panel on its skeletons
+   * forever, which looks exactly like a request that never came back. Opening
+   * the embed snippet as a local file is the first thing anyone does with it, so
+   * this is a failure mode worth not having.
+   *
+   * `'*'` is the only string that can reach an opaque origin, and it is safe
+   * here for the same reason `ready` is: the recipient is always
+   * `window.parent`, and nothing this bridge sends outward is a secret — the
+   * visitor token never crosses `postMessage`, only unread counts and window
+   * chrome requests.
+   */
+  private targetOrigin(): string {
+    return this.hostOrigin === null || this.hostOrigin === 'null' ? '*' : this.hostOrigin;
   }
 
   private settle(): void {
