@@ -147,7 +147,8 @@ So the two questions are separated, and only the second one needs proof:
 | Who is this ticket **for**? | `widget_visitors.user_id` → `tickets.requester_id` | **No.** Get-or-create on the claimed email, exactly as `POST /api/users` does for an agent adding somebody by hand. One address is one person. |
 | What may this browser **read**? | `Conversations(visitor)` | **Yes.** It widens to the contact's whole history only when `is_verified`; `ContactConversations` throws rather than return rows without it. |
 | What does the desk already **know** about this address? | `ToSessionAsync`, `VisitorNameAsync` | **Yes.** Unverified, the panel is only ever told what this browser itself said — otherwise typing a stranger's address would read back the name and phone on file for them. |
-| May this claim **write** to an existing contact? | `UpsertContactAsync(proven:)` | **Yes.** An unverified visitor may be attached to a record but never edit one. |
+| May this claim **add** to an existing contact — a blank name, a `variables` key it does not have? | `UpsertContactAsync` | **No.** Additive only: nothing recorded is lost, and the desk gains a fact it did not have. |
+| May this claim **replace** something already on the contact? | `UpsertContactAsync(proven:)` | **Yes.** Unsigned, one console call on the embedding page could otherwise rewrite any customer's `plan`. A name or phone the desk recorded is never overwritten by *either*. |
 
 The confirmation email stays behind `is_verified` as well (§ 9.x): sending to an
 address nobody has proved would make any embed a way to post workspace-branded

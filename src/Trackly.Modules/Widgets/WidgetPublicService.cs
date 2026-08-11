@@ -441,28 +441,37 @@ public class WidgetPublicService(
                     "Widget identity {Email} matches a {Role} account; left unlinked", email, existing.Role);
                 return null;
             }
-            // Fill blanks only, and only on a proven claim. The contact record is
-            // the desk's: an agent who corrected a customer's name should not have
-            // it overwritten by whatever the host page sends on the next page
-            // load, and an anonymous visitor who merely typed the address should
-            // not be writing to it at all.
+            // **Adding is not overwriting**, and only the second one needs proof.
             //
-            // That last part is why `variables` needs proof too, and it is the one
-            // place where being strict actually costs something. The bag is
-            // attacker-controllable in a way a JWT is not: the config object lives
-            // in a public page, so anybody can open the console on the embedding
-            // site and call `identifyChatWidget` with somebody else's address and
-            // any keys they like. Writing that into the workspace's CRM fields
-            // would hand every visitor an edit on every customer record.
-            if (proven)
+            // A returning visitor whose page now sends a `seats` it did not send
+            // before should end up with `seats` on their record — nothing is lost
+            // and the desk gains a fact. Changing a `plan` the desk already has on
+            // file is the other thing entirely: the config object lives in a public
+            // page, so anybody can open the console on the embedding site, claim
+            // somebody else's address and send any keys they like. Unproven, that
+            // must not be able to alter a single value already recorded.
+            //
+            // So: blanks are filled and new keys are added on any claim; existing
+            // values are replaced only on a proven one. Same rule the Customers
+            // screen's own get-or-create uses for name and phone.
+            var touched = false;
+            if (string.IsNullOrWhiteSpace(existing.Name) && !string.IsNullOrWhiteSpace(name))
             {
-                if (string.IsNullOrWhiteSpace(existing.Name) && !string.IsNullOrWhiteSpace(name))
-                    existing.Name = name;
-                if (string.IsNullOrWhiteSpace(existing.Phone) && !string.IsNullOrWhiteSpace(phone))
-                    existing.Phone = phone;
-                MergeVariables(existing, variables);
-                existing.UpdatedAt = DateTime.UtcNow;
+                existing.Name = name;
+                touched = true;
             }
+            if (string.IsNullOrWhiteSpace(existing.Phone) && !string.IsNullOrWhiteSpace(phone))
+            {
+                existing.Phone = phone;
+                touched = true;
+            }
+            touched |= MergeVariables(existing, variables, replaceExisting: proven);
+
+            // Only stamped when something actually moved. A session start that
+            // changed nothing must not touch `updated_at` — an agent reads that
+            // column as "somebody edited this customer", and every page load
+            // bumping it would make it meaningless.
+            if (touched) existing.UpdatedAt = DateTime.UtcNow;
             return existing.Id;
         }
 
@@ -481,7 +490,7 @@ public class WidgetPublicService(
         // overwrite and nothing an agent recorded to lose, and a contact the
         // widget just created with no `plan` on it is a worse answer than one
         // carrying what the host page said about them.
-        MergeVariables(contact, variables);
+        MergeVariables(contact, variables, replaceExisting: true);
         db.Users.Add(contact);
         await db.SaveChangesAsync(ct);
         return contact.Id;
@@ -493,20 +502,40 @@ public class WidgetPublicService(
     /// it is the same kind of thing: whatever this business tracks about a person.
     ///
     /// <para>
-    /// Merge, not replace, and last write wins per key. Blank keys and values are
-    /// dropped rather than stored empty, matching <c>POST /api/users</c> — a key
-    /// with nothing behind it is noise on a screen an agent reads during a call.
+    /// Always additive: a key the contact does not have is added. Blank keys and
+    /// values are dropped rather than stored empty, matching
+    /// <c>POST /api/users</c> — a key with nothing behind it is noise on a screen
+    /// an agent reads during a call.
+    /// </para>
+    /// <para>
+    /// <paramref name="replaceExisting"/> is the part that needs proof. False, a
+    /// key already on the record keeps its value whatever the page claims; true,
+    /// the claim wins. Nothing is ever deleted either way — a page that stops
+    /// sending a key does not clear it, because "we no longer mention this" is not
+    /// the same statement as "this is no longer true".
     /// </para>
     /// </summary>
-    private static void MergeVariables(User contact, IReadOnlyDictionary<string, string>? variables)
+    /// <returns>Whether anything was actually written.</returns>
+    private static bool MergeVariables(
+        User contact, IReadOnlyDictionary<string, string>? variables, bool replaceExisting)
     {
-        if (variables is null) return;
+        if (variables is null) return false;
+
+        var changed = false;
         foreach (var (key, value) in variables)
         {
             var trimmed = key?.Trim();
             if (string.IsNullOrEmpty(trimmed) || string.IsNullOrWhiteSpace(value)) continue;
-            contact.CustomFields[trimmed] = value.Trim();
+
+            var incoming = value.Trim();
+            if (contact.CustomFields.TryGetValue(trimmed, out var current))
+            {
+                if (!replaceExisting || current == incoming) continue;
+            }
+            contact.CustomFields[trimmed] = incoming;
+            changed = true;
         }
+        return changed;
     }
 
     // ---- Conversations --------------------------------------------------------

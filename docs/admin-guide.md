@@ -960,8 +960,10 @@ Those are separate, and it is worth knowing which is which:
 | Sees **their own** conversations from this browser | ✅ | ✅ |
 | Sees the contact's conversations **from other channels** | ❌ | ✅ |
 | Panel shows the name/phone **the desk has on file** | ❌ — only what the page sent | ✅ |
-| `variables` become the customer's **Custom fields** | ✅ on a customer the widget creates | ✅ always |
-| May **change** an existing customer record | ❌ | ✅ |
+| `variables` **add** new Custom fields to the customer | ✅ | ✅ |
+| `variables` **replace** a Custom field already on record | ❌ | ✅ |
+| Fills a **blank** name or phone on the customer | ✅ | ✅ |
+| **Overwrites** a name or phone the desk recorded | ❌ | ❌ — never, by either |
 | Gets the "we got your message" **email** | ❌ | ✅ |
 
 So the email address in your snippet is what creates and matches the customer —
@@ -972,14 +974,19 @@ ticket arrives attributed instead of reading _"Not linked to a customer record"_
 Sign the JWT when you also want the visitor to see their history from email and
 the portal in the same panel.
 
-**Why an unsigned `variables` bag stops updating a customer who already exists.**
-The config object sits in a public page, so anyone can open the browser console on
-your site and call `identifyChatWidget` with somebody else's address and any keys
-they like. If that wrote through, every visitor would have an edit on every
-customer record — so it does not. A widget-created customer is seeded from it
-(there is nothing to overwrite), and after that the bag only lands when the
-identity is signed. If you want `plan` to stay current on the customer, sign the
-JWT; that is the job it exists for.
+**Adding is not overwriting, and only the second one needs a signature.** A
+returning visitor whose page now sends a `seats` it did not send before ends up
+with `seats` on their record — nothing was lost and the desk gained a fact.
+Changing a `plan` the desk already has on file is a different act: the config
+object sits in a public page, so anyone can open the browser console on your site,
+claim somebody else's address and send any keys they like. Unsigned, that must not
+be able to alter one value already recorded. So new keys always land; existing
+values are replaced only on a signed identity. Nothing is ever *removed* — a page
+that stops sending a key does not clear it, because "we no longer mention this" is
+not the same statement as "this is no longer true".
+
+If you need `plan` to stay current on the customer record, sign the JWT. That is
+the job it exists for.
 
 There are two ways to become verified. Either your site signs a **JWT** with the
 widget's secret key and passes it in the snippet's `token` field — this is what
