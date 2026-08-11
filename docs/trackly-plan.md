@@ -1611,27 +1611,31 @@ The same branding is applied to: the customer portal (`/portal`), the embeddable
 
 ### 6. Workspace Branding
 
-Configured on the **Branding tab of `/admin/widget`** (and during onboarding
-Step 3). There is no `/admin/settings/branding` screen and no Branding row in the
-admin nav — the route redirects to the widget screen.
+Configured on **`/admin/settings/branding`** (and during onboarding Step 3),
+which is a screen and a nav row of its own.
 
-The record stayed workspace-level; only the screen moved. Two doors into one
-record is a thing an admin has to hold in their head — "which of these wins?" —
-and there was never an answer, because there was only ever one row. The tab says
-so at the top, because a branding setting reached from a widget screen invites
-exactly the wrong assumption: this logo is on the sign-in page and in the header
-of every email Trackly sends, not just on that widget.
+It briefly was not: `docs/widget-plan.md` § 4.2 folded the editor into the widget
+screen's Branding tab, and § 4.2.1 reversed that. The record dresses the sign-in
+and verify pages, `/submit`, `/portal`, the knowledge base, guest ticket views,
+CSAT and the header of every outbound email — an admin looking for "our logo on
+the login page" has no reason to open *Widget*, and a widget that could rewrite
+the record could repaint every email in the product.
 
-The one genuine per-widget override is colour: `widget_configs.primary_color`
-beats `workspace_branding.primary_color` for that widget alone, and clearing it
-goes back to inheriting. Colour is the setting a marketing site and an in-app
-widget actually differ on; logo and copy are not.
+**Per-widget overrides are colour and logo**, both on `widget_configs`, both
+nullable, null meaning inherit — so a widget keeps following the workspace after
+somebody changes it, rather than holding a copy taken at the time. Nothing on the
+widget screen writes `workspace_branding`.
 
 ```sql
 CREATE TABLE workspace_branding (
     id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     workspace_id  UUID NOT NULL UNIQUE REFERENCES workspaces(id) ON DELETE CASCADE,
     logo_url      TEXT,                     -- stored via IFileStorage, same as attachments
+    -- Artwork for the panel beside the sign-in form. Separate from the logo on
+    -- purpose: a logo has to read at 32px in an email header, a hero image is
+    -- full-bleed. Raster only (no SVG) and capped at 5 MB, five times the logo.
+    sign_in_image_storage_key  TEXT,
+    sign_in_image_content_type TEXT,
     primary_color TEXT DEFAULT '#2563EB',   -- hex; drives header, buttons, links
     page_title    TEXT,                     -- e.g. "Acme Support"
     welcome_text  TEXT,                     -- shown on the submit form
@@ -1639,10 +1643,25 @@ CREATE TABLE workspace_branding (
     hide_powered_by BOOLEAN DEFAULT false,  -- paid-tier flag
     updated_at    TIMESTAMPTZ DEFAULT now()
 );
+
+-- On widget_configs, alongside the existing nullable primary_color:
+ALTER TABLE widget_configs ADD COLUMN logo_storage_key  TEXT;  -- NULL ⇒ workspace logo
+ALTER TABLE widget_configs ADD COLUMN logo_content_type TEXT;
 ```
 
-Served to the public form/widget via an unauthenticated, cacheable endpoint:
-`GET /api/public/workspaces/{slug}/branding` → `{ logoUrl, primaryColor, pageTitle, welcomeText, ssoProviderName }`
+Served to the public form/widget via unauthenticated, cacheable endpoints:
+
+`GET /api/public/workspaces/{slug}/branding` → `{ workspaceName, slug, logoUrl, signInImageUrl, primaryColor, pageTitle, welcomeText, footerText, hidePoweredBy }`
+
+**Every public branding route has a slug-less twin** — `/api/public/branding`,
+`/api/public/logo`, `/api/public/sign-in-image` — resolved by
+`db.ResolveWorkspaceAsync(null, ct)`, which falls back to the single workspace
+(invariant 1). That is what lets `/login` brand itself: it has no slug to carry,
+and without this it showed Trackly's colours while the verify page reached from a
+magic-link email — which *does* carry `?workspace=` — showed the workspace's.
+Both screens now wear the workspace brand, and both keep dark mode: invariant 6's
+always-light list names the portal, guest views, the KB, the widget, chat, CSAT
+and emails, and sign-in is not on it because staff sign in there too.
 
 ---
 
@@ -1709,7 +1728,7 @@ be paired with `borderColor: 'divider'` or it falls back to `currentColor`.
 | SSO callback | `/auth/callback` | No | All |
 | Customer portal | `/portal/tickets`, `/portal/tickets/new`, `/portal/tickets/:id` | Yes | `customer` |
 | Agent dashboard | `/dashboard/tickets`, `/dashboard/tickets/:id`, `/dashboard/problems` | Yes | `agent`, `admin` |
-| Admin settings | `/admin/users`, `/admin/settings/sso`, `/admin/settings/email`, `/admin/widget` (branding is a tab on it — `/admin/settings/branding` redirects here), `/admin/announcements` | Yes | `admin` |
+| Admin settings | `/admin/users`, `/admin/settings/sso`, `/admin/settings/email`, `/admin/settings/branding`, `/admin/widget` (its Branding tab overrides colour + logo for that widget alone), `/admin/announcements` | Yes | `admin` |
 | Embedded widget panel | `/widget/:token` | No — its own visitor token | Anonymous |
 
 ---
@@ -1853,11 +1872,18 @@ claim is trusted. JIT/session/role-mapping is shared with OIDC via
 | POST   | `/api/invitations` | Session | admin — invite agents by email |
 | POST   | `/api/invitations/accept` | None | Accept invite via token, create account |
 | GET    | `/api/public/workspaces/{slug}/branding` | None | Public, cacheable — branding for form/widget |
-| PUT    | `/api/admin/branding` | Session | admin — update logo, colour, portal title. Edited on the widget screen's Branding tab; the record is still workspace-level |
+| GET    | `/api/public/branding` | None | The same, with no slug. Resolves the single workspace — this is what lets `/login` brand itself (§ 6) |
+| GET    | `/api/public/workspaces/{slug}/logo`, `/api/public/logo` | None | The logo bytes, `max-age=300` |
+| GET    | `/api/public/workspaces/{slug}/sign-in-image`, `/api/public/sign-in-image` | None | The sign-in panel artwork, `max-age=300` |
+| GET/PUT | `/api/admin/branding` | Session | admin — the workspace record: colour, page title, welcome/footer text, Hide "Powered by". Edited at `/admin/settings/branding` |
+| POST/DELETE | `/api/admin/branding/logo` | Session | admin — upload / clear the workspace logo. 1 MB; PNG, SVG, JPEG, WebP |
+| POST/DELETE | `/api/admin/branding/sign-in-image` | Session | admin — upload / clear the sign-in artwork. 5 MB; PNG, JPEG, WebP, GIF — **no SVG**, it is a full-viewport background rather than a 32px mark |
 | GET/POST | `/api/admin/widgets` | Session | admin — list / create. A workspace has many |
 | GET/PUT/DELETE | `/api/admin/widgets/{id}` | Session | admin — one widget |
 | POST   | `/api/admin/widgets/{id}/secret` | Session | admin — regenerate the identity-signing key. Returned **once**, no overlap window |
 | POST   | `/api/admin/widgets/{id}/verify-jwt` | Session | admin — does Trackly accept this token, and who does it say the visitor is |
+| POST/DELETE | `/api/admin/widgets/{id}/logo` | Session | admin — this widget's own logo. Writes `widget_configs` only; DELETE falls back to the workspace logo rather than deleting it |
+| GET    | `/api/public/widget/{token}/logo` | None, `Origin`-checked | The widget's own logo bytes. Absent when it inherits |
 | GET/PUT | `/api/admin/widget` | Session | admin — the legacy single-widget submit-form config |
 | GET    | `/api/public/workspaces/{slug}/widget` | None | Public — the legacy embed's config |
 | GET    | `/widget.js` | None | The loader. Served from the API host, runs on the customer's site |

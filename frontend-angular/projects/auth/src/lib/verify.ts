@@ -1,24 +1,8 @@
-import {
-  ChangeDetectionStrategy,
-  Component,
-  DestroyRef,
-  computed,
-  effect,
-  inject,
-  resource,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, resource, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslocoPipe } from '@jsverse/transloco';
-import {
-  AuthApi,
-  PublicApi,
-  SessionStore,
-  ThemeService,
-  errorMessage,
-  homePathFor,
-} from '@trackly/core';
+import { AuthApi, PublicApi, SessionStore, errorMessage, homePathFor } from '@trackly/core';
 import { Alert, Button, Spinner } from '@trackly/ui';
 import { AuthLayout } from './auth-layout';
 
@@ -40,6 +24,12 @@ import { AuthLayout } from './auth-layout';
  * No token in the URL (a truncated or mangled link — a different message from a
  * failure), ready to confirm, confirming, and failed with a way back. There is
  * deliberately no success state: a successful confirm navigates away.
+ *
+ * <h3>Same brand, same scheme, as `/login`</h3>
+ * Branding loads whether or not the emailed link carried `?workspace=`, and the
+ * visitor's light/dark preference is left alone — both to match the sign-in page
+ * this person came from. When the two disagreed, the same flow appeared to hop
+ * between two different products halfway through.
  */
 @Component({
   selector: 'tk-verify',
@@ -49,6 +39,7 @@ import { AuthLayout } from './auth-layout';
     <tk-auth-layout
       [brandName]="brandName()"
       [logoUrl]="logoUrl()"
+      [imageUrl]="signInImageUrl()"
       [accent]="accent()"
     >
       @if (!token()) {
@@ -115,7 +106,6 @@ export class Verify {
   private readonly auth = inject(AuthApi);
   private readonly publicApi = inject(PublicApi);
   private readonly session = inject(SessionStore);
-  private readonly theme = inject(ThemeService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
 
@@ -128,35 +118,25 @@ export class Verify {
   protected readonly error = signal<string | null>(null);
 
   /**
-   * A branded link wears the workspace's identity.
+   * The workspace's identity, with or without a slug on the link.
    *
-   * The loader swallows its own failure rather than letting the resource enter
-   * the error state: `resource.value()` *throws* when it has an error, so a
-   * workspace slug that no longer resolves would take out the whole template —
-   * and this is the screen where that costs someone their way in. Branding is
-   * decoration; sign-in is not, and the two must not share a failure.
+   * `PublicApi.branding` swallows its own failure and answers null rather than
+   * letting the resource enter the error state: `resource.value()` *throws* when
+   * it has an error, so a workspace that no longer resolves would take out the
+   * whole template — and this is the screen where that costs someone their way
+   * in. Branding is decoration; sign-in is not, and the two must not share a
+   * failure. The extra `.catch` here is belt and braces for the same reason.
    */
   private readonly branding = resource({
     params: () => ({ slug: this.workspaceSlug() }),
-    loader: ({ params }) =>
-      params.slug ? this.publicApi.branding(params.slug).catch(() => null) : Promise.resolve(null),
+    loader: ({ params }) => this.publicApi.branding(params.slug).catch(() => null),
   });
 
   protected readonly accent = computed(() => this.branding.value()?.primaryColor ?? null);
   protected readonly brandName = computed(() => this.branding.value()?.workspaceName ?? 'Trackly');
   protected readonly logoUrl = computed(() => this.branding.value()?.logoUrl ?? null);
+  protected readonly signInImageUrl = computed(() => this.branding.value()?.signInImageUrl ?? null);
   protected readonly hidePoweredBy = computed(() => this.branding.value()?.hidePoweredBy ?? false);
-
-  constructor() {
-    // A workspace-branded surface is customer-facing: tenant colour, always
-    // light, and the visitor's own preference restored on the way out
-    // (invariant 6). Same handling as the sign-in screen.
-    let release: (() => void) | null = null;
-    effect(() => {
-      if (this.accent() && !release) release = this.theme.forceLight();
-    });
-    inject(DestroyRef).onDestroy(() => release?.());
-  }
 
   /** The only thing that spends the token, and only from a real click. */
   protected async confirm(): Promise<void> {

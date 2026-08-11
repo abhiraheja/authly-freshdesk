@@ -87,34 +87,6 @@
                     </tk-select>
                   </tk-field>
 
-                  <tk-field
-                    [label]="'admin.widget.theme' | transloco"
-                    [hint]="'admin.widget.themeHint' | transloco"
-                  >
-                    <div class="flex items-center gap-2">
-                      <input
-                        type="color"
-                        class="h-9 w-12 cursor-pointer rounded-lg border border-border bg-card p-1"
-                        [attr.aria-label]="'admin.widget.theme' | transloco"
-                        [ngModel]="effectiveColour()"
-                        name="widget-colour-picker"
-                        (ngModelChange)="primaryColor.set($event)"
-                      />
-                      <input
-                        tkInput
-                        class="w-32"
-                        name="widget-colour"
-                        placeholder="#2563EB"
-                        [(ngModel)]="primaryColor"
-                        [attr.aria-label]="'admin.widget.themeHex' | transloco"
-                      />
-                      @if (primaryColor()) {
-                        <button tkButton variant="ghost" size="sm" (click)="primaryColor.set('')">
-                          {{ 'admin.widget.inherit' | transloco }}
-                        </button>
-                      }
-                    </div>
-                  </tk-field>
                 </div>
               </tk-card>
 
@@ -312,97 +284,142 @@
 
         <!-- ─────────────── Branding ─────────────── -->
         @case ('branding') {
-          <div class="max-w-[720px] space-y-4">
-            <!-- The one thing an admin must understand before editing anything
-                 on this tab. Not a footnote: these fields are worn by surfaces
-                 that have no widget in sight. -->
-            <tk-alert tone="info" [heading]="'admin.widget.brandingScopeHeading' | transloco">
-              {{ 'admin.widget.brandingScopeBody' | transloco }}
-            </tk-alert>
+          <div class="grid gap-4 lg:grid-cols-[1fr_300px]">
+            <div class="space-y-4">
+              <!-- Says the boundary out loud, because the old version of this tab
+                   edited the workspace record in place and an admin who used it
+                   then has every reason to expect it still does. -->
+              <tk-alert tone="info" [heading]="'admin.widget.brandingScopeHeading' | transloco">
+                <p>{{ 'admin.widget.brandingScopeBody' | transloco }}</p>
+                <a class="mt-1 inline-block font-semibold underline" routerLink="/admin/settings/branding">
+                  {{ 'admin.widget.workspaceBrandingLink' | transloco }}
+                </a>
+              </tk-alert>
 
-            <tk-card
-              [heading]="'admin.widget.logo' | transloco"
-              [subheading]="'admin.widget.logoHint' | transloco"
-            >
-              <div class="flex flex-wrap items-center gap-3">
-                @if (branding()?.hasLogo) {
-                  <tk-badge tone="success" dot>{{ 'admin.widget.logoPresent' | transloco }}</tk-badge>
-                } @else {
-                  <span class="text-meta text-muted-foreground">{{ 'admin.widget.logoAbsent' | transloco }}</span>
+              <!-- ─────────── Logo ─────────── -->
+              <tk-card [heading]="'admin.widget.logo' | transloco">
+                <p class="mb-3 text-meta text-muted-foreground">{{ logoLimit() }}</p>
+
+                <div class="flex flex-wrap items-center gap-4">
+                  <!-- Shows what a visitor gets, override or not, so the state is
+                       readable without working out which of the two is winning. -->
+                  <span class="grid size-16 shrink-0 place-items-center rounded-xl border border-border bg-muted">
+                    @if (effectiveLogoUrl(); as url) {
+                      <img [src]="url" [alt]="name()" class="size-full rounded-xl object-contain p-1.5" />
+                    } @else {
+                      <tk-icon name="image" [size]="20" class="text-muted-foreground" />
+                    }
+                  </span>
+
+                  <div class="space-y-2">
+                    @if (widgetLogoUrl()) {
+                      <tk-badge tone="primary" dot>{{ 'admin.widget.logoOwn' | transloco }}</tk-badge>
+                    } @else if (workspaceLogoUrl()) {
+                      <tk-badge tone="neutral" dot>{{ 'admin.widget.logoInherited' | transloco }}</tk-badge>
+                    } @else {
+                      <span class="block text-meta text-muted-foreground">{{ 'admin.widget.logoAbsent' | transloco }}</span>
+                    }
+
+                    <div class="flex flex-wrap items-center gap-2">
+                      <label tkButton variant="outline" size="sm" class="cursor-pointer">
+                        @if (uploadingLogo()) {
+                          <tk-spinner [size]="15" />
+                        } @else {
+                          <tk-icon name="upload-cloud" [size]="15" />
+                        }
+                        {{ (widgetLogoUrl() ? 'admin.widget.replaceLogo' : 'admin.widget.uploadLogo') | transloco }}
+                        <input
+                          type="file"
+                          class="sr-only"
+                          [accept]="logoAccept"
+                          [disabled]="uploadingLogo()"
+                          (change)="uploadLogo($event)"
+                        />
+                      </label>
+
+                      @if (widgetLogoUrl()) {
+                        <button
+                          tkButton
+                          variant="ghost"
+                          size="sm"
+                          type="button"
+                          [disabled]="uploadingLogo()"
+                          (click)="removeLogo()"
+                        >
+                          {{ 'admin.widget.inheritLogo' | transloco }}
+                        </button>
+                      }
+                    </div>
+                  </div>
+                </div>
+
+                @if (logoError(); as failure) {
+                  <tk-alert tone="danger" class="mt-3 block">{{ failure }}</tk-alert>
                 }
-                <label tkButton variant="outline" class="cursor-pointer">
-                  @if (uploadingLogo()) {
-                    <tk-spinner [size]="14" />
-                  }
-                  {{ 'admin.widget.uploadLogo' | transloco }}
-                  <input
-                    type="file"
-                    class="hidden"
-                    accept="image/png,image/svg+xml,image/jpeg,image/webp"
-                    (change)="uploadLogo($event)"
-                  />
-                </label>
-              </div>
-            </tk-card>
+              </tk-card>
 
-            <tk-card [heading]="'admin.widget.workspaceColour' | transloco">
-              <div class="space-y-4">
-                <tk-field
-                  [label]="'admin.widget.defaultColour' | transloco"
-                  [hint]="'admin.widget.defaultColourHint' | transloco"
-                >
-                  <div class="flex items-center gap-2">
+              <!-- ─────────── Colour ─────────── -->
+              <tk-card [heading]="'admin.widget.theme' | transloco">
+                <tk-field [label]="'admin.widget.theme' | transloco" [hint]="'admin.widget.themeHint' | transloco">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <!-- The picker shows the effective colour so the swatch is
+                         never blank, but only ever writes the override. -->
                     <input
                       type="color"
                       class="h-9 w-12 cursor-pointer rounded-lg border border-border bg-card p-1"
-                      name="brand-colour-picker"
-                      [attr.aria-label]="'admin.widget.defaultColour' | transloco"
-                      [(ngModel)]="brandColor"
+                      name="widget-colour-picker"
+                      [attr.aria-label]="'admin.widget.theme' | transloco"
+                      [ngModel]="effectiveColour()"
+                      (ngModelChange)="primaryColor.set($event)"
                     />
                     <input
                       tkInput
-                      class="w-32"
-                      name="brand-colour"
-                      [(ngModel)]="brandColor"
+                      class="w-32 font-mono"
+                      name="widget-colour"
+                      spellcheck="false"
+                      autocomplete="off"
+                      [placeholder]="workspaceColour()"
+                      [(ngModel)]="primaryColor"
                       [attr.aria-label]="'admin.widget.themeHex' | transloco"
                     />
+                    @if (primaryColor()) {
+                      <button tkButton variant="ghost" size="sm" type="button" (click)="primaryColor.set('')">
+                        {{ 'admin.widget.inherit' | transloco }}
+                      </button>
+                    }
                   </div>
                 </tk-field>
 
-                <tk-field [label]="'admin.widget.pageTitle' | transloco" for="brand-page-title">
-                  <input tkInput id="brand-page-title" name="brand-page-title" [(ngModel)]="pageTitle" />
-                </tk-field>
+                <p class="mt-3 flex items-center gap-2 text-meta text-muted-foreground">
+                  <span class="size-4 shrink-0 rounded-full border border-border" [style.background]="workspaceColour()"></span>
+                  {{ 'admin.widget.inheritedColour' | transloco: { colour: workspaceColour() } }}
+                </p>
+              </tk-card>
 
-                <tk-field [label]="'admin.widget.welcomeText' | transloco" for="brand-welcome">
-                  <input tkInput id="brand-welcome" name="brand-welcome" [(ngModel)]="welcomeText" />
-                </tk-field>
+              @if (saveError(); as failure) {
+                <tk-alert tone="danger">{{ failure }}</tk-alert>
+              }
 
-                <tk-field
-                  [label]="'admin.widget.footerText' | transloco"
-                  for="brand-footer"
-                  [hint]="'admin.widget.footerTextHint' | transloco"
-                >
-                  <input tkInput id="brand-footer" name="brand-footer" [(ngModel)]="footerText" />
-                </tk-field>
+              <button tkButton [disabled]="saving()" (click)="save()">
+                @if (saving()) {
+                  <tk-spinner [size]="16" />
+                }
+                {{ 'admin.widget.update' | transloco }}
+              </button>
+            </div>
 
-                <label class="flex items-center justify-between gap-3 border-t border-border pt-4">
-                  <span>
-                    <span class="block text-body">{{ 'admin.widget.hidePoweredBy' | transloco }}</span>
-                    <span class="block text-meta text-muted-foreground">{{ 'admin.widget.hidePoweredByHint' | transloco }}</span>
-                  </span>
-                  <tk-switch [(checked)]="hidePoweredBy" [ariaLabel]="'admin.widget.hidePoweredBy' | transloco" />
-                </label>
-
-                <div class="border-t border-border pt-4">
-                  <button tkButton [disabled]="savingBranding()" (click)="saveBranding()">
-                    @if (savingBranding()) {
-                      <tk-spinner [size]="16" />
-                    }
-                    {{ 'common.save' | transloco }}
-                  </button>
-                </div>
-              </div>
-            </tk-card>
+            <div class="lg:sticky lg:top-4 lg:self-start">
+              <tk-widget-preview
+                [name]="name()"
+                [greeting]="greeting()"
+                [tagline]="tagline()"
+                [colour]="effectiveColour()"
+                [hideLauncher]="hideLauncher()"
+                [showWidgetForm]="showWidgetForm()"
+                [showCloseButton]="showCloseButton()"
+                [hidePoweredBy]="hidePoweredBy()"
+              />
+            </div>
           </div>
         }
 

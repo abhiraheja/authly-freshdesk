@@ -52,6 +52,24 @@ public class PublicWidgetController(WidgetPublicService widgets) : ControllerBas
         return Ok(config);
     }
 
+    /// <summary>
+    /// This widget's own logo, for a widget that overrides the workspace's.
+    /// `config` only names this URL when an override exists — a widget with none
+    /// is handed the workspace logo endpoint instead, so this never 404s in
+    /// normal use.
+    /// </summary>
+    [HttpGet("logo")]
+    public async Task<IActionResult> Logo(string token, CancellationToken ct)
+    {
+        var asset = await widgets.GetLogoAsync(token, Origin, ct);
+        if (asset is null) return NotFound();
+
+        // Same reasoning as `config`: the answer depends on the caller's Origin.
+        Response.Headers.CacheControl = "private, max-age=300";
+        Response.Headers.Vary = "Origin";
+        return File(asset.Value.Stream, asset.Value.ContentType);
+    }
+
     [HttpPost("session")]
     [EnableRateLimiting("auth")]
     public async Task<IActionResult> StartSession(

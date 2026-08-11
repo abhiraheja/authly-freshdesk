@@ -21,6 +21,8 @@ export interface WidgetSummary {
 }
 
 export interface WidgetDetail extends WidgetSummary {
+  /** A logo of this widget's own. False inherits the workspace's. */
+  hasLogo: boolean;
   greeting: string | null;
   hasSecretKey: boolean;
   /** `first4…last4`. Enough to tell two keys apart, not enough to sign with. */
@@ -72,33 +74,25 @@ export interface VerifyJwtResult {
   claims: Record<string, string>;
 }
 
-/** `workspace_branding` — the record every customer surface and email wears. */
-export interface WorkspaceBranding {
-  hasLogo: boolean;
-  primaryColor: string;
-  pageTitle: string | null;
-  welcomeText: string | null;
-  footerText: string | null;
-  hidePoweredBy: boolean;
-}
-
-export interface SaveBrandingBody {
-  primaryColor?: string;
-  pageTitle?: string | null;
-  welcomeText?: string | null;
-  footerText?: string | null;
-  hidePoweredBy?: boolean;
+/**
+ * The public URL a widget's own logo is served from.
+ *
+ * Token-addressed, because that is the only identifier an embedding page holds,
+ * and versioned for the same reason as the workspace assets: the endpoint sends
+ * `max-age=300`, so a replaced logo would otherwise look like a failed upload.
+ */
+export function widgetLogoUrl(publicToken: string, version: string): string {
+  return `/api/public/widget/${encodeURIComponent(publicToken)}/logo?v=${encodeURIComponent(version)}`;
 }
 
 /**
- * Admin-side widget management, plus the workspace branding record the widget
- * screen now owns.
+ * Admin-side widget management.
  *
- * The two live on one service because they are edited on one screen
- * (docs/widget-plan.md § 4.2) — but they remain **two records**, and that is the
- * distinction the screen has to keep visible: the widget row is per-widget, the
- * branding row is worn by the login page, the portal, the knowledge base and the
- * header of every email Trackly sends.
+ * **This service never writes `workspace_branding`.** A widget's colour and logo
+ * are its own; unset, they inherit the workspace record edited at
+ * `/admin/settings/branding`, which also dresses the sign-in page, the portal,
+ * the knowledge base and every outbound email. Overriding one widget must not be
+ * able to repaint all of those — see `BrandingApi` for the other record.
  */
 @Injectable({ providedIn: 'root' })
 export class WidgetAdminApi {
@@ -132,19 +126,17 @@ export class WidgetAdminApi {
     return this.api.post<VerifyJwtResult>(`/api/admin/widgets/${id}/verify-jwt`, { token });
   }
 
-  // ---- Workspace branding --------------------------------------------------
+  // ---- This widget's own logo ----------------------------------------------
+  // widget_configs only. Clearing falls back to the workspace logo; it does not
+  // delete it.
 
-  branding(): Promise<WorkspaceBranding> {
-    return this.api.get<WorkspaceBranding>('/api/admin/branding');
-  }
-
-  saveBranding(body: SaveBrandingBody): Promise<WorkspaceBranding> {
-    return this.api.put<WorkspaceBranding>('/api/admin/branding', body);
-  }
-
-  uploadLogo(file: File): Promise<WorkspaceBranding> {
+  uploadLogo(id: string, file: File): Promise<WidgetDetail> {
     const form = new FormData();
     form.append('file', file, file.name);
-    return this.api.upload<WorkspaceBranding>('/api/admin/branding/logo', form);
+    return this.api.upload<WidgetDetail>(`/api/admin/widgets/${id}/logo`, form);
+  }
+
+  removeLogo(id: string): Promise<WidgetDetail> {
+    return this.api.delete<WidgetDetail>(`/api/admin/widgets/${id}/logo`);
   }
 }

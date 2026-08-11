@@ -195,6 +195,9 @@ All settled. Nothing here is open.
    widget screen instead. See § 4.2, because *which* fields move is the part that
    matters.
 
+   > **Reversed, 2026-08-11.** The merge shipped and was wrong in practice. See
+   > § 4.2.1.
+
 ### 4.2 Where branding lives after the merge
 
 `workspace_branding` is **not** retired. It feeds the login page, `/submit`,
@@ -221,6 +224,50 @@ The `/admin/settings/branding` route is removed from `admin.routes.ts` and its
 nav entry from `nav.ts`; `frontend/src/pages/admin/BrandingSettingsPage.tsx` is
 never ported. `BrandingController`'s endpoints are untouched — only the screen
 moves.
+
+### 4.2.1 Reversed — branding is its own screen again (2026-08-11)
+
+The merge above shipped, and then failed on contact with the product. The
+reasoning in § 4.2 is kept rather than deleted, because the record-level half of
+it was right and only the screen-level half was wrong.
+
+**What went wrong.**
+
+1. **Nobody could find it.** The record dresses the sign-in page, the portal, the
+   knowledge base, guest views, CSAT and every outbound email. An admin looking
+   for "our logo on the login page" has no reason to open *Widget*, and § 4.2
+   never accounted for the cost of that — it weighed one screen saved against a
+   concept avoided, and left discoverability out of the ledger entirely.
+2. **The sign-in page was not wearing it anyway.** `/login` only fetched branding
+   when the URL carried `?workspace=`, so a magic-link email (whose verify URL
+   does carry the slug) showed the workspace's colours while the sign-in page the
+   same person started from showed Trackly's. One flow, two identities. Fixed by
+   `db.ResolveWorkspaceAsync` plus slug-less public routes — a deployment is one
+   workspace, so no slug is needed to know whose brand this is.
+3. **A widget could repaint the whole product.** Editing a colour for one
+   embedded widget wrote `workspace_branding`, which meant it also changed every
+   outbound email. Nothing in the UI made that recoverable, or even visible.
+
+**What changed.**
+
+| | Before (§ 4.2) | Now |
+|---|---|---|
+| Workspace logo, colour, page title, welcome text, footer, Hide "Powered by" | Widget screen → Branding tab | `/admin/settings/branding`, a screen and nav row of its own |
+| Sign-in panel image | did not exist | `workspace_branding.sign_in_image_storage_key`, on the same screen |
+| Widget colour | `widget_configs.primary_color`, null ⇒ inherit | unchanged |
+| Widget logo | did not exist | `widget_configs.logo_storage_key`, null ⇒ inherit |
+| Widget Branding tab | wrote `workspace_branding` | writes `widget_configs` **only** — colour and logo, each with an explicit "use the workspace's" |
+
+The record-level split in § 4.2 stands: `workspace_branding` is still one row per
+workspace, still what `EmailBrandResolver` reads, and there is still no "which
+widget brands the emails?" question — because a widget override only ever reaches
+that widget. What is new is that a widget owns a **logo** as well as a colour, on
+the same null-means-inherit rule the colour already used.
+
+**The invariant this adds:** editing a widget must never write
+`workspace_branding`. Enforced by construction — `WidgetService` touches
+`widget_configs` and `WidgetAdminApi` has no branding methods at all; the
+workspace record is reachable only through `BrandingApi`.
 
 ### 4.3 Settled from the outset
 
@@ -632,13 +679,14 @@ editor from the screenshots:
   to collect user data), Identity Verification (enable + masked secret with copy,
   Regenerate Secret Key, Verify JWT), Allowed domains, Require email
   verification, Update, Delete Widget.
-- **Branding** — the block absorbed from the dropped `/admin/settings/branding`
-  screen (§ 4.2): logo upload, footer text, Hide "Powered by Trackly", page title
-  and welcome text, and the workspace's default primary colour. It writes
-  `workspace_branding`, so it sits under its own heading with help text saying
-  plainly that these apply **everywhere** — the login page, the portal, the
-  knowledge base, and the header of every email Trackly sends — while Widget
-  Theme above it overrides the colour for this widget alone.
+- **Branding** — *(rewritten by § 4.2.1)* this widget's own colour and logo, and
+  nothing else. Each shows what it would inherit from the workspace underneath
+  it, with an explicit "use the workspace's" that clears the override rather than
+  copying a value down. An alert at the top says the tab changes this widget only
+  and links to `/admin/settings/branding`, which is where the workspace record —
+  logo, sign-in image, colour, page title, welcome text, footer, Hide "Powered by
+  Trackly" — is edited. Widget Theme moved here from Configuration: colour and
+  logo are the same decision and were a tab apart.
 - **Integration** — Web / Mobile SDK tabs, the generated snippet in a scrollable
   code block with copy, "Know more about variables" into the admin guide, and the
   **live preview panel on the right** that both screenshots show — it is the
@@ -698,16 +746,20 @@ Each is independently shippable and leaves the existing widget working.
 | 4 ✅ | `/widget.js` rewritten: `initChatWidget`, open/close/identify, branded launcher, postMessage handshake, back-compat path | The snippet in § 7.1 works on a plain HTML page |
 | 5 ✅ | Angular customer surface `/widget/:token` (home, details form, thread, closed section) | Four states each, brand-coloured, light |
 | 6 ✅ | Angular admin `/admin/widget` list + Configuration/Branding/Integration tabs with live preview; `/admin/settings/branding` route and nav entry removed (§ 4.2) | React `WidgetPage.tsx` is no longer reachable and branding is editable in exactly one place |
+| 6b ✅ | **§ 4.2 reversed (§ 4.2.1).** `/admin/settings/branding` restored as a real screen + nav row; sign-in image added to `workspace_branding`; logo added to `widget_configs`; the widget Branding tab writes `widget_configs` only; `/login` and `/auth/verify` load branding with no slug and keep dark mode | Setting a colour and logo on a widget leaves `GET /api/admin/branding` byte-for-byte unchanged, and `/login` and `/auth/verify` show the same brand |
 | 7 ✅ | Docs — the rework folded back into `trackly-plan.md`, the trust rule promoted to an invariant | § 11 |
 
-Phase 6 shipped with `scripts/verify-widget-phase6.ps1` — 19 assertions. The
-done-when's second half is checked from **both** ends, because "editable in
-exactly one place" is not provable from one: the Branding nav row is gone, *and*
-`/admin/settings/branding` lands on the widget screen.
+Phase 6 shipped with `scripts/verify-widget-phase6.ps1`, and § 4.2.1 rewrote its
+branding half rather than adding a second script — an assertion that contradicts
+the current design is worse than no assertion. It now proves the split from three
+sides: the Branding nav row and screen exist, the widget's Branding tab offers
+only that widget's colour and logo (and specifically **not** "Powered by Trackly"
+or Welcome text), and — the one that actually matters — saving a widget colour
+leaves `GET /api/admin/branding` byte-for-byte identical.
 
-- **The old branding URL redirects, it is not deleted.** It is in bookmarks and
-  in older revisions of the admin guide, and a 404 would read as "branding was
-  removed" rather than "branding moved".
+- **The old branding URL is a screen again, not a redirect.** It was redirected to
+  the widget screen because a 404 would read as "branding was removed"; the same
+  bookmarks now land where they always meant to.
 - **The live preview is a mock, not the panel in an iframe**, and both reasons
   matter. An iframe would only show what had been *saved*, which would stop the
   colour picker being a picker; and loading `/widget/:token` opens a visitor
@@ -931,6 +983,8 @@ landed, so phase 7 was mostly one large gap plus one promotion.
   `/admin/settings/branding`, a screen that no longer exists. Now records the
   § 4.2 split: record stays workspace-level, screen moved to the widget's
   Branding tab, colour is the one genuine per-widget override.
+  *(§ 4.2.1: the screen exists again, and the per-widget overrides are two —
+  colour and logo. Repointed a second time.)*
 - **`docs/admin-guide.md`** — already done. § 11 covers multiple widgets, the
   three tabs, identity verification and allowed domains; § 10 points at the
   widget screen; the "Admin ▾" table has no Branding row.

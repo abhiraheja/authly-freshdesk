@@ -1,7 +1,6 @@
 import {
   ChangeDetectionStrategy,
   Component,
-  DestroyRef,
   ElementRef,
   computed,
   effect,
@@ -15,13 +14,12 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
-    AuthApi,
+  AuthApi,
   PublicApi,
   SessionStore,
-  settled,
-  ThemeService,
   errorMessage,
   homePathFor,
+  settled,
   type User,
 } from '@trackly/core';
 import type { SsoLoginProvider } from '@trackly/core';
@@ -42,8 +40,18 @@ type Phase = 'email' | 'code';
  *
  * Which providers appear is the server's call, from the workspace slug: a
  * branded login (`?workspace=slug`) is a customer-facing surface, so it gets the
- * customer-facing providers, wears the workspace's brand and is forced to light
- * mode (invariant 6).
+ * customer-facing providers rather than the staff ones.
+ *
+ * **Branding loads with or without a slug.** It used to load only for `?workspace=`,
+ * which meant a magic-link email — whose verify URL carries the slug — showed the
+ * workspace's colours while the sign-in page the same person had just come from
+ * showed Trackly's. One deployment is one workspace, so `/api/public/branding`
+ * resolves it with no slug at all and both screens wear the same identity.
+ *
+ * **Dark mode stays.** Invariant 6 forces light on the portal, guest views, the
+ * knowledge base, the widget, chat, CSAT and emails — sign-in is not in that list,
+ * and staff sign in here too. So this screen takes the workspace's colour while
+ * still honouring the visitor's own light/dark preference.
  */
 @Component({
   selector: 'tk-login',
@@ -64,6 +72,7 @@ type Phase = 'email' | 'code';
     <tk-auth-layout
       [brandName]="brandName()"
       [logoUrl]="loadedBranding()?.logoUrl ?? null"
+      [imageUrl]="loadedBranding()?.signInImageUrl ?? null"
       [accent]="accent()"
       [panelTitle]="panelTitleKey() | transloco"
       [panelBody]="'login.panel.body' | transloco"
@@ -271,7 +280,6 @@ export class Login {
   private readonly auth = inject(AuthApi);
   private readonly publicApi = inject(PublicApi);
   private readonly session = inject(SessionStore);
-  private readonly theme = inject(ThemeService);
   private readonly router = inject(Router);
   private readonly route = inject(ActivatedRoute);
   private readonly transloco = inject(TranslocoService);
@@ -284,11 +292,17 @@ export class Login {
   private readonly workspaceSlug = computed(() => this.query()?.get('workspace') ?? undefined);
   private readonly returnUrl = computed(() => this.query()?.get('returnUrl') ?? null);
 
-  /** A branded login wears the workspace's identity; a miss falls back to Trackly's. */
+  /**
+   * The workspace's identity, slug or no slug.
+   *
+   * Two guards, both deliberate on the one screen that must never fail to
+   * render: `PublicApi.branding` swallows its own failure and answers null, and
+   * every read goes through `loadedBranding` below. Branding is decoration;
+   * sign-in is not, and the two must not share a failure.
+   */
   protected readonly branding = resource({
     params: () => ({ slug: this.workspaceSlug() }),
-    loader: ({ params }) =>
-      params.slug ? this.publicApi.branding(params.slug) : Promise.resolve(null),
+    loader: ({ params }) => this.publicApi.branding(params.slug),
   });
 
   protected readonly accent = computed(() => this.loadedBranding()?.primaryColor ?? null);
@@ -377,14 +391,8 @@ export class Login {
   private readonly codeInput = viewChild<ElementRef<HTMLInputElement>>('codeInput');
 
   constructor() {
-    // A workspace-branded sign-in is a customer-facing surface: it wears the
-    // tenant's colour and is always light. Restore the visitor's own preference
-    // on the way out (invariant 6).
-    let release: (() => void) | null = null;
-    effect(() => {
-      if (this.accent() && !release) release = this.theme.forceLight();
-    });
-    inject(DestroyRef).onDestroy(() => release?.());
+    // No `forceLight()` here, deliberately. The colour is the workspace's; the
+    // scheme is the visitor's — see the class doc.
 
     // Focus follows the phase, so the keyboard never has to catch up.
     effect(() => {

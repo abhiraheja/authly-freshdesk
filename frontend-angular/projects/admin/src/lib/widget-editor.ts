@@ -3,9 +3,16 @@ import { FormsModule } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
+  BrandingApi,
+  LOGO_ACCEPT,
+  MAX_IMAGE_BYTES,
   TicketsApi,
   WidgetAdminApi,
+  brandingAssetUrl,
+  checkFile,
   errorMessage,
+  formatBytes,
+  widgetLogoUrl,
   type Team,
   type VerifyJwtResult,
   type WidgetDetail,
@@ -36,16 +43,21 @@ type Tab = 'configuration' | 'branding' | 'integration';
 /**
  * Admin → Widget → one widget (docs/widget-plan.md § 8.2).
  *
- * <h3>One screen, two records</h3>
- * Configuration and Integration edit the **widget** row. Branding edits
- * `workspace_branding`, which the login page, the portal, the knowledge base and
- * the header of every outbound email also wear — so that tab says so in plain
- * words. Per-widget branding was rejected in § 4.2 because none of those surfaces
- * has a widget token to resolve, and "which widget brands the emails?" is a worse
- * question than the one screen it would save.
+ * <h3>One record — this widget's</h3>
+ * Every tab here writes `widget_configs` and nothing else. The Branding tab used
+ * to edit `workspace_branding` in place (§ 4.2), which meant changing a colour
+ * for one embedded widget silently repainted the sign-in page, the portal, the
+ * knowledge base and the header of every outbound email. That is reversed: the
+ * workspace record is edited at `/admin/settings/branding`, and this screen can
+ * only ever override the two fields a widget genuinely owns — its colour and its
+ * logo.
  *
- * The one field that spans both: **Widget theme** overrides the workspace's
- * primary colour for this widget alone. Empty means inherit.
+ * <h3>Null means inherit</h3>
+ * Both overrides are nullable, and empty is a real state rather than a default
+ * copied down: an unset colour follows the workspace's forever, including after
+ * someone changes it. So the workspace values are loaded read-only, shown
+ * underneath each field as what you would get by clearing it, and never written.
+ * A failure to load them must not take the editor down — hence `.catch`.
  */
 @Component({
   selector: 'tk-admin-widget-editor',
@@ -75,6 +87,8 @@ export class AdminWidgetEditor {
   readonly id = input.required<string>();
 
   private readonly api = inject(WidgetAdminApi);
+  /** Read-only here. The workspace record is written on its own screen. */
+  private readonly brandingApi = inject(BrandingApi);
   private readonly tickets = inject(TicketsApi);
   private readonly toast = inject(ToastService);
   private readonly confirm = inject(ConfirmService);
@@ -116,15 +130,38 @@ export class AdminWidgetEditor {
   protected readonly saving = signal(false);
   protected readonly saveError = signal<string | null>(null);
 
-  // ---- Branding form -------------------------------------------------------
+  // ---- Branding (this widget's own) ----------------------------------------
 
-  protected readonly brandColor = signal('#2563EB');
-  protected readonly pageTitle = signal('');
-  protected readonly welcomeText = signal('');
-  protected readonly footerText = signal('');
-  protected readonly hidePoweredBy = signal(false);
-  protected readonly savingBranding = signal(false);
   protected readonly uploadingLogo = signal(false);
+  protected readonly logoError = signal<string | null>(null);
+
+  protected readonly logoAccept = LOGO_ACCEPT;
+  protected readonly logoLimit = computed(() => {
+    this.transloco.getActiveLang();
+    return this.transloco.translate('admin.widget.logoHint', { limit: formatBytes(MAX_IMAGE_BYTES) });
+  });
+
+  /** What the workspace would give this widget if both overrides were cleared. */
+  protected readonly workspaceColour = computed(() => this.branding()?.primaryColor ?? '#2563EB');
+
+  protected readonly workspaceLogoUrl = computed(() => {
+    const record = this.branding();
+    return record?.hasLogo ? brandingAssetUrl('logo', record.updatedAt) : null;
+  });
+
+  protected readonly widgetLogoUrl = computed(() => {
+    const w = this.widget();
+    return w?.hasLogo ? widgetLogoUrl(w.publicToken, w.updatedAt) : null;
+  });
+
+  /** Whatever the visitor actually sees, override or inherited. */
+  protected readonly effectiveLogoUrl = computed(() => this.widgetLogoUrl() ?? this.workspaceLogoUrl());
+
+  /**
+   * Read-only, and only so the preview tells the truth. "Powered by Trackly" is
+   * workspace-wide — a widget cannot turn it off for itself.
+   */
+  protected readonly hidePoweredBy = computed(() => this.branding()?.hidePoweredBy ?? false);
 
   // ---- Secret key ----------------------------------------------------------
 
@@ -150,7 +187,7 @@ export class AdminWidgetEditor {
 
   /** What the preview should paint: the widget's own colour, else the workspace's. */
   protected readonly effectiveColour = computed(
-    () => this.primaryColor().trim() || this.brandColor() || '#2563EB',
+    () => this.primaryColor().trim() || this.workspaceColour(),
   );
 
   constructor() {
@@ -168,21 +205,25 @@ export class AdminWidgetEditor {
   private async load(id: string): Promise<void> {
     this.loadError.set(null);
     try {
+      // Only the widget itself is load-bearing. The workspace defaults and the
+      // team list are context: without them the fields still edit correctly, and
+      // failing the whole screen over "what colour would I inherit" would be a
+      // worse trade than showing the fallback.
       const [widget, branding, teams] = await Promise.all([
         this.api.get(id),
-        this.api.branding(),
+        this.brandingApi.get().catch(() => null),
         this.tickets.teams().catch(() => [] as Team[]),
       ]);
       this.widget.set(widget);
       this.branding.set(branding);
       this.teams.set(teams);
-      this.fill(widget, branding);
+      this.fill(widget);
     } catch (error) {
       this.loadError.set(errorMessage(error));
     }
   }
 
-  private fill(widget: WidgetDetail, branding: WorkspaceBranding): void {
+  private fill(widget: WidgetDetail): void {
     this.name.set(widget.name);
     this.tagline.set(widget.tagline ?? '');
     this.greeting.set(widget.greeting ?? '');
@@ -197,12 +238,6 @@ export class AdminWidgetEditor {
     this.identityVerificationEnabled.set(widget.identityVerificationEnabled);
     this.requireEmailVerification.set(widget.requireEmailVerification);
     this.allowedOrigins.set(widget.allowedOrigins.join('\n'));
-
-    this.brandColor.set(branding.primaryColor);
-    this.pageTitle.set(branding.pageTitle ?? '');
-    this.welcomeText.set(branding.welcomeText ?? '');
-    this.footerText.set(branding.footerText ?? '');
-    this.hidePoweredBy.set(branding.hidePoweredBy);
   }
 
   // ---- Saving --------------------------------------------------------------
@@ -248,38 +283,53 @@ export class AdminWidgetEditor {
     }
   }
 
-  protected async saveBranding(): Promise<void> {
-    this.savingBranding.set(true);
-    try {
-      this.branding.set(
-        await this.api.saveBranding({
-          primaryColor: this.brandColor(),
-          pageTitle: this.pageTitle().trim() || null,
-          welcomeText: this.welcomeText().trim() || null,
-          footerText: this.footerText().trim() || null,
-          hidePoweredBy: this.hidePoweredBy(),
-        }),
-      );
-      this.toast.success(this.transloco.translate('admin.widget.brandingSaved'));
-    } catch (error) {
-      this.toast.error(errorMessage(error));
-    } finally {
-      this.savingBranding.set(false);
-    }
-  }
+  // ---- This widget's logo --------------------------------------------------
+  // Writes `widget_configs.logo_storage_key` and nothing else. Removing it here
+  // falls back to the workspace logo; it never deletes the workspace's.
+  //
+  // Files save on pick rather than waiting for Update, matching the branding
+  // screen: there is nothing to reconcile, and an image sitting unsaved behind a
+  // button is a worse surprise than one that lands straight away.
 
   protected async uploadLogo(event: Event): Promise<void> {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
+    // Reset first, or re-picking the same file after an error does nothing.
     input.value = '';
     if (!file) return;
 
+    const reason = checkFile(file, { maxBytes: MAX_IMAGE_BYTES, accept: LOGO_ACCEPT });
+    if (reason) {
+      this.logoError.set(
+        this.transloco.translate(`upload.rejected.${reason}`, {
+          name: file.name,
+          limit: formatBytes(MAX_IMAGE_BYTES),
+          types: 'PNG, SVG, JPEG, WEBP',
+        }),
+      );
+      return;
+    }
+
+    this.logoError.set(null);
     this.uploadingLogo.set(true);
     try {
-      this.branding.set(await this.api.uploadLogo(file));
+      this.widget.set(await this.api.uploadLogo(this.id(), file));
       this.toast.success(this.transloco.translate('admin.widget.logoUploaded'));
     } catch (error) {
-      this.toast.error(errorMessage(error));
+      this.logoError.set(errorMessage(error));
+    } finally {
+      this.uploadingLogo.set(false);
+    }
+  }
+
+  protected async removeLogo(): Promise<void> {
+    this.logoError.set(null);
+    this.uploadingLogo.set(true);
+    try {
+      this.widget.set(await this.api.removeLogo(this.id()));
+      this.toast.success(this.transloco.translate('admin.widget.logoCleared'));
+    } catch (error) {
+      this.logoError.set(errorMessage(error));
     } finally {
       this.uploadingLogo.set(false);
     }

@@ -47,6 +47,17 @@ public class WidgetConfig
     /// the organisation has a colour, a given widget may want another.
     /// </summary>
     public string? PrimaryColor { get; set; }
+    /// <summary>
+    /// Logo for this widget alone. Null inherits <c>workspace_branding</c>, the
+    /// same way <see cref="PrimaryColor"/> does.
+    ///
+    /// A widget can carry a different identity from the organisation running it —
+    /// a support widget on a product microsite, or a partner-branded embed — and
+    /// setting one here must never write back to the workspace record, which also
+    /// dresses the sign-in page, the portal and every outbound email.
+    /// </summary>
+    public string? LogoStorageKey { get; set; }
+    public string? LogoContentType { get; set; }
     /// <summary>Tickets raised through this widget are routed to this team.</summary>
     public Guid? TeamId { get; set; }
     public Team? Team { get; set; }

@@ -3687,6 +3687,14 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("launch_widget");
 
+                    b.Property<string>("LogoContentType")
+                        .HasColumnType("text")
+                        .HasColumnName("logo_content_type");
+
+                    b.Property<string>("LogoStorageKey")
+                        .HasColumnType("text")
+                        .HasColumnName("logo_storage_key");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text")
@@ -3951,6 +3959,14 @@ namespace Trackly.Infrastructure.Data.Migrations
                         .HasColumnType("text")
                         .HasDefaultValue("#2563EB")
                         .HasColumnName("primary_color");
+
+                    b.Property<string>("SignInImageContentType")
+                        .HasColumnType("text")
+                        .HasColumnName("sign_in_image_content_type");
+
+                    b.Property<string>("SignInImageStorageKey")
+                        .HasColumnType("text")
+                        .HasColumnName("sign_in_image_storage_key");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")

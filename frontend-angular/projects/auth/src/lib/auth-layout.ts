@@ -12,8 +12,13 @@ import { Avatar, Icon } from '@trackly/ui';
  * **Two brands, one layout.** With no `accent` this is Trackly's own screen —
  * indigo gradient, dark-mode capable. Pass a workspace's `primaryColor` and it
  * becomes that workspace's sign-in: their colour, their name and logo, no
- * Trackly cross-links. The caller is responsible for forcing light mode in that
- * case (invariant 6).
+ * Trackly cross-links.
+ *
+ * An accent does **not** by itself mean light mode. Sign-in and verify are worn
+ * by staff as well as customers, so they take the workspace colour and keep the
+ * visitor's own scheme; the surfaces invariant 6 actually enumerates — portal,
+ * guest views, knowledge base, widget, chat, CSAT — call `forceLight()` for
+ * themselves on entry.
  *
  * The panel is hidden below `lg`. It carries no information the user needs —
  * losing it on a phone costs nothing, whereas a squashed illustration above the

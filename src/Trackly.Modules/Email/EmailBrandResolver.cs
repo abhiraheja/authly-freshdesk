@@ -8,14 +8,18 @@ namespace Trackly.Modules.Email;
 /// What a workspace's emails look like. The one place the email pipeline reads
 /// branding from.
 ///
-/// **Why the indirection.** `WorkspaceBranding` is only half-built: the entity,
-/// the admin API and the public read endpoint all work, but the Angular editor
-/// at `/admin/settings/branding` is still `ComingSoon`, so how branding is
-/// ultimately modelled may still move. Templates only ever *read* branding, and
-/// the read shape is the settled half — but pointing thirteen templates and a
-/// layout directly at the entity would make any later restructuring a rewrite of
-/// all of them, including bodies admins had customised by then. Everything goes
-/// through this record instead, so that change stays inside this file.
+/// **Why the indirection.** Templates only ever *read* branding, and pointing
+/// thirteen templates and a layout directly at the entity would make any later
+/// restructuring a rewrite of all of them — including bodies admins had
+/// customised by then. Everything goes through this record instead, so that
+/// change stays inside this file. That has already earned its keep twice: the
+/// editor moved onto the widget screen and then back out to
+/// `/admin/settings/branding`, and `workspace_branding` gained a sign-in image,
+/// without a single template changing.
+///
+/// Widget overrides deliberately do **not** reach here. A widget's colour and
+/// logo apply to that widget; an email has no widget in sight, and "which widget
+/// brands the emails?" has no answer (docs/widget-plan.md § 4.2.1).
 /// </summary>
 public record EmailBrand(
     string BrandName,

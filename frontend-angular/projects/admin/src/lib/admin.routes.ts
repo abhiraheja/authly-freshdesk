@@ -84,9 +84,13 @@ export const adminRoutes: Routes = [
     loadComponent: () => import('./widget-editor').then((m) => m.AdminWidgetEditor),
   },
   { path: 'settings/ai', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.aiCopilot', from: 'frontend/src/pages/admin/AiSettingsPage.tsx' } },
-  // /admin/settings/branding is deliberately gone — branding is edited on the
-  // widget screen's Branding tab now, so there is exactly one place for it
-  // (§ 4.2). A redirect rather than a deletion, because the URL is in bookmarks
-  // and in the admin guide's older revisions.
-  { path: 'settings/branding', redirectTo: 'widget', pathMatch: 'full' },
+  {
+    // The workspace's visual identity: logo, sign-in artwork, colour, the words
+    // on the customer-facing surfaces. A screen of its own again — the § 4.2
+    // merge into the widget editor assumed branding was a widget concern, and it
+    // is not: the same record dresses the sign-in page, the portal, the knowledge
+    // base and every email. A widget still overrides its own colour and logo.
+    path: 'settings/branding',
+    loadComponent: () => import('./branding-settings').then((m) => m.AdminBrandingSettings),
+  },
 ];

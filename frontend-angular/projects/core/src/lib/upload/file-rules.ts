@@ -14,8 +14,31 @@ export const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 /** Matches `BrandingController.MaxLogoBytes` and the avatar cap. */
 export const MAX_IMAGE_BYTES = 1024 * 1024;
 
+/**
+ * Matches `BrandingController.MaxSignInImageBytes`.
+ *
+ * Five times the logo's, because it is a different kind of picture: a logo is a
+ * mark that has to read at 32px in an email header, and the sign-in panel image
+ * is full-bleed artwork across a 1440px column. Holding it to 1 MB would make
+ * admins degrade a photograph before it ever reached the page.
+ */
+export const MAX_SIGN_IN_IMAGE_BYTES = 5 * 1024 * 1024;
+
 /** What the avatar and logo endpoints accept, as an `accept` attribute. */
 export const IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp';
+
+/**
+ * What the logo endpoints accept. SVG is allowed here and nowhere else: a logo
+ * is rendered into an `<img>` inside Trackly's own chrome, and vector is what
+ * keeps a mark crisp from a 24px favicon to an email header. Deliberately *not*
+ * offered for the sign-in panel image, which is a full-viewport background —
+ * an SVG is a document, and one filling the page is a larger surface than one
+ * sitting at 32px in a header.
+ */
+export const LOGO_ACCEPT = 'image/png,image/svg+xml,image/jpeg,image/webp';
+
+/** What the sign-in panel image accepts. Raster only; GIF so a loop works. */
+export const SIGN_IN_IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
 
 /**
  * What a ticket attachment may be — **must match `UploadPolicy.Allowed`**.

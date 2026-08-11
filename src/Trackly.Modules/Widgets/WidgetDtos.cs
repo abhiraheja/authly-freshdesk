@@ -38,7 +38,10 @@ public record WidgetDetailDto(
     bool HasSecretKey,
     string? SecretKeyMasked,
 
+    // Both null/false mean "inherit workspace_branding". They are read here so the
+    // Branding tab can show what a widget would look like without one.
     string? PrimaryColor,
+    bool HasLogo,
     Guid? TeamId,
     string? TeamName,
 

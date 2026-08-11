@@ -76,6 +76,41 @@ public class WidgetController(
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
         => await widgets.DeleteAsync(User.GetActor(), id, ct) ? NoContent() : NotFound();
 
+    // ---- Admin: the per-widget logo -----------------------------------------
+    // Writes widget_configs, never workspace_branding. A widget that overrides
+    // the logo is showing its own identity; the workspace record behind the
+    // sign-in page, the portal and every email is untouched by this.
+
+    private const long MaxWidgetLogoBytes = 1024 * 1024;
+    private static readonly string[] AllowedWidgetLogoTypes =
+        ["image/png", "image/svg+xml", "image/jpeg", "image/webp"];
+
+    [HttpPost("api/admin/widgets/{id:guid}/logo")]
+    [Authorize(Policy = "Admin")]
+    [RequestSizeLimit(MaxWidgetLogoBytes + 1024)]
+    public async Task<IActionResult> UploadLogo(Guid id, IFormFile file, CancellationToken ct)
+    {
+        if (file is null || file.Length == 0)
+            return BadRequest(new { error = "A logo file is required." });
+        if (file.Length > MaxWidgetLogoBytes)
+            return StatusCode(StatusCodes.Status413PayloadTooLarge, new { error = "Logos are limited to 1 MB." });
+        if (!AllowedWidgetLogoTypes.Contains(file.ContentType))
+            return BadRequest(new { error = "Logo must be PNG, SVG, JPEG or WebP." });
+
+        await using var stream = file.OpenReadStream();
+        var widget = await widgets.SetLogoAsync(
+            User.GetActor(), id, stream, file.FileName, file.ContentType, Origins, ct);
+        return widget is null ? NotFound() : Ok(widget);
+    }
+
+    [HttpDelete("api/admin/widgets/{id:guid}/logo")]
+    [Authorize(Policy = "Admin")]
+    public async Task<IActionResult> DeleteLogo(Guid id, CancellationToken ct)
+    {
+        var widget = await widgets.ClearLogoAsync(User.GetActor(), id, Origins, ct);
+        return widget is null ? NotFound() : Ok(widget);
+    }
+
     // The plaintext secret exists in a response exactly here and on create.
     [HttpPost("api/admin/widgets/{id:guid}/secret")]
     [Authorize(Policy = "Admin")]

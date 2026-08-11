@@ -21,7 +21,8 @@ namespace Trackly.Modules.Widgets;
 /// not live in this class.
 /// </para>
 /// </summary>
-public class WidgetService(TracklyDbContext db, ISecretProtector protector)
+public class WidgetService(
+    TracklyDbContext db, ISecretProtector protector, IWorkspaceFileStorage storage)
 {
     private IQueryable<WidgetConfig> Visible(Actor actor) =>
         db.WidgetConfigs.Where(w => w.WorkspaceId == actor.WorkspaceId);
@@ -100,7 +101,59 @@ public class WidgetService(TracklyDbContext db, ISecretProtector protector)
         // outlives the config row that produced it. See the Ticket mapping.
         db.WidgetConfigs.Remove(widget);
         await db.SaveChangesAsync(ct);
+
+        // The row is gone, so nothing will ever name this key again. Storage has
+        // no foreign keys to cascade through — an orphan here is a file that
+        // outlives the workspace's own record of it.
+        if (widget.LogoStorageKey is not null)
+            await storage.DeleteAsync(actor.WorkspaceId, widget.LogoStorageKey, ct);
         return true;
+    }
+
+    // ---- Per-widget logo -----------------------------------------------------
+    // A widget may carry its own mark — a product microsite, a partner-branded
+    // embed — and setting one here must never touch workspace_branding, which
+    // also dresses the sign-in page, the portal and every outbound email. Null
+    // means inherit; clearing falls straight back to the workspace's logo.
+
+    public async Task<WidgetDetailDto?> SetLogoAsync(
+        Actor actor, Guid id, Stream content, string fileName, string contentType,
+        WidgetOrigins origins, CancellationToken ct)
+    {
+        var widget = await Visible(actor).Include(w => w.Team).SingleOrDefaultAsync(w => w.Id == id, ct);
+        if (widget is null) return null;
+
+        var oldKey = widget.LogoStorageKey;
+        // Public: it is fetched by browsers on sites Trackly does not control.
+        widget.LogoStorageKey = await storage.SaveAsync(
+            actor.WorkspaceId, $"{actor.WorkspaceId}/widgets/{widget.Id}", fileName, content,
+            StorageVisibility.Public, ct);
+        widget.LogoContentType = contentType;
+        widget.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        // After the save: deleting first would leave the widget with no logo at
+        // all if the write then failed.
+        if (oldKey is not null)
+            await storage.DeleteAsync(actor.WorkspaceId, oldKey, ct);
+        return await ToDetailAsync(widget, origins, ct);
+    }
+
+    public async Task<WidgetDetailDto?> ClearLogoAsync(
+        Actor actor, Guid id, WidgetOrigins origins, CancellationToken ct)
+    {
+        var widget = await Visible(actor).Include(w => w.Team).SingleOrDefaultAsync(w => w.Id == id, ct);
+        if (widget is null) return null;
+
+        var oldKey = widget.LogoStorageKey;
+        widget.LogoStorageKey = null;
+        widget.LogoContentType = null;
+        widget.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+
+        if (oldKey is not null)
+            await storage.DeleteAsync(actor.WorkspaceId, oldKey, ct);
+        return await ToDetailAsync(widget, origins, ct);
     }
 
     /// <summary>
@@ -326,7 +379,7 @@ public class WidgetService(TracklyDbContext db, ISecretProtector protector)
             w.IdentityVerificationEnabled,
             w.SecretKeyEncrypted is not null,
             Mask(w.SecretKeyEncrypted),
-            w.PrimaryColor, w.TeamId, w.Team?.Name,
+            w.PrimaryColor, w.LogoStorageKey is not null, w.TeamId, w.Team?.Name,
             w.HideLauncher, w.LaunchWidget, w.ShowWidgetForm, w.ShowCloseButton, w.ShowSendButton,
             w.RequireEmailVerification, SplitOrigins(w.AllowedOrigins),
             w.EmbedType, ParseFields(w.Fields), w.Theme,

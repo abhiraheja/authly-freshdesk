@@ -120,10 +120,12 @@ public class WidgetPublicService(
             widget.Greeting,
             $"{frontend}/widget/{widget.PublicToken}",
             widget.Workspace.Name,
-            // The widget's colour wins, the workspace's is the default, and the
-            // Trackly blue is only ever the last resort (plan § 4.2).
+            // The widget's own identity wins, the workspace's is the default, and
+            // the Trackly blue is only ever the last resort. Colour and logo
+            // inherit independently: a widget may repaint without re-uploading a
+            // mark, or carry a partner's logo in the organisation's colour.
             widget.PrimaryColor ?? branding?.PrimaryColor ?? "#2563EB",
-            branding?.LogoStorageKey is null ? null : $"/api/public/workspaces/{slug}/logo",
+            WidgetLogoUrl(widget, branding, slug),
             branding?.HidePoweredBy ?? false,
             widget.HideLauncher,
             widget.LaunchWidget,
@@ -132,6 +134,38 @@ public class WidgetPublicService(
             widget.ShowSendButton,
             widget.IdentityVerificationEnabled,
             widget.RequireEmailVerification);
+    }
+
+    /// <summary>
+    /// This widget's logo, else the workspace's, else none.
+    ///
+    /// The widget URL is keyed on the public token rather than the slug because
+    /// that is the only identifier the embedding page holds — and it keeps the
+    /// two assets on separate cache keys, so overriding a widget's logo cannot
+    /// serve a stale workspace one to the portal.
+    /// </summary>
+    private static string? WidgetLogoUrl(WidgetConfig widget, WorkspaceBranding? branding, string slug)
+    {
+        if (widget.LogoStorageKey is not null)
+            return $"/api/public/widget/{widget.PublicToken}/logo";
+        return branding?.LogoStorageKey is null
+            ? null
+            : $"/api/public/workspaces/{Uri.EscapeDataString(slug)}/logo";
+    }
+
+    /// <summary>
+    /// The bytes behind the URL above, for a widget that overrides the logo.
+    /// Origin-checked like every other public widget read, so an unlisted site
+    /// cannot hotlink the asset any more than it can load the widget.
+    /// </summary>
+    public async Task<(Stream Stream, string ContentType)?> GetLogoAsync(
+        string publicToken, string? origin, CancellationToken ct)
+    {
+        var widget = await ResolveAsync(publicToken, origin, ct);
+        if (widget?.LogoStorageKey is null) return null;
+
+        var stream = await storage.OpenReadAsync(widget.WorkspaceId, widget.LogoStorageKey, ct);
+        return (stream, widget.LogoContentType ?? "application/octet-stream");
     }
 
     // ---- Session ------------------------------------------------------------

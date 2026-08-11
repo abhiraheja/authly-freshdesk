@@ -42,7 +42,7 @@ them is the fastest way to break the product.
 
 | | **Trackly-owned** | **Workspace-branded** |
 |---|---|---|
-| Screens | dashboard, tickets, admin, login/verify, onboarding | `/submit`, `/kb`, `/chat`, `/csat`, guest ticket view, `/portal/*`, `/invite`, widget, notification emails |
+| Screens | dashboard, tickets, admin, onboarding | `/submit`, `/kb`, `/chat`, `/csat`, guest ticket view, `/portal/*`, `/invite`, widget, notification emails |
 | Colour source | the token layer (indigo `#4F46E5`) | `branding.primaryColor`, fetched per workspace |
 | Dark mode | **yes** — must work in both schemes | **no** — always light; the palette is the customer's |
 | Wrapper | routed under `Shell` | a branded frame, outside the shell |
@@ -50,6 +50,14 @@ them is the fastest way to break the product.
 This is **invariant 6** in `CLAUDE.md`. Customer surfaces still use Trackly's
 typography, spacing, radius and motion — those are brand-neutral. Only colour
 differs, and a branded route calls `ThemeService.forceLight()` on entry.
+
+**`/login` and `/auth/verify` are the one hybrid**, and deliberately: they take
+the workspace's colour, logo and sign-in artwork (from `/api/public/branding`,
+which resolves the single workspace with no slug) while **keeping dark mode**.
+Invariant 6's always-light list enumerates the portal, guest views, the KB, the
+widget, chat, CSAT and emails — sign-in is not on it, because staff sign in there
+too. Neither screen calls `forceLight()`; if you add one that does, the two halves
+of a magic-link flow stop matching, which is the bug this fixed.
 
 ---
 

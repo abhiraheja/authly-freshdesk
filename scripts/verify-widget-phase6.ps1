@@ -5,11 +5,14 @@
   a rendered page can settle:
 
     * the widget screen is real, not the ComingSoon placeholder
-    * branding is editable in exactly ONE place
+    * each branding record is editable in exactly ONE place
 
-  The second is checked from both ends - the Branding nav row is gone, and the
-  old /admin/settings/branding URL lands on the widget screen rather than a 404,
-  because that URL is in bookmarks and in older revisions of the admin guide.
+  The second claim was rewritten by widget-plan 4.2.1. It used to mean "branding
+  lives only on the widget screen"; it now means the opposite split - the
+  workspace record has its own screen at /admin/settings/branding and its own nav
+  row, and the widget's Branding tab writes the widget row alone. The strong form
+  is proved at the end: save a colour on a widget, then re-read
+  GET /api/admin/branding and assert the payload did not move.
 
   Also asserted: the secret key is never rendered in plaintext, the live preview
   repaints as the colour is typed (which is the only reason it exists), and the

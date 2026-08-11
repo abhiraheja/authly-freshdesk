@@ -237,9 +237,10 @@ of object, at `<prefix>/<workspace-id>/…`:
 |---|---|---|
 | `<ticket-id>/…` | Ticket attachments | Private — `GET /api/attachments/{id}` |
 | `avatars/<user-id>/…` | Profile photos | Private — `GET /api/users/{id}/avatar` |
-| `branding/…` | Workspace logo | Public — the only thing a CDN URL is ever built for |
+| `branding/…` | Workspace logo, sign-in panel image | Public — the only things a CDN URL is ever built for |
+| `widgets/<widget-id>/…` | A single widget's own logo, when it overrides the workspace's | Public, same rules |
 
-Only the logo is saved with `StorageVisibility.Public`, which is what puts the
+Only these branding assets are saved with `StorageVisibility.Public`, which is what puts the
 `-public` marker in its storage key. `PublicUrlAsync` returns null for any key
 without it, so no code path can hand out a CDN link to an attachment or a photo
 even by mistake.
@@ -284,13 +285,15 @@ bucket:  https://storage.googleapis.com/saarvix-beta-public/trackly/…/logo.png
 CDN:     https://cdn-beta.saarvix.in/trackly/…/logo.png
 ```
 
-**Only workspace logos are ever given a CDN URL.**
-`GET /api/public/workspaces/{slug}/logo` answers with a `302` to the CDN;
+**Only branding assets are ever given a CDN URL.**
+`GET /api/public/workspaces/{slug}/logo`, its slug-less twin `/api/public/logo`,
+`/api/public/sign-in-image` and `/api/public/widget/{token}/logo` answer with a
+`302` to the CDN;
 everything else keeps streaming through the API. Attachments go through
 `GET /api/attachments/{id}`, which is where workspace isolation, requester
 scoping and the private-note rule (invariant 5) are enforced — a CDN URL carries
 no sign-in, so publishing one would bypass all three. The mechanism is the key
-prefix: logos are written `gcs-public:…`, everything else `gcs:…`, and
+prefix: branding assets are written `gcs-public:…`, everything else `gcs:…`, and
 `PublicUrlAsync` returns null for anything not marked public.
 
 > ⚠️ **One bucket holds both.** A CDN requires that bucket to be publicly
@@ -537,6 +540,7 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] `App:FrontendBaseUrl` = the public SPA URL (test a magic-link email points there); the SPA host must also serve `index.html` for `/oauth/callback`
 - [ ] `App:ApiBaseUrl` = the public API URL, and **reachable from outside** — mail clients fetch the workspace logo from it over the open internet. An address that only resolves inside the cluster gives every recipient a broken image. (Emails only reference the logo when one has actually been uploaded; with no logo the layout prints the workspace name as text, so this matters from the moment branding is set, not before)
 - [ ] **Send a test email** and open it: the layout, logo and brand colour are what customers will see. This is also the send that satisfies invariant 8
+- [ ] **Branding set** — **Admin ▾ → Branding**: logo, sign-in image, colour and words. The sign-in and verify pages, the portal, the KB, guest views and every email read this one record, so it is worth doing before the first invitation goes out rather than after. Both assets are written to storage as **public** objects (§3); on a workspace using a CDN they get a CDN URL, which is the exposure recorded there
 - [ ] **If any email template was customised:** open **Admin ▾ → Workspace → Email → Edit templates** and send a **Test** for each one showing *Customised*. Built-in templates are covered by the send above; a customised one is the only mail nobody has read since it was edited
 - [ ] `Storage:LocalPath` on a persistent, backed-up volume (single instance) — still the default and the fallback even when workspaces use a cloud provider
 - [ ] Any workspace on Azure/GCS has passed **Admin → Storage → Test connection**

@@ -57,6 +57,8 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
   - **Customer-facing surfaces** (submit form, portal, guest view, widget, KB,
     live chat, CSAT, notification emails) carry **your workspace branding** and
     are always light. Setting up branding (§10) changes all of them at once.
+  - **Sign-in and verify** sit between the two: your colour, logo and artwork,
+    but dark mode still works, because staff sign in there as well as customers.
 - **Sessions** — login issues an HttpOnly session cookie, valid 30 days.
 
 ---
@@ -74,8 +76,8 @@ feature you get: **what it is**, **how to set it up**, and **how to use it**.
    of your own installation. That is also why Trackly has passwords at all (§3.1). Once this has run, `/setup` is closed permanently —
    everyone else joins by invitation (§3.2) or SSO (§3.3).
 2. **Invite your team** — **Admin ▾ → People → Members** (§3.2).
-3. **Set your branding** — **Admin ▾ → Widget → Branding tab** (§10) so customer
-   surfaces show your logo and colour.
+3. **Set your branding** — **Admin ▾ → Branding** (§10) so the sign-in page and
+   every customer surface show your logo and colour.
 4. **Decide how tickets arrive** — a shareable submit form and portal work out of
    the box; add **email** (§9), the **widget** (§11), **live chat** (§15), or
    **messaging connectors** (§14) as needed.
@@ -895,23 +897,49 @@ handlers are removed._
 
 ## 10. Branding
 
-**What it is.** Your logo, primary colour, page title, welcome/footer text applied
-to **every customer-facing surface** (submit form, portal, guest view, widget, KB,
-live chat, CSAT, notification emails). Trackly’s own agent/admin screens are
-unaffected.
+**What it is.** Your logo, sign-in artwork, primary colour, page title and
+welcome/footer text, applied to **every customer-facing surface** (submit form,
+portal, guest view, widget, KB, live chat, CSAT, notification emails) **and to the
+sign-in and verify pages**. Trackly's own agent/admin screens are unaffected.
 
-**Where:** **Admin ▾ → Widget → Branding tab**. There is no separate Branding
-screen — it moved onto the widget screen so there is exactly one place to edit it.
-The tab says so at the top, because it is easy to assume a setting on a widget
-screen only affects that widget. It does not: your logo is on the sign-in page and
-in the header of every email Trackly sends.
+**Where:** **Admin ▾ → Branding**. (It was briefly a tab on the widget screen.
+That was the wrong home: this record reaches far more than a widget, and nobody
+looking for "our logo on the login page" thinks to open *Widget*.)
 
-**Set up.** Upload a logo, pick the workspace's default primary colour, set the
-page title and copy, and decide whether to hide "Powered by Trackly".
+### Set up
 
-**One exception.** A single widget can wear a different colour — **Widget theme**
-on that widget's Configuration tab overrides the workspace colour for that widget
-alone. Clear it to go back to inheriting.
+1. **Logo** — PNG, SVG, JPEG or WebP, up to 1 MB. It appears in the sign-in
+   header, on customer pages, and at the top of every email. A square mark reads
+   better than a wordmark, because it is rendered small.
+2. **Sign-in image** — PNG, JPEG, WebP or GIF, up to 5 MB. Fills the panel beside
+   the sign-in form. The headline sits across the bottom of that panel over a dark
+   scrim, so keep the subject of the picture out of that strip. Leave it empty to
+   keep the built-in illustration.
+3. **Colour** — one hex value. The lighter gradient stop on the sign-in panel is
+   derived from it, so there is no second colour to choose.
+4. **Words** — page title, welcome text, footer text, and whether to hide
+   "Powered by Trackly".
+
+The live preview at the top of the screen shows the sign-in page as you type. It
+is there to catch the two failures a form cannot show you: a colour that is
+illegible behind white button text, and an image whose subject sits exactly where
+the headline lands.
+
+**Uploads save immediately.** The colour and the text fields save when you press
+**Save**.
+
+> **Logos in email need one config key.** A mail client fetches the logo from
+> outside your network, so it needs an absolute address: set `App:ApiBaseUrl` to a
+> URL reachable from the open internet. Without it, emails print your workspace
+> name as text instead of the logo, and nothing inside Trackly will look wrong.
+
+**Sign-in keeps dark mode.** Customer-facing pages are always light — the palette
+is yours, not Trackly's. The sign-in and verify pages are the exception: staff use
+them too, so they wear your colour and logo while still following each visitor's
+own light/dark preference.
+
+**Per-widget overrides.** A single widget can wear its own **colour** and its own
+**logo** — see §11. Editing a widget never changes anything here.
 
 ---
 
@@ -937,6 +965,20 @@ allowed domains.
 4. **Allowed domains**, one origin per line. Leave empty and any site can load the
    widget. This list is the only thing stopping that, so fill it in.
 5. **Integration tab** → copy the snippet onto your site, just before `</body>`.
+
+### Branding tab — this widget only
+
+A widget can wear its own **colour** and its own **logo**. Both start empty, and
+empty means *follow the workspace* (§10) — not "copy the workspace's value now",
+so a widget you never override keeps up automatically when you change your brand
+later.
+
+Set either one and it applies to that widget and nothing else. **Use the
+workspace colour** / **Use the workspace logo** clears the override and goes back
+to inheriting; it never deletes the workspace's own logo. Nothing on this tab can
+change your sign-in page, your portal or your emails.
+
+The logo saves as soon as you pick it. The colour saves with **Update widget**.
 
 ### Identity verification
 
@@ -1169,8 +1211,8 @@ Canned.
 | **People** | Members · Teams |
 | **Workflow** | Statuses & workflow · SLA policies · Automation · AI copilot |
 | **Ticket view** | Registers (§4.3) · Ticket layout (§23) |
-| **Channels** | Messaging (connectors) · Widget (branding lives on its Branding tab, §10) · Email · Email templates (§9.1) |
-| **Workspace** | Login methods · SSO |
+| **Channels** | Messaging (connectors) · Widget (its Branding tab overrides colour + logo for that widget alone, §11) · Email · Email templates (§9.1) |
+| **Workspace** | Branding (§10) · Login methods · SSO |
 
 **Customer-facing URLs:** `/submit` · `/portal` · `/kb` · `/chat` · `/widget/<token>` (the embedded panel) · guest tracking
 & CSAT links (emailed), all with `?workspace=<slug>` where shown.
