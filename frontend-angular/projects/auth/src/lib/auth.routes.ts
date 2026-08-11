@@ -34,8 +34,7 @@ export const authRoutes: Routes = [
     // button posts it, because email scanners prefetch GET links and would
     // otherwise burn the token before the recipient ever clicked (invariant 7).
     path: 'auth/verify',
-    loadComponent: () => import('@trackly/ui').then((m) => m.ComingSoon),
-    data: { titleKey: 'comingSoon.titles.verifySignIn', from: 'frontend/src/pages/VerifyPage.tsx' },
+    loadComponent: () => import('./verify').then((m) => m.Verify),
   },
   {
     // Where the SSO callback lands once Trackly has issued its own session.

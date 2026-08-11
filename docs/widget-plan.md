@@ -418,6 +418,13 @@ filter already live, so nothing can leak down the socket that could not leak ove
 HTTP. `Origin` is not re-checked on the handshake — the visitor token was issued
 over an origin-checked POST and is the thing being trusted.
 
+Both credentials travel in the **query string** rather than a header, which is
+not a shortcut: `new WebSocket()` cannot set request headers, so the
+`X-Trackly-Visitor` header the REST calls use is unavailable on a handshake. The
+socket is same-origin despite the widget being an embed — the panel document is
+served by Trackly and merely *displayed* inside the host page's iframe — so the
+widget CORS policy is not involved in it at all.
+
 Every one of these authenticates by the visitor token in a header, resolves the
 workspace from `{token}` (never from a client-supplied slug), and is written so
 that dropping the visitor-token filter fails a test rather than leaking.
@@ -691,7 +698,7 @@ Each is independently shippable and leaves the existing widget working.
 | 4 ✅ | `/widget.js` rewritten: `initChatWidget`, open/close/identify, branded launcher, postMessage handshake, back-compat path | The snippet in § 7.1 works on a plain HTML page |
 | 5 ✅ | Angular customer surface `/widget/:token` (home, details form, thread, closed section) | Four states each, brand-coloured, light |
 | 6 ✅ | Angular admin `/admin/widget` list + Configuration/Branding/Integration tabs with live preview; `/admin/settings/branding` route and nav entry removed (§ 4.2) | React `WidgetPage.tsx` is no longer reachable and branding is editable in exactly one place |
-| 7 | Docs | § 11 |
+| 7 ✅ | Docs — the rework folded back into `trackly-plan.md`, the trust rule promoted to an invariant | § 11 |
 
 Phase 6 shipped with `scripts/verify-widget-phase6.ps1` — 19 assertions. The
 done-when's second half is checked from **both** ends, because "editable in
@@ -741,13 +748,38 @@ Three decisions the build forced:
   it throws out of change detection first. On an iframe that failure mode is a
   blank white box with no way to tell broken from loading, so the config is two
   plain signals.
-- **Polling, not SignalR — for now.** The hub landed in phase 3 and the panel
-  still uses the documented fallback: the list every 20s (which is what feeds the
-  launcher badge, so it runs even while the panel is shut) and the open thread
-  every 10s. Adding `@microsoft/signalr` is a new runtime dependency in every
-  customer-facing bundle, and it belongs to the change that ports live chat,
-  which needs the client anyway. Until then the badge is at most twenty seconds
-  late, which is the difference the fallback exists to cover.
+- **SignalR, with polling as the fallback it was always described as.** Phase 5
+  shipped on the poll alone, because `@microsoft/signalr` was a new runtime
+  dependency in a customer-facing bundle and it belonged to the change that ports
+  live chat. That change has since landed on `main`, so the client is already
+  there and the panel now connects to `/hubs/widget`. Measured end to end, an
+  agent's reply reaches an open panel in ~300ms rather than up to 20s.
+
+  Three things about the wiring are deliberate:
+
+  - **The poll does not go away, it slows down.** With the socket up the list
+    still refreshes every 120s and the thread not at all. That is not belt and
+    braces — the push fires from `NotificationService.OnReplyAsync`, so it fires
+    on a *reply*. An agent who resolves or closes a ticket without commenting
+    moves a status the panel shows, and nothing pushes. Two minutes bounds how
+    wrong that can get, at a sixth of the old request volume. With the socket
+    down the old 20s/10s cadence comes straight back.
+  - **The connection is keyed on the visitor token, not opened once at boot.**
+    Verifying an email can hand back a different token, and the hub resolves its
+    group from whichever token opened the socket — a connection left on the old
+    one would keep looking live while listening to the wrong visitor.
+  - **Nothing is rendered about it.** No connection dot, no "reconnecting"
+    banner. A visitor cannot act on a hub being down, and Trackly's operational
+    state does not belong on somebody else's storefront. The flag exists only to
+    choose the cadence above.
+
+  One structural consequence, worth knowing before someone moves it back:
+  `WidgetVisitorStore` had to leave `widget.api.ts` for its own file.
+  `widgetVisitorInterceptor` needs the store, the interceptors are reached from
+  `provideTracklyCore`, and that is eager in every app — so while the store sat
+  beside `WidgetApi`, importing SignalR into `WidgetApi` put ~56kB of it in the
+  initial bundle of every screen in Trackly. Measured, not guessed: `main` went
+  13.96kB → 70.32kB and back to 12.75kB after the split.
 
 The visitor token lives in `localStorage` keyed **per widget token**, and rides
 on `X-Trackly-Visitor` through an interceptor scoped to `/api/public/widget/`
@@ -777,6 +809,42 @@ Two smaller decisions:
 - **The loader holds no credential.** § 7.2's `visitorId` step is gone; the frame
   owns the server-issued token. A loader with nothing to steal is a loader that
   can safely be a plain script tag on a page Trackly does not control.
+- **An opaque host origin posts to `'*'`, and must.** A host page opened from
+  `file://` — or one inside a sandboxed iframe — reports `event.origin` as the
+  *string* `"null"`, which is not a legal `postMessage` target: it throws
+  `SyntaxError` instead of quietly not delivering. `WidgetBridge.targetOrigin()`
+  maps it to `'*'`, which is the only string that can reach an opaque origin.
+
+  This is not a weakening of the learned-origin rule. The recipient is always
+  `window.parent`, and nothing the panel sends outward is a secret — the visitor
+  token never crosses `postMessage`, only unread counts and window-chrome
+  requests. The *inbound* check (`event.origin` must match the learned origin) is
+  untouched, and that is the half that matters.
+
+  It shipped broken and reached a user. The throw happened inside the effect
+  behind `reportUnread`, which took out change detection, so the panel sat on its
+  loading skeletons forever — on screen, indistinguishable from an API call that
+  never returned, and easily mistaken for a CORS problem. Every request was a
+  200. `scripts/widget-opaque-origin-probe.mjs` is the regression guard, and it
+  was confirmed to fail against the broken code before being kept: every other
+  probe serves the host page over http, which is precisely why none of them
+  caught it. Opening the snippet in a local HTML file is the first thing anyone
+  does with it.
+
+The move to SignalR added two more probes, deliberately split by what they can
+prove. `scripts/widget-realtime-probe.mjs` drives the hub through the same client
+the panel ships — resolved out of `frontend-angular/node_modules` rather than
+re-declared, so it exercises negotiate and transport fallback rather than a
+protocol somebody wrote down — and asserts delivery, the conversation id, that an
+**internal note pushes nothing** (invariant 5, over the socket this time), and
+that a second visitor's connection sees none of it (§ 3.3).
+`scripts/widget-realtime-browser-probe.mjs` proves the other half in a real
+Chrome: the panel opens the socket, and an agent's reply lands on screen in a
+window far shorter than the fallback poll could explain.
+
+Phase 3 had only asserted that `/hubs/widget` *negotiates*. That proves the hub
+is mapped and nothing about delivery — which was harmless while the panel polled,
+and is the whole contract now that it does not.
 
 Phase 3 shipped with `scripts/verify-widget-phase3.ps1` — 62 assertions. The
 done-when is taken apart directly: two browsers on one widget, **both claiming
@@ -839,22 +907,37 @@ pre-reshape row and migrating forward: it gains a 12-char token, the workspace's
 name, and `is_active` / `show_widget_form` / `show_close_button` /
 `show_send_button` all **true**, so a live embed does not go dark on upgrade.
 
-## 11. Docs to update as phases land
+## 11. Docs — done ✅
 
-- **`docs/trackly-plan.md`** § Embeddable Widget & Integration Options — new
-  schema, the endpoint table, and the trust rule (§ 3.3), which belongs beside
-  the invariants rather than in a working file. Its **§ Branding** section needs
-  the § 4.2 split recorded too: the record stays workspace-level, the screen
-  moves, and the widget may override the colour.
-- **`docs/admin-guide.md`** — § 11 gets multiple widgets, the Configuration /
-  Branding / Integration tabs, what identity verification is for and how a
-  developer signs the JWT, and allowed domains. **§ 10 (branding) must be
-  rewritten to point at the widget screen**, and the "Admin ▾" nav table near the
-  end of the guide loses its Branding row — an admin following the current text
-  would look for a screen that no longer exists.
-- **`docs/go-live.md`** — the new public endpoints that must be reachable over
-  HTTPS, the secret-key rotation story, and the `frame-ancestors` caveat in
-  § 9.2.
+`docs/admin-guide.md` and `docs/go-live.md` were kept in step as phases 4–6
+landed, so phase 7 was mostly one large gap plus one promotion.
+
+- **`docs/trackly-plan.md` § Embeddable Widget & Integration Options — rewritten.**
+  This was the gap. It still described the pre-rework design: one widget per
+  workspace (`workspace_id … UNIQUE`), a `data-workspace="acme"` snippet, three
+  embed types and a `fields` JSONB — a reader taking the canonical plan at its
+  word would have built the wrong thing. It now carries the real schema of all
+  three tables, the public endpoint table, the CORS reasoning, the hub, and why
+  there is no stored `unread_count`. The legacy `embed_type` / `fields` / `theme`
+  columns are recorded as *kept deliberately* rather than quietly omitted, since
+  old snippets still round-trip through them.
+- **The trust rule is now invariant 10, in `CLAUDE.md`.** § 11 asked for it
+  "beside the invariants", and that is where the numbered list actually lives —
+  `trackly-plan.md` only ever cites them by number. It earned the promotion: it
+  is a security boundary of the same kind as invariant 5, it is enforced in two
+  places (`WidgetPublicService` and `WidgetHubRealtime`), and while it lived only
+  in this working file it was a design note rather than a rule.
+- **`docs/trackly-plan.md` § 6 Workspace Branding — repointed.** It named
+  `/admin/settings/branding`, a screen that no longer exists. Now records the
+  § 4.2 split: record stays workspace-level, screen moved to the widget's
+  Branding tab, colour is the one genuine per-widget override.
+- **`docs/admin-guide.md`** — already done. § 11 covers multiple widgets, the
+  three tabs, identity verification and allowed domains; § 10 points at the
+  widget screen; the "Admin ▾" table has no Branding row.
+- **`docs/go-live.md`** — already done. Public endpoints, secret-key rotation
+  with its no-overlap-window warning, and the `frame-ancestors` caveat (nginx
+  cannot know the per-widget list, so `allowed_origins` is the only enforcement
+  and an unlisted site gets an inert panel rather than no panel).
 
 ---
 

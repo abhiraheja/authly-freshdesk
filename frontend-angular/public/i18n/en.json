@@ -129,6 +129,15 @@
     "emailMeACode": "Email me a sign-in code instead",
     "passwordFailed": "That email and password do not match."
   },
+  "verify": {
+    "title": "Confirm sign-in",
+    "body": "Click the button below to finish signing in. This one extra step is what stops automated email scanners from using your link before you do.",
+    "confirm": "Confirm sign-in",
+    "invalidTitle": "This sign-in link is incomplete",
+    "invalidBody": "The link is missing its sign-in token — some mail apps shorten long links. Request a new one and open it from the email itself.",
+    "backToSignIn": "Back to sign in",
+    "requestNew": "Request a new link"
+  },
   "dashboard": {
     "welcome": "Welcome back",
     "welcomeNamed": "Welcome back, {{name}}",

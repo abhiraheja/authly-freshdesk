@@ -36,6 +36,7 @@ Trackly is a standalone, **self-hosted** ticket management app (FreshDesk/Zendes
 7. **Magic-link verify pages never consume the token on GET** — only the confirm POST does (email scanners prefetch GETs).
 8. **Never leave an installation with no working way in.** A sign-in method may only be disabled while another one is *proven* — email counts only after a test message was delivered (`email_configs.last_verified_at`), SSO only after a real login completed (`status = active`). Enforced in `LoginSettingsController`, not just greyed out in the UI. Self-hosted means no support desk and no recovery link: a lockout here is permanent.
 9. **A temporary password is a credential someone else has seen.** `users.must_change_password` blocks every endpoint except reading your own profile and changing the password — enforced by `MustChangePasswordFilter` in the API, never by the SPA alone.
+10. **A claimed identity is not a proven one** (the widget's *trust rule*). An **unverified** widget visitor sees only the conversations raised from their own browser (`tickets.widget_visitor_id`); a **verified** one sees their whole contact record (`tickets.requester_id`). Verification means a server-signed identity JWT or a confirmed emailed code — never a typed-in address, or anyone could type a colleague's and read their support history. Enforced in `WidgetPublicService` as two separate query builders, not one with a flag, and on the SignalR hub as well as the REST surface.
 
 ## Build order
 

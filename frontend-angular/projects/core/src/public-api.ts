@@ -28,6 +28,7 @@ export * from './lib/api/sso.api';
 export * from './lib/api/ticket-realtime';
 export * from './lib/api/tickets.api';
 export * from './lib/api/widget.api';
+export * from './lib/api/widget-visitor.store';
 export * from './lib/api/widget-admin.api';
 export * from './lib/api/workspace-ops.api';
 export * from './lib/auth/auth.api';

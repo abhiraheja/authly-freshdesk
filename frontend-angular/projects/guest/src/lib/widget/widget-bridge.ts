@@ -25,9 +25,18 @@ const FRAME = 'trackly-widget';
  * inside an effect, threw during change detection and froze the view on whatever
  * it was showing at the time.
  *
+ * Opening the embed snippet as a local file is the first thing anyone does with
+ * it, so this is a failure mode worth not having.
+ *
  * There is nothing to address such a host by, so the panel keeps posting to
- * `'*'`. Nothing outbound is a secret — `ready`, the window controls, an unread
- * count — and the inbound direction is still pinned to `window.parent`.
+ * `'*'` — the only string that reaches an opaque origin. Safe for the same
+ * reason `ready` is: the recipient is always `window.parent`, the inbound
+ * direction is still pinned to it, and nothing this bridge sends outward is a
+ * secret. The visitor token never crosses `postMessage` — only unread counts and
+ * window-chrome requests do.
+ *
+ * `URL.canParse` rather than a `=== 'null'` check, so any other origin the
+ * platform cannot address fails the same way instead of reaching `postMessage`.
  */
 function addressable(origin: string): boolean {
   return origin !== 'null' && origin !== '' && URL.canParse(origin);
@@ -161,11 +170,11 @@ export class WidgetBridge {
       // the host page has no origin to address (see `addressable`).
       window.parent.postMessage(message, this.hostOrigin ?? '*');
     } catch {
-      // A message that cannot be delivered must never take the panel down with
-      // it. `reportUnread` is called from an effect and the window controls from
-      // click handlers; a throw in the first freezes the view mid-render — which
-      // is what left the conversation list showing its skeleton forever — and a
-      // throw in the second is a button that does nothing.
+      // Belt to `addressable`'s braces. A message that cannot be delivered must
+      // never take the panel down with it: `reportUnread` is called from an
+      // effect, so a throw there stops change detection mid-render, and the
+      // window controls are click handlers, so a throw there is a button that
+      // does nothing.
     }
   }
 

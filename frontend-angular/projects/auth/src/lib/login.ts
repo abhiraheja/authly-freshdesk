@@ -207,6 +207,10 @@ type Phase = 'email' | 'code';
 
           <form class="mt-8" (ngSubmit)="verify()">
             <label tkLabel for="code">{{ 'login.codeLabel' | transloco }}</label>
+            <!-- maxlength is 7, not 6: onCode strips non-digits, but the
+                 browser applies maxlength to a paste first, so a code copied
+                 with a stray space or newline was cut to five digits and then
+                 simply never verified. One spare character costs nothing. -->
             <input
               #codeInput
               tkInput
@@ -214,7 +218,7 @@ type Phase = 'email' | 'code';
               name="code"
               inputmode="numeric"
               autocomplete="one-time-code"
-              maxlength="6"
+              maxlength="7"
               placeholder="000000"
               class="text-center font-display text-[22px] font-bold tracking-[0.4em]"
               [ngModel]="code()"

@@ -641,9 +641,11 @@ Append here as phases land, so nothing is missed later.
     route — it is the document the loader puts in its iframe. A proxy that does
     not fall back to `index.html` for it produces an embed whose launcher opens
     an empty box. No new config: the URL is built from `App:FrontendBaseUrl`.
-  - **No new runtime dependency.** The panel polls (list every 20s, open thread
-    every 10s) rather than opening a socket, so the widget adds nothing to the
-    client bundle beyond its own code and needs no WebSocket path of its own.
+  - **The panel opens a WebSocket.** It connects to `/hubs/widget` and falls back
+    to polling only while that connection is down — see the hub entry below for
+    what a proxy that blocks the upgrade actually costs. `@microsoft/signalr` is
+    already in the bundle for live chat and stays in a lazy chunk, so the initial
+    payload is unchanged; there is no new package to install.
   - **CORS.** Since phase 4 the API declares one cross-origin policy, applied to
     `/api/public/widget/*` and `/api/public/workspaces/{slug}/widget` only. It
     allows **any** origin, because `widget.js` runs on the customer's site and
@@ -662,11 +664,16 @@ Append here as phases land, so nothing is missed later.
     list/thread/reply/read-receipt/attachments. All must be reachable over HTTPS
     from every site that embeds a widget. They resolve the workspace from the
     widget token server-side and never accept a slug.
-  - **A second SignalR hub, `/hubs/widget`** (phase 3). Same proxy requirement as
-    `/hubs/chat`: the WebSocket upgrade must be allowed on `/hubs/*`. It is a
-    latency feature only — the panel polls as well, so a proxy that blocks the
-    upgrade degrades the unread badge rather than breaking it. Worth knowing when
-    someone reports "the badge takes a few seconds".
+  - **A second SignalR hub, `/hubs/widget`** (phase 3; the panel connects to it
+    as of the SignalR change). Same proxy requirement as `/hubs/chat`: the
+    WebSocket upgrade must be allowed on `/hubs/*`.
+
+    Still a latency feature, not a correctness one — a blocked upgrade drops the
+    panel back to polling, so a reply takes up to 20 seconds to appear instead of
+    the ~300ms measured with the socket up. That is the *symptom to look for*:
+    "the widget is slow to show replies, but the ticket is fine" means the
+    upgrade is being blocked somewhere, and SignalR's own SSE/long-polling
+    fallbacks are being blocked too. Nothing is lost, only time.
   - **Widget secret keys are AES-256-GCM under `Security:MasterKey`.** Losing or
     rotating that key makes every widget's secret unreadable, which breaks
     identity verification on every embed at once. Rotation story: regenerate each

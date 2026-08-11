@@ -58,14 +58,19 @@ public class AuthService(
         // verify page reads it to render the workspace's branding (invariant 6).
         var verifyUrl = $"{frontendBaseUrl}/auth/verify?token={linkToken}&workspace={workspace.Slug}";
 
-        // Grouped for readability in the mail, and to make a transcribed code
-        // easier to keep place in. The verify endpoint strips whitespace.
-        var codeDisplay = $"{code[..3]} {code[3..]}";
+        // Sent unbroken, deliberately. Grouping it as "482 913" read well and
+        // cost more than it was worth: the code input is `maxlength="6"`, so a
+        // pasted seven-character string is truncated by the browser to "482 91"
+        // before any handler sees it, and the phone and mail clients that offer
+        // to autofill a one-time code look for a bare run of six digits — the
+        // space suppressed the very "copy the code" affordance it was meant to
+        // help with. The verify endpoint still strips whitespace, for codes
+        // already sitting in inboxes and for people who type the space anyway.
 
         await mailer.SendAsync(workspace.Id, email, toName: null, "magic_link", new()
         {
             ["action_url"] = verifyUrl,
-            ["otp"] = codeDisplay,
+            ["otp"] = code,
             ["expiry_minutes"] = ((int)TokenLifetime.TotalMinutes).ToString(),
         }, ct);
 

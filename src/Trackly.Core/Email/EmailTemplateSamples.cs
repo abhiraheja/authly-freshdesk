@@ -18,12 +18,12 @@ public static class EmailTemplateSamples
         "magic_link" => new()
         {
             ["action_url"] = "https://trackly.example.com/auth/verify?token=sample",
-            ["otp"] = "482 913",
+            ["otp"] = "482913",
             ["expiry_minutes"] = "10",
         },
         "guest_otp" => new()
         {
-            ["otp"] = "482 913",
+            ["otp"] = "482913",
             ["expiry_minutes"] = "10",
         },
         "invitation" => new()
