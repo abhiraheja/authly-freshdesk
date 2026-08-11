@@ -5,9 +5,11 @@ import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import {
   BrandingApi,
   LOGO_ACCEPT,
+  LOGO_ASPECT,
   MAX_IMAGE_BYTES,
   MAX_SIGN_IN_IMAGE_BYTES,
   SIGN_IN_IMAGE_ACCEPT,
+  SIGN_IN_IMAGE_ASPECT,
   SessionStore,
   brandingAssetUrl,
   checkFile,
@@ -22,11 +24,13 @@ import {
   Card,
   Field,
   Icon,
+  ImageCropper,
   InputDirective,
   SkeletonDirective,
   Spinner,
   Switch,
   ToastService,
+  isCroppable,
 } from '@trackly/ui';
 
 /** Offered as a starting point; the hex box is still the source of truth. */
@@ -51,10 +55,16 @@ const SWATCHES = ['#2563EB', '#4F46E5', '#0EA5E9', '#059669', '#D97706', '#DC262
  * typed rather than from what is saved.
  *
  * <h3>Saves are split, deliberately</h3>
- * The text and colour fields save together on the button. Uploads save on pick —
- * they are files, there is nothing to reconcile, and an image that sat unsaved
- * behind a button an admin never pressed would be a worse surprise than one that
- * lands immediately.
+ * The text and colour fields save together on the button. Uploads save as soon
+ * as the crop is confirmed — they are files, there is nothing to reconcile, and
+ * an image that sat unsaved behind a button an admin never pressed would be a
+ * worse surprise than one that lands immediately.
+ *
+ * <h3>Framed on the way in</h3>
+ * Both assets go through {@link ImageCropper} before upload, at the ratio the
+ * surface actually renders them at. Without it the browser cropped on display,
+ * so an admin uploading a portrait photograph got its middle band and no say in
+ * which band. SVG and GIF skip the cropper — see `isCroppable` for why.
  */
 @Component({
   selector: 'tk-admin-branding-settings',
@@ -68,6 +78,7 @@ const SWATCHES = ['#2563EB', '#4F46E5', '#0EA5E9', '#059669', '#D97706', '#DC262
     Card,
     Field,
     Icon,
+    ImageCropper,
     InputDirective,
     SkeletonDirective,
     Spinner,
@@ -100,6 +111,12 @@ export class AdminBrandingSettings {
   protected readonly swatches = SWATCHES;
   protected readonly logoAccept = LOGO_ACCEPT;
   protected readonly imageAccept = SIGN_IN_IMAGE_ACCEPT;
+  protected readonly logoAspect = LOGO_ASPECT;
+  protected readonly imageAspect = SIGN_IN_IMAGE_ASPECT;
+
+  /** A picked file waiting to be framed. Non-null is what opens the cropper. */
+  protected readonly pendingLogo = signal<File | null>(null);
+  protected readonly pendingImage = signal<File | null>(null);
 
   protected readonly loadError = computed(() => errorMessage(this.branding.error()));
 
@@ -120,6 +137,29 @@ export class AdminBrandingSettings {
     this.primaryColor().trim().length > 0 && !this.colourValid()
       ? this.transloco.translate('admin.branding.colourInvalid')
       : undefined,
+  );
+
+  /**
+   * The mock's two shapes, mirroring `AuthLayout`.
+   *
+   * With artwork the panel is a fixed-width column the shape of the crop, so
+   * `object-cover` fills it without trimming — 272 is 340 × the crop ratio, and
+   * 340 is the row's minimum height. Without artwork it is the old even split,
+   * which is what the gradient panel is drawn for.
+   *
+   * Literal strings, never assembled: Tailwind v4 emits only the classes it can
+   * find written out.
+   */
+  protected readonly previewGridClass = computed(() =>
+    this.signInImageUrl()
+      ? 'grid bg-white sm:min-h-[340px] sm:grid-cols-[1fr_auto]'
+      : 'grid bg-white sm:min-h-[340px] sm:grid-cols-2',
+  );
+
+  protected readonly previewPanelClass = computed(() =>
+    this.signInImageUrl()
+      ? 'relative hidden h-full w-[272px] sm:block'
+      : 'relative hidden h-full min-h-[220px] sm:block',
   );
 
   /**
@@ -201,65 +241,105 @@ export class AdminBrandingSettings {
     }
   }
 
-  protected uploadLogo(event: Event): void {
-    void this.upload(event, {
-      busy: this.uploadingLogo,
-      maxBytes: MAX_IMAGE_BYTES,
-      accept: LOGO_ACCEPT,
-      types: 'PNG, SVG, JPEG, WEBP',
-      send: (file) => this.api.uploadLogo(file),
-    });
+  // ---- Uploads -------------------------------------------------------------
+  //
+  // Pick → crop → send. The crop step is what makes the stored image the shape
+  // the UI renders it at, instead of leaving `object-cover` to take the middle
+  // band of a portrait photograph at display time.
+  //
+  // The size cap is checked *after* the crop, not before: re-encoding a phone
+  // photograph at 512px routinely takes 4 MB down to under 200 kB, so rejecting
+  // it on its original size would refuse a file that was about to be fine. Type
+  // is still checked up front, because no amount of cropping turns a PDF into a
+  // logo.
+
+  private readonly logoAsset = {
+    busy: this.uploadingLogo,
+    maxBytes: MAX_IMAGE_BYTES,
+    types: 'PNG, SVG, JPEG, WEBP',
+    send: (file: File) => this.api.uploadLogo(file),
+  };
+
+  private readonly imageAsset = {
+    busy: this.uploadingImage,
+    maxBytes: MAX_SIGN_IN_IMAGE_BYTES,
+    types: 'PNG, JPEG, WEBP, GIF',
+    send: (file: File) => this.api.uploadSignInImage(file),
+  };
+
+  protected pickLogo(event: Event): void {
+    const file = this.take(event, LOGO_ACCEPT, this.logoAsset.types);
+    if (!file) return;
+    if (isCroppable(file)) this.pendingLogo.set(file);
+    else void this.send(file, this.logoAsset);
   }
 
-  protected uploadSignInImage(event: Event): void {
-    void this.upload(event, {
-      busy: this.uploadingImage,
-      maxBytes: MAX_SIGN_IN_IMAGE_BYTES,
-      accept: SIGN_IN_IMAGE_ACCEPT,
-      types: 'PNG, JPEG, WEBP, GIF',
-      send: (file) => this.api.uploadSignInImage(file),
-    });
+  protected pickSignInImage(event: Event): void {
+    const file = this.take(event, SIGN_IN_IMAGE_ACCEPT, this.imageAsset.types);
+    if (!file) return;
+    if (isCroppable(file)) this.pendingImage.set(file);
+    else void this.send(file, this.imageAsset);
   }
 
-  private async upload(
-    event: Event,
-    options: {
-      busy: ReturnType<typeof signal<boolean>>;
-      maxBytes: number;
-      accept: string;
-      types: string;
-      send: (file: File) => Promise<WorkspaceBranding>;
-    },
-  ): Promise<void> {
+  protected croppedLogo(file: File): void {
+    this.pendingLogo.set(null);
+    void this.send(file, this.logoAsset);
+  }
+
+  protected croppedSignInImage(file: File): void {
+    this.pendingImage.set(null);
+    void this.send(file, this.imageAsset);
+  }
+
+  /** The picked file if its type is acceptable, else null with the reason shown. */
+  private take(event: Event, accept: string, types: string): File | null {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     // Reset first: without it, re-picking the same file after an error is silent.
     input.value = '';
-    if (!file) return;
+    if (!file) return null;
 
-    // Checked here as a courtesy — it turns a 5 MB round trip ending in a 413
-    // into an instant message. The API re-checks regardless.
-    const reason = checkFile(file, { maxBytes: options.maxBytes, accept: options.accept });
+    const reason = checkFile(file, { accept });
     if (reason) {
       this.uploadError.set(
-        this.transloco.translate(`upload.rejected.${reason}`, {
+        this.transloco.translate(`upload.rejected.${reason}`, { name: file.name, types }),
+      );
+      return null;
+    }
+    this.uploadError.set(null);
+    return file;
+  }
+
+  private async send(
+    file: File,
+    asset: {
+      busy: ReturnType<typeof signal<boolean>>;
+      maxBytes: number;
+      types: string;
+      send: (file: File) => Promise<WorkspaceBranding>;
+    },
+  ): Promise<void> {
+    // A courtesy check — it turns a round trip ending in a 413 into an instant
+    // message. The API re-checks regardless.
+    if (file.size > asset.maxBytes) {
+      this.uploadError.set(
+        this.transloco.translate('upload.rejected.tooLarge', {
           name: file.name,
-          limit: formatBytes(options.maxBytes),
-          types: options.types,
+          limit: formatBytes(asset.maxBytes),
         }),
       );
       return;
     }
 
     this.uploadError.set(null);
-    options.busy.set(true);
+    asset.busy.set(true);
     try {
-      this.branding.set(await options.send(file));
+      this.branding.set(await asset.send(file));
       this.toast.success(this.transloco.translate('admin.branding.uploaded'));
     } catch (error) {
       this.uploadError.set(errorMessage(error));
     } finally {
-      options.busy.set(false);
+      asset.busy.set(false);
     }
   }
 

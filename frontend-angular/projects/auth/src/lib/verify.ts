@@ -1,7 +1,7 @@
 import { ChangeDetectionStrategy, Component, computed, inject, resource, signal } from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { TranslocoPipe } from '@jsverse/transloco';
+import { TranslocoPipe, TranslocoService } from '@jsverse/transloco';
 import { AuthApi, PublicApi, SessionStore, errorMessage, homePathFor, settled } from '@trackly/core';
 import { Alert, Button, Spinner } from '@trackly/ui';
 import { AuthLayout } from './auth-layout';
@@ -40,6 +40,7 @@ import { AuthLayout } from './auth-layout';
       [brandName]="brandName()"
       [logoUrl]="logoUrl()"
       [imageUrl]="signInImageUrl()"
+      [panelTitle]="panelTitle()"
       [accent]="accent()"
     >
       @if (!token()) {
@@ -107,6 +108,9 @@ export class Verify {
   private readonly publicApi = inject(PublicApi);
   private readonly session = inject(SessionStore);
   private readonly router = inject(Router);
+  private readonly transloco = inject(TranslocoService);
+  /** Re-resolve TS-side copy when the language changes. */
+  private readonly lang = toSignal(this.transloco.langChanges$, { initialValue: '' });
   private readonly route = inject(ActivatedRoute);
 
   private readonly query = toSignal(this.route.queryParamMap, { initialValue: null });
@@ -140,6 +144,16 @@ export class Verify {
   protected readonly logoUrl = computed(() => this.loaded()?.logoUrl ?? null);
   protected readonly signInImageUrl = computed(() => this.loaded()?.signInImageUrl ?? null);
   protected readonly hidePoweredBy = computed(() => this.loaded()?.hidePoweredBy ?? false);
+
+  /**
+   * Same headline as the sign-in page — this screen is the second half of that
+   * flow, and it previously passed none at all, which left the artwork's scrim
+   * sitting over nothing.
+   */
+  protected readonly panelTitle = computed(() => {
+    this.lang();
+    return this.loaded()?.pageTitle || this.transloco.translate('login.panel.signInTitle');
+  });
 
   /** The only thing that spends the token, and only from a real click. */
   protected async confirm(): Promise<void> {

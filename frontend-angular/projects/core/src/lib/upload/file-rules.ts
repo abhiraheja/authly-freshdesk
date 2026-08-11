@@ -41,6 +41,30 @@ export const LOGO_ACCEPT = 'image/png,image/svg+xml,image/jpeg,image/webp';
 export const SIGN_IN_IMAGE_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
 
 /**
+ * Width ÷ height that a logo is cropped to. Square, because every surface that
+ * shows one renders it in a square box: the sign-in header, the email header,
+ * the widget launcher, the admin thumbnails.
+ */
+export const LOGO_ASPECT = 1;
+
+/**
+ * Width ÷ height that the sign-in panel image is cropped to — **and the ratio
+ * `AuthLayout` sizes its panel by.** These two are one decision in two files, so
+ * the constant lives here rather than being written down twice.
+ *
+ * The panel used to be a fixed half-width column, which made its shape depend on
+ * the visitor's screen — 0.80 on a 1440×900 laptop, 0.89 on a 1080p monitor,
+ * wider on an ultrawide. No fixed crop can match a target that moves, so the
+ * image was always trimmed again on display. Now the panel takes its width from
+ * its height and this number, so the crop fills it exactly: nothing is cut off,
+ * and no brand colour shows down the sides.
+ *
+ * 4:5 rather than something wider because the panel is a tall column on every
+ * desktop shape, and a portrait subject is what fits it.
+ */
+export const SIGN_IN_IMAGE_ASPECT = 0.8;
+
+/**
  * What a ticket attachment may be — **must match `UploadPolicy.Allowed`**.
  *
  * Extensions rather than MIME types: the browser's guess at a type varies by OS

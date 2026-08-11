@@ -27,6 +27,7 @@ export * from './lib/editor/rich-text';
 export * from './lib/editor/rich-text-view';
 export * from './lib/upload/file-picker';
 export * from './lib/upload/avatar-upload';
+export * from './lib/upload/image-cropper';
 export * from './lib/upload/attachment-list';
 export * from './lib/feedback/feedback';
 export * from './lib/toast/toast';

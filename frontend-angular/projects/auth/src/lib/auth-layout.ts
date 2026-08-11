@@ -1,5 +1,6 @@
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
+import { SIGN_IN_IMAGE_ASPECT } from '@trackly/core';
 import { Avatar, Icon } from '@trackly/ui';
 
 /**
@@ -30,20 +31,24 @@ import { Avatar, Icon } from '@trackly/ui';
   imports: [Avatar, Icon, TranslocoPipe],
   host: { class: 'block min-h-screen bg-background' },
   template: `
-    <div class="grid min-h-screen lg:grid-cols-2">
+    <div [class]="gridClass()">
       <!-- ─────────────── Form column ─────────────── -->
       <div class="flex flex-col px-6 py-7 sm:px-10">
-        <header class="flex items-center gap-2.5">
+        <!-- 44px, not 32: this is the workspace's own mark on the one screen
+             everybody in the organisation sees, and at 32 it read as a favicon
+             beside the name rather than as the brand. The fallbacks match it so
+             the header does not change height with what is configured. -->
+        <header class="flex items-center gap-3">
           @if (logoUrl(); as url) {
-            <img [src]="url" [alt]="brandName()" class="size-8 rounded-lg object-contain" />
+            <img [src]="url" [alt]="brandName()" class="size-11 rounded-xl object-contain" />
           } @else if (accent()) {
-            <tk-avatar [name]="brandName()" [size]="32" />
+            <tk-avatar [name]="brandName()" [size]="44" />
           } @else {
-            <span class="brand-gradient grid size-8 place-items-center rounded-lg text-white">
-              <tk-icon name="life-buoy" [size]="17" />
+            <span class="brand-gradient grid size-11 place-items-center rounded-xl text-white">
+              <tk-icon name="life-buoy" [size]="23" />
             </span>
           }
-          <span class="font-display text-[17px] font-extrabold tracking-tight">{{ brandName() }}</span>
+          <span class="font-display text-[19px] font-extrabold tracking-tight">{{ brandName() }}</span>
         </header>
 
         <main class="flex flex-1 items-center justify-center py-10">
@@ -58,10 +63,12 @@ import { Avatar, Icon } from '@trackly/ui';
       </div>
 
       <!-- ─────────────── Brand panel ─────────────── -->
-      <div class="hidden p-3 lg:block">
+      <div [class]="panelWrapClass()">
         <aside
-          class="relative flex h-full flex-col justify-center overflow-hidden rounded-2xl px-10 py-12 xl:px-14"
+          [class]="panelClass()"
           [style.background]="panelBackground()"
+          [style.aspect-ratio]="panelAspectRatio()"
+          [style.height]="panelHeight()"
           aria-hidden="true"
         >
           <!-- Depth: two soft highlights, not flat colour. Pure decoration,
@@ -70,8 +77,14 @@ import { Avatar, Icon } from '@trackly/ui';
           <span class="absolute -bottom-32 -left-24 size-[28rem] rounded-full bg-black/[0.08] blur-3xl"></span>
 
           @if (imageUrl(); as url) {
-            <!-- A supplied asset takes the whole panel: drop a file in public/
-                 and pass its path. Nothing else about the layout changes. -->
+            <!--
+              Cover is safe here, and only here, because the panel above was
+              sized to SIGN_IN_IMAGE_ASPECT — the same ratio the admin cropped
+              to. Matching ratios mean cover and contain agree: the picture fills
+              the panel edge to edge with nothing trimmed and no background
+              showing beside it. Change one of the two and this silently starts
+              cutting people's images again.
+            -->
             <img [src]="url" alt="" class="absolute inset-0 size-full object-cover" />
             <div class="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent"></div>
             <div class="relative mt-auto">
@@ -179,6 +192,51 @@ export class AuthLayout {
     { value: '96%', labelKey: 'login.panel.statCsat' },
     { value: '6', labelKey: 'login.panel.statChannels' },
   ];
+
+  /**
+   * The panel is sized by the artwork, not by the grid.
+   *
+   * With no image it is the old half-and-half split, and the built-in product
+   * mock is laid out for that. With one, the panel takes its height from the
+   * viewport and its width from {@link SIGN_IN_IMAGE_ASPECT}, so it is exactly
+   * the shape the admin cropped to — which is the only arrangement where the
+   * image neither gets trimmed nor leaves brand colour down its sides. The form
+   * column absorbs whatever width is left.
+   *
+   * Every class here is a literal string. Tailwind v4 only emits classes it can
+   * find written out, so a computed one would compile to no CSS at all.
+   */
+  protected readonly gridClass = computed(() =>
+    this.imageUrl()
+      ? 'grid min-h-screen lg:grid-cols-[1fr_auto]'
+      : 'grid min-h-screen lg:grid-cols-2',
+  );
+
+  protected readonly panelWrapClass = computed(() =>
+    this.imageUrl() ? 'hidden p-3 lg:flex lg:items-center' : 'hidden p-3 lg:block',
+  );
+
+  protected readonly panelClass = computed(() =>
+    this.imageUrl()
+      ? 'relative flex flex-col justify-center overflow-hidden rounded-2xl px-10 py-12 xl:px-14'
+      : 'relative flex h-full flex-col justify-center overflow-hidden rounded-2xl px-10 py-12 xl:px-14',
+  );
+
+  protected readonly panelAspectRatio = computed(() =>
+    this.imageUrl() ? `${SIGN_IN_IMAGE_ASPECT}` : null,
+  );
+
+  /**
+   * Full height, unless that would make the panel wider than half the viewport.
+   *
+   * The second term is the width cap expressed as a height, so the ratio holds
+   * either way — capping the *width* would have let `max-width` override the
+   * derived width and quietly break the aspect the whole arrangement rests on.
+   * `1.5rem` is the wrapper's `p-3` on both edges.
+   */
+  protected readonly panelHeight = computed(() =>
+    this.imageUrl() ? `min(calc(100vh - 1.5rem), ${50 / SIGN_IN_IMAGE_ASPECT}vw)` : null,
+  );
 
   /**
    * `color-mix` derives the lighter stop from whatever colour a workspace

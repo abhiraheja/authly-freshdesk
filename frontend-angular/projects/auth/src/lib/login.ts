@@ -74,7 +74,7 @@ type Phase = 'email' | 'code';
       [logoUrl]="loadedBranding()?.logoUrl ?? null"
       [imageUrl]="loadedBranding()?.signInImageUrl ?? null"
       [accent]="accent()"
-      [panelTitle]="panelTitleKey() | transloco"
+      [panelTitle]="panelTitle()"
       [panelBody]="'login.panel.body' | transloco"
     >
       @switch (phase()) {
@@ -385,7 +385,18 @@ export class Login {
     return this.loadedBranding()?.welcomeText || this.transloco.translate('login.welcomeBack');
   });
 
-  protected readonly panelTitleKey = computed(() => 'login.panel.signInTitle');
+  /**
+   * The headline across the panel.
+   *
+   * A workspace's own `pageTitle` wins — it is admin-authored content, the
+   * branding screen's own help text calls it "the headline on the sign-in
+   * panel", and its preview renders it there. Falling back to Trackly's line
+   * when one is set made the preview a lie.
+   */
+  protected readonly panelTitle = computed(() => {
+    this.lang();
+    return this.loadedBranding()?.pageTitle || this.transloco.translate('login.panel.signInTitle');
+  });
 
   private readonly emailInput = viewChild<ElementRef<HTMLInputElement>>('emailInput');
   private readonly codeInput = viewChild<ElementRef<HTMLInputElement>>('codeInput');

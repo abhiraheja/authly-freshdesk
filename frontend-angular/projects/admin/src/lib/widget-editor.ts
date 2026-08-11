@@ -26,6 +26,7 @@ import {
   ConfirmService,
   Field,
   Icon,
+  ImageCropper,
   InputDirective,
   Select,
   SelectOption,
@@ -34,6 +35,7 @@ import {
   Switch,
   Tabs,
   ToastService,
+  isCroppable,
   type TabItem,
 } from '@trackly/ui';
 import { WidgetPreview } from './widget-preview';
@@ -72,6 +74,7 @@ type Tab = 'configuration' | 'branding' | 'integration';
     Card,
     Field,
     Icon,
+    ImageCropper,
     InputDirective,
     Select,
     SelectOption,
@@ -134,6 +137,9 @@ export class AdminWidgetEditor {
 
   protected readonly uploadingLogo = signal(false);
   protected readonly logoError = signal<string | null>(null);
+
+  /** A picked file waiting to be framed. Non-null is what opens the cropper. */
+  protected readonly pendingLogo = signal<File | null>(null);
 
   protected readonly logoAccept = LOGO_ACCEPT;
   protected readonly logoLimit = computed(() => {
@@ -291,20 +297,49 @@ export class AdminWidgetEditor {
   // screen: there is nothing to reconcile, and an image sitting unsaved behind a
   // button is a worse surprise than one that lands straight away.
 
-  protected async uploadLogo(event: Event): Promise<void> {
+  /**
+   * Pick, then frame, then send.
+   *
+   * The crop is square because that is the shape the widget header, the launcher
+   * and the admin thumbnail all render it in. The size cap is checked after the
+   * crop rather than before — re-encoding at 512px routinely brings a phone
+   * photograph under 1 MB, so refusing it on its original size would refuse a
+   * file that was about to be fine. Type is still checked up front.
+   */
+  protected pickLogo(event: Event): void {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];
     // Reset first, or re-picking the same file after an error does nothing.
     input.value = '';
     if (!file) return;
 
-    const reason = checkFile(file, { maxBytes: MAX_IMAGE_BYTES, accept: LOGO_ACCEPT });
+    const reason = checkFile(file, { accept: LOGO_ACCEPT });
     if (reason) {
       this.logoError.set(
         this.transloco.translate(`upload.rejected.${reason}`, {
           name: file.name,
-          limit: formatBytes(MAX_IMAGE_BYTES),
           types: 'PNG, SVG, JPEG, WEBP',
+        }),
+      );
+      return;
+    }
+
+    this.logoError.set(null);
+    if (isCroppable(file)) this.pendingLogo.set(file);
+    else void this.sendLogo(file);
+  }
+
+  protected croppedLogo(file: File): void {
+    this.pendingLogo.set(null);
+    void this.sendLogo(file);
+  }
+
+  private async sendLogo(file: File): Promise<void> {
+    if (file.size > MAX_IMAGE_BYTES) {
+      this.logoError.set(
+        this.transloco.translate('upload.rejected.tooLarge', {
+          name: file.name,
+          limit: formatBytes(MAX_IMAGE_BYTES),
         }),
       );
       return;

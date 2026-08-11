@@ -912,9 +912,30 @@ looking for "our logo on the login page" thinks to open *Widget*.)
    header, on customer pages, and at the top of every email. A square mark reads
    better than a wordmark, because it is rendered small.
 2. **Sign-in image** — PNG, JPEG, WebP or GIF, up to 5 MB. Fills the panel beside
-   the sign-in form. The headline sits across the bottom of that panel over a dark
-   scrim, so keep the subject of the picture out of that strip. Leave it empty to
-   keep the built-in illustration.
+   the sign-in form, framed at 4:5. The headline sits across the bottom of that
+   panel over a dark scrim, so keep the subject of the picture out of that strip.
+   Leave it empty to keep the built-in illustration.
+
+   **What you framed is exactly what people see.** The panel takes its width from
+   the shape of your picture rather than being a fixed half of the window, so the
+   image reaches every edge with nothing trimmed a second time and no brand colour
+   showing beside it. The sign-in form takes whatever width is left, which is why
+   that side looks a little wider on a big monitor than on a laptop.
+
+> **Both are cropped before they are stored.** Picking a file opens a framing
+> dialog at the shape that surface uses — square for the logo, tall for the
+> sign-in panel. Drag to reposition, use the slider to zoom; only what is inside
+> the frame is saved. This is why a portrait photograph no longer loses its top:
+> you choose the crop instead of the browser choosing it at display time.
+>
+> Two file types skip the dialog and upload untouched. An **SVG** is a vector
+> drawing, and cropping it would mean flattening it to pixels — losing the reason
+> to use one. A **GIF** may be animated, and a crop could only ever keep the first
+> frame. Crop those in an image editor first if you need to.
+>
+> Because cropping usually makes a file much smaller, the size limit is checked
+> *after* the crop. A large phone photograph will normally fit even when the
+> original is over the cap.
 3. **Colour** — one hex value. The lighter gradient stop on the sign-in panel is
    derived from it, so there is no second colour to choose.
 4. **Words** — page title, welcome text, footer text, and whether to hide
@@ -978,7 +999,8 @@ workspace colour** / **Use the workspace logo** clears the override and goes bac
 to inheriting; it never deletes the workspace's own logo. Nothing on this tab can
 change your sign-in page, your portal or your emails.
 
-The logo saves as soon as you pick it. The colour saves with **Update widget**.
+The logo opens the same square framing dialog as §10 and saves as soon as you
+confirm the crop. The colour saves with **Update widget**.
 
 ### Identity verification
 

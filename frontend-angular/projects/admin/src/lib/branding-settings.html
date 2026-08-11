@@ -23,20 +23,25 @@
                (invariant 6). The sign-in screen itself keeps dark mode — it is
                staff-facing too — but a preview that followed the admin's theme
                would show a page nobody is ever served. -->
-          <div class="grid bg-white sm:grid-cols-2">
+          <!-- Mirrors AuthLayout: with artwork the panel is a fixed-width column
+               the shape of the crop, so the preview frames the picture the way
+               the sign-in page will; without it, the old half-and-half split. -->
+          <div [class]="previewGridClass()">
             <div class="flex flex-col gap-3 p-5">
+              <!-- Scaled from AuthLayout's 44px header at roughly 60%, so the
+                   preview keeps the real proportion between mark and name. -->
               <div class="flex items-center gap-2">
                 @if (logoUrl(); as url) {
-                  <img [src]="url" alt="" class="size-7 rounded-lg object-contain" />
+                  <img [src]="url" alt="" class="size-9 rounded-lg object-contain" />
                 } @else {
                   <span
-                    class="grid size-7 place-items-center rounded-lg text-[11px] font-bold text-white"
+                    class="grid size-9 place-items-center rounded-lg text-[13px] font-bold text-white"
                     [style.background]="previewColour()"
                   >
                     {{ workspaceName().charAt(0) }}
                   </span>
                 }
-                <span class="font-display text-[13px] font-extrabold tracking-tight text-slate-900">
+                <span class="font-display text-[15px] font-extrabold tracking-tight text-slate-900">
                   {{ workspaceName() }}
                 </span>
               </div>
@@ -68,9 +73,14 @@
               }
             </div>
 
-            <!-- The panel, mirroring AuthLayout: artwork if one is set, the
-                 derived gradient otherwise. -->
-            <div class="relative hidden min-h-[220px] sm:block" [style.background]="previewPanel()">
+            <!-- Artwork if one is set, the derived gradient otherwise. Cover is
+                 safe because the panel is sized to the crop ratio — the same
+                 arrangement, and the same reasoning, as AuthLayout.
+
+                 `h-full` rather than a fixed height: the row is at least 340px
+                 and grows with the form beside it, and a panel that did not grow
+                 with it left a band of white under the picture. -->
+            <div [class]="previewPanelClass()" [style.background]="previewPanel()">
               @if (signInImageUrl(); as url) {
                 <img [src]="url" alt="" class="absolute inset-0 size-full object-cover" />
                 <span class="absolute inset-0 bg-gradient-to-t from-black/45 to-transparent"></span>
@@ -90,9 +100,18 @@
         <p class="mb-3 text-meta text-muted-foreground">{{ logoLimit() }}</p>
 
         <div class="flex flex-wrap items-center gap-4">
-          <span class="grid size-16 shrink-0 place-items-center rounded-xl border border-border bg-muted">
+          <!-- `max-h-full max-w-full` rather than `size-full`, and this is not a
+               style preference. A grid item has `min-height: auto`, which for a
+               replaced element with an intrinsic aspect ratio transfers the
+               width-based minimum into the height — so a portrait logo computed
+               a minimum taller than the box, `min` beat the `height: 100%`, and
+               it spilled out the bottom. A definite `max-height` clamps that
+               minimum; `overflow-hidden` is the belt to its braces. -->
+          <span
+            class="grid size-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-muted p-1.5"
+          >
             @if (logoUrl(); as url) {
-              <img [src]="url" [alt]="workspaceName()" class="size-full rounded-xl object-contain p-1.5" />
+              <img [src]="url" [alt]="workspaceName()" class="max-h-full max-w-full object-contain" />
             } @else {
               <tk-icon name="image" [size]="20" class="text-muted-foreground" />
             }
@@ -111,7 +130,7 @@
                 class="sr-only"
                 [accept]="logoAccept"
                 [disabled]="uploadingLogo()"
-                (change)="uploadLogo($event)"
+                (change)="pickLogo($event)"
               />
             </label>
 
@@ -137,9 +156,16 @@
         <p class="mb-3 text-meta text-muted-foreground">{{ imageLimit() }}</p>
 
         <div class="flex flex-wrap items-center gap-4">
-          <span class="grid h-16 w-28 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-muted">
+          <!-- 64×80 — the 4:5 the crop produces, not a landscape box. It was
+               landscape with `object-cover`, which meant the one place an admin
+               checks what they saved showed a horizontal band through the middle
+               of it. `absolute inset-0` keeps the fill measured against the box
+               rather than a grid row that sizes itself to content. -->
+          <span
+            class="relative grid h-20 w-16 shrink-0 place-items-center overflow-hidden rounded-xl border border-border bg-muted"
+          >
             @if (signInImageUrl(); as url) {
-              <img [src]="url" alt="" class="size-full object-cover" />
+              <img [src]="url" alt="" class="absolute inset-0 size-full object-cover" />
             } @else {
               <tk-icon name="image" [size]="20" class="text-muted-foreground" />
             }
@@ -158,7 +184,7 @@
                 class="sr-only"
                 [accept]="imageAccept"
                 [disabled]="uploadingImage()"
-                (change)="uploadSignInImage($event)"
+                (change)="pickSignInImage($event)"
               />
             </label>
 
@@ -182,6 +208,30 @@
 
       @if (uploadError(); as message) {
         <tk-alert tone="danger">{{ message }}</tk-alert>
+      }
+
+      <!-- Framed before it is stored, at the exact ratio each surface renders it
+           at, so nothing gets re-cropped by `object-cover` later. -->
+      @if (pendingLogo(); as file) {
+        <tk-image-cropper
+          [file]="file"
+          [aspect]="logoAspect"
+          [outputWidth]="512"
+          [heading]="'admin.branding.cropLogo' | transloco"
+          (cropped)="croppedLogo($event)"
+          (cancelled)="pendingLogo.set(null)"
+        />
+      }
+
+      @if (pendingImage(); as file) {
+        <tk-image-cropper
+          [file]="file"
+          [aspect]="imageAspect"
+          [outputWidth]="1200"
+          [heading]="'admin.branding.cropImage' | transloco"
+          (cropped)="croppedSignInImage($event)"
+          (cancelled)="pendingImage.set(null)"
+        />
       }
 
       <!-- ─────────── Colour ─────────── -->

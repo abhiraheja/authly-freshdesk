@@ -24,7 +24,8 @@
     "copyFailed": "Could not copy — select the text instead.",
     "done": "Done",
     "actions": "Actions",
-    "someone": "Someone"
+    "someone": "Someone",
+    "remove": "Remove"
   },
   "nav": {
     "main": "Main",
@@ -687,6 +688,13 @@
       "empty": "{{name}} is empty.",
       "tooLarge": "{{name}} is larger than {{limit}}.",
       "wrongType": "{{name}} isn't an accepted file type — pick {{types}}."
+    },
+    "crop": {
+      "hint": "Drag to reposition, and use the slider to zoom. Only what stays inside the frame is saved.",
+      "zoom": "Zoom",
+      "apply": "Crop and upload",
+      "decodeFailed": "That file couldn't be opened as an image.",
+      "renderFailed": "The crop couldn't be saved. Try a smaller image."
     }
   },
   "ui": {
@@ -1448,7 +1456,8 @@
       "replaceLogo": "Replace logo",
       "inheritLogo": "Use the workspace logo",
       "logoCleared": "Now using the workspace logo",
-      "inheritedColour": "Workspace default: {{colour}}"
+      "inheritedColour": "Workspace default: {{colour}}",
+      "cropLogo": "Frame this widget's logo"
     },
     "branding": {
       "title": "Branding",
@@ -1466,8 +1475,8 @@
       "uploadLogo": "Upload logo",
       "replaceLogo": "Replace logo",
       "imageHeading": "Sign-in image",
-      "imageHint": "PNG, JPEG, WebP or GIF, up to {{limit}}. Fills the panel beside the sign-in form.",
-      "imageComposition": "The headline sits across the bottom of the panel over a dark scrim, so keep the subject of the image out of that strip. Leave this empty to keep the built-in illustration.",
+      "imageHint": "PNG, JPEG, WebP or GIF, up to {{limit}}. Framed at 4:5 and shown edge to edge beside the sign-in form.",
+      "imageComposition": "Exactly what you frame is what appears — the sign-in panel takes its width from this shape, so nothing is trimmed a second time and no background shows down the sides. The headline sits across the bottom over a dark scrim, so keep the subject out of that strip. Leave this empty to keep the built-in illustration.",
       "uploadImage": "Upload image",
       "replaceImage": "Replace image",
       "colourHeading": "Colour",
@@ -1487,7 +1496,9 @@
       "saved": "Branding saved",
       "uploaded": "Uploaded",
       "removed": "Removed",
-      "loadFailed": "Couldn't load branding"
+      "loadFailed": "Couldn't load branding",
+      "cropLogo": "Frame your logo",
+      "cropImage": "Frame the sign-in image"
     }
   },
   "customers": {
