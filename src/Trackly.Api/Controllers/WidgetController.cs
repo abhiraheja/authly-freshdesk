@@ -21,7 +21,26 @@ public class WidgetController(
 {
     private string ApiOrigin => (configuration.GetNonEmpty("App:ApiBaseUrl") ?? $"{Request.Scheme}://{Request.Host}").TrimEnd('/');
     private string FrontendOrigin => (configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173").TrimEnd('/');
-    private WidgetOrigins Origins => new(ApiOrigin, FrontendOrigin);
+
+    /// <summary>
+    /// The origin that actually serves <c>/widget.js</c>, for the snippet an
+    /// admin pastes onto somebody else's site.
+    ///
+    /// <para>
+    /// Normally the API's own origin, which is why this falls back to
+    /// <see cref="ApiOrigin"/>. It is separately overridable because development
+    /// is the one place where <c>App:ApiBaseUrl</c> is deliberately <i>not</i>
+    /// the API: the SPA proxies <c>/api</c> so the two share an origin and the
+    /// session cookie survives, and that proxy covers <c>/api</c> and
+    /// <c>/hubs</c> only. A snippet naming the dev SPA would be copied onto a
+    /// real site and fetch the SPA's index.html as JavaScript — which fails with
+    /// no error anyone can act on.
+    /// </para>
+    /// </summary>
+    private string WidgetScriptOrigin =>
+        (configuration.GetNonEmpty("App:WidgetScriptBaseUrl") ?? ApiOrigin).TrimEnd('/');
+
+    private WidgetOrigins Origins => new(WidgetScriptOrigin, FrontendOrigin);
 
     // ---- Admin: many widgets ------------------------------------------------
 

@@ -55,6 +55,11 @@ const KIND_ICON: Record<string, IconName> = {
 @Component({
   selector: 'tk-release-component-card',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  // Not decoration. A custom element is `display: inline` until told otherwise,
+  // and an inline box ignores vertical margin — so the `space-y-4` on the list
+  // that renders these silently did nothing and every service card after the
+  // first sat flush against the one above it, reading as a card with no padding.
+  host: { class: 'block' },
   imports: [TranslocoPipe, Alert, Avatar, Badge, Button, Card, Icon, Select, SelectOption],
   template: `
     <tk-card>

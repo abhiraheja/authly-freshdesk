@@ -42,6 +42,8 @@ export const appConfig: ApplicationConfig = {
       apiBaseUrl: environment.apiBaseUrl,
       chatHubPath: environment.chatHubPath,
       releaseHubPath: environment.releaseHubPath,
+      widgetHubPath: environment.widgetHubPath,
+      ticketHubPath: environment.ticketHubPath,
     }),
     // Localisation. No user-visible string is hard-coded anywhere in this
     // workspace — see the `trackly-i18n` skill. Messages load from

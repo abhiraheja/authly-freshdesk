@@ -88,6 +88,9 @@ builder.Services.AddScoped<WidgetPublicService>();
 // The push behind the widget's unread badge. Scoped, because it reads the
 // ticket to work out which visitors are watching it.
 builder.Services.AddScoped<IWidgetRealtime, WidgetHubRealtime>();
+// The same push aimed at the desk. Singleton is enough — unlike the widget's, it
+// reads nothing and only needs the group name, which the caller supplies.
+builder.Services.AddSingleton<ITicketRealtime, Trackly.Api.Tickets.TicketHubRealtime>();
 builder.Services.AddSignalR();
 builder.Services.AddHostedService<AnnouncementWorker>();
 builder.Services.AddHostedService<SlaBreachWorker>();
@@ -182,6 +185,7 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
 app.MapHub<WidgetHub>("/hubs/widget");
+app.MapHub<Trackly.Api.Tickets.TicketHub>("/hubs/tickets");
 app.MapHub<Trackly.Api.Releases.ReleaseHub>("/hubs/releases");
 
 // Container/orchestrator liveness. Anonymous, and deliberately does not touch

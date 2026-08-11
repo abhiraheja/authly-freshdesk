@@ -14,6 +14,26 @@ const LOADER = 'trackly-loader';
 const FRAME = 'trackly-widget';
 
 /**
+ * Whether an origin can be used as a `postMessage` target.
+ *
+ * A page with an **opaque origin** — one opened from `file://`, or embedded in a
+ * sandboxed frame — reports its origin as the literal string `"null"`. That is
+ * not a URL, and `postMessage(msg, "null")` does not quietly fail to deliver: it
+ * throws `SyntaxError`. Adopting it as the host origin therefore turned every
+ * later message the panel sent into an exception — the close, minimise and
+ * expand buttons stopped doing anything, and the unread report, which runs
+ * inside an effect, threw during change detection and froze the view on whatever
+ * it was showing at the time.
+ *
+ * There is nothing to address such a host by, so the panel keeps posting to
+ * `'*'`. Nothing outbound is a secret — `ready`, the window controls, an unread
+ * count — and the inbound direction is still pinned to `window.parent`.
+ */
+function addressable(origin: string): boolean {
+  return origin !== 'null' && origin !== '' && URL.canParse(origin);
+}
+
+/**
  * The panel's half of the loader protocol (docs/widget-plan.md § 7.2).
  *
  * <h3>Why the origin is learned rather than configured</h3>
@@ -102,7 +122,7 @@ export class WidgetBridge {
     const data = event.data as { source?: string; type?: string; payload?: unknown } | null;
     if (!data || data.source !== LOADER || !data.type) return;
 
-    this.hostOrigin ??= event.origin;
+    this.hostOrigin ??= addressable(event.origin) ? event.origin : null;
     const payload = (data.payload ?? {}) as {
       config?: LoaderSettings;
       identity?: WidgetIdentity | null;
@@ -135,9 +155,18 @@ export class WidgetBridge {
     if (!this.framed) return;
     const message: Record<string, unknown> = { source: FRAME, type };
     if (payload) message['payload'] = payload;
-    // '*' only for `ready`, which is the message that teaches us the origin and
-    // carries nothing worth intercepting.
-    window.parent.postMessage(message, this.hostOrigin ?? '*');
+    try {
+      // '*' for `ready`, which is the message that teaches us the origin and
+      // carries nothing worth intercepting — and for the whole conversation when
+      // the host page has no origin to address (see `addressable`).
+      window.parent.postMessage(message, this.hostOrigin ?? '*');
+    } catch {
+      // A message that cannot be delivered must never take the panel down with
+      // it. `reportUnread` is called from an effect and the window controls from
+      // click handlers; a throw in the first freezes the view mid-render — which
+      // is what left the conversation list showing its skeleton forever — and a
+      // throw in the second is a button that does nothing.
+    }
   }
 
   private settle(): void {

@@ -169,6 +169,7 @@ store. Empty strings in the committed `appsettings.json` are placeholders.
 | `Ai:Model` | Claude model id for the copilot (defaults to `claude-opus-5`) | optional | no |
 | `App:FrontendBaseUrl` | Absolute base URL of the SPA; used to build links in **emails** (magic links, invites, guest tracking, notifications) and SSO redirects | per-env (e.g. `https://app.trackly.com`) | no |
 | `App:ApiBaseUrl` | Public base URL of the API; used to build the **OIDC/SAML redirect (callback) URI**, the **mail OAuth callback URI**, and the **workspace logo URL in HTML emails**. Falls back to the request scheme+host if unset for the callbacks — but the logo has no request to fall back on, so leaving it unset means emails show the workspace name as text instead of the logo | per-env (e.g. `https://app.trackly.com`) | no |
+| `App:WidgetScriptBaseUrl` | Origin that serves `/widget.js`, used **only** to build the embed snippet an admin copies from Widget → Integration. Leave unset in any deployment where the API and the SPA share an origin — it falls back to `App:ApiBaseUrl`, which is correct there. Set it only when the two are split, as in local dev, where `ApiBaseUrl` names the SPA (which proxies `/api`) and the SPA does **not** proxy `/widget.js`; a snippet naming that host is copied onto a customer's real site and fetches `index.html` as JavaScript, failing silently | unset in prod; `http://localhost:5210` in dev | no |
 | `App:ForwardedHeaders` | Trust `X-Forwarded-For` / `X-Forwarded-Proto`. **Required behind any reverse proxy** (including the bundled nginx image) — without it the per-IP auth rate limiter collapses onto one bucket and the session cookie loses `Secure` behind TLS termination. Leave **false** if the API is directly internet-reachable: the headers are client-spoofable and this flag is the trust boundary (§6) | true behind a proxy, false otherwise | no |
 | `Storage:LocalPath` | Directory for uploaded attachments + logos | per-env (see §3) | no |
 | `Email:Smtp:Host` | Shared/deployment-level SMTP relay host. Empty ⇒ emails are logged, not sent | per-env | no |
@@ -547,8 +548,8 @@ worker on all but one) if any workspace uses mailbox polling.
 - [ ] **`/app/data` on the API and `/var/lib/postgresql/data` on Postgres are on persistent volumes** — and if either is a *bind* mount, the host directory is `chown`ed to uid 1654 for the API (§0.5)
 - [ ] `TRACKLY_MAX_BODY_SIZE` on the `web` container ≥ the API's attachment limit
 - [ ] `AllowedHosts` restricted; `App:ForwardedHeaders=true` **and** the API unreachable except through the proxy (§6)
-- [ ] One API instance if any workspace uses IMAP polling **or live chat** (or add a SignalR backplane) — until leader election / a backplane exists. The widget hub has the same constraint, but degrades to polling rather than breaking
-- [ ] Proxy allows the WebSocket upgrade on `/hubs/*` (live chat, widget)
+- [ ] One API instance if any workspace uses IMAP polling **or live chat** (or add a SignalR backplane) — until leader election / a backplane exists. The widget and ticket hubs have the same constraint, but degrade to polling / a manual refresh rather than breaking
+- [ ] Proxy allows the WebSocket upgrade on `/hubs/*` (live chat, widget, tickets)
 - [ ] Inbound webhook endpoint publicly reachable over HTTPS (if any tenant uses Option A)
 - [ ] Database backups verified **restorable** — bulk delete has no undo (§6)
 - [ ] Smoke test: sign in, create a ticket, agent reply → notification email sent, inbound reply → comment added
@@ -843,3 +844,34 @@ Append here as phases land, so nothing is missed later.
     (`done_by`, `tested_by`, `verified_by`, `completed_by`, `release_manager_id`,
     `actor_id`) is `ON DELETE SET NULL`, so a two-year-old tick never blocks an
     offboarding. `releases.created_by` is `RESTRICT`, matching `problems`.
+
+### Widget & ticket realtime, and the embed snippet's origin
+
+- **New SignalR hub at `/hubs/tickets`**, with a matching SPA config key
+  `ticketHubPath` (`src/environments/*.ts` → `app.config.ts`). It carries the
+  push that was missing in the customer→agent direction: a reply arriving from
+  the widget, the portal or an inbound email now reaches an open ticket page
+  instead of waiting for someone to reload. Same proxy requirement as every
+  other hub — the WebSocket upgrade must be allowed on `/hubs/*`.
+  - **Staff only, and enforced in the hub.** `[Authorize]` alone is not enough:
+    a customer holds a perfectly valid session, so `TicketHub.OnConnectedAsync`
+    also checks the role before joining the workspace group. Without that check
+    every customer would be told each time any ticket in the workspace moved.
+  - The group is per **workspace**, not per ticket, and the payload is only a
+    `ticketId`. Screens re-fetch through the ticket endpoints, so workspace
+    isolation and the private-note rules (invariants 1 and 5) stay in exactly
+    one place.
+  - Behind more than one API replica it needs sticky sessions or a backplane,
+    like `/hubs/releases`. Degrading costs a manual refresh, never data.
+- **The widget panel now connects to `/hubs/widget`** (SPA key `widgetHubPath`).
+  The hub had existed since phase 3 and the server had been pushing to it, but
+  nothing in the panel ever subscribed — replies arrived only on the 20s list /
+  10s thread poll. The polls stay as the documented fallback, so a network that
+  blocks WebSockets costs latency and not delivery.
+- **`App:WidgetScriptBaseUrl`** (see the config table in §5). Only affects the
+  embed snippet on Widget → Integration. Leave it unset wherever the API and the
+  SPA share an origin. It exists because dev deliberately points
+  `App:ApiBaseUrl` at the SPA — which proxies `/api` and `/hubs` but **not**
+  `/widget.js` — so the generated snippet named a host that answers with
+  `index.html`. Pasted onto a customer's site that fails with nothing in the
+  console anyone can act on.

@@ -19,6 +19,7 @@ import {
   WidgetVisitorStore,
   brandTokens,
   errorMessage,
+  type HubConnection,
   type WidgetConversation,
   type WidgetPublicConfig,
   type WidgetSession,
@@ -202,6 +203,9 @@ export class WidgetPanel {
   protected readonly config = signal<WidgetPublicConfig | null>(null);
   protected readonly configError = signal<string | null>(null);
 
+  /** The live push. Null until the session exists, and again if it ever drops. */
+  private hub: HubConnection | null = null;
+
   // setProperty rather than a [style] binding: Angular's style binding does not
   // reliably reach CSS custom properties, and a token that silently fails to
   // apply looks exactly like a workspace that never configured a colour.
@@ -312,7 +316,40 @@ export class WidgetPanel {
       return;
     }
 
+    this.connectRealtime(token);
     await this.reloadList();
+  }
+
+  /**
+   * The live half of delivery (plan § 10). The hub says only *that* a
+   * conversation moved; everything is re-fetched through the endpoints that
+   * apply the trust rule, so nothing arrives here that could not have arrived
+   * over HTTP.
+   *
+   * Additive, not a replacement: the polls stay. A blocked WebSocket is an
+   * ordinary condition on the kind of corporate network a support widget gets
+   * embedded on, and it must cost latency rather than delivery.
+   */
+  private connectRealtime(token: string): void {
+    const visitorToken = this.visitor.token();
+    if (!visitorToken || this.hub) return;
+
+    const hub = this.api.connect(token, visitorToken);
+    this.hub = hub;
+
+    hub.on('conversation', (payload: { conversationId?: string } | null) => {
+      // Always the list — it is what feeds the launcher's badge, and the panel
+      // is usually shut when a reply lands.
+      void this.reloadList();
+      if (payload?.conversationId && payload.conversationId === this.activeId()) {
+        void this.reloadThread();
+      }
+    });
+
+    hub.start().catch(() => {
+      // Cleared so a later boot can try again rather than holding a dead handle.
+      this.hub = null;
+    });
   }
 
   private applySession(session: WidgetSession): void {
@@ -327,7 +364,15 @@ export class WidgetPanel {
   // ---- List and thread -----------------------------------------------------
 
   protected async reloadList(): Promise<void> {
-    if (!this.visitor.token()) return;
+    // No session, so there is nothing to ask for — but the skeleton still has to
+    // come down. It used to return with `listLoading` left true, and since
+    // nothing else ever clears it, a panel that reached here on its *first* load
+    // shimmered for the rest of its life with no request in flight and no error
+    // to show. The poll shares this path, which is what made it reachable.
+    if (!this.visitor.token()) {
+      this.listLoading.set(false);
+      return;
+    }
     this.listError.set(null);
     try {
       this.conversations.set(await this.api.conversations(this.token()));
@@ -480,7 +525,11 @@ export class WidgetPanel {
   // launcher's badge; the thread only polls while it is the view on screen.
 
   private startPolling(): void {
-    const list = setInterval(() => void this.reloadList(), LIST_POLL_MS);
+    // Guarded on the token so a tick that lands before boot has opened the
+    // session does not take the skeleton down and flash an empty list.
+    const list = setInterval(() => {
+      if (this.visitor.token()) void this.reloadList();
+    }, LIST_POLL_MS);
     const thread = setInterval(() => {
       if (this.view() === 'thread' && this.activeId() && this.bridge.visible()) {
         void this.reloadThread();
@@ -490,6 +539,7 @@ export class WidgetPanel {
     inject(DestroyRef).onDestroy(() => {
       clearInterval(list);
       clearInterval(thread);
+      void this.hub?.stop();
     });
   }
 }

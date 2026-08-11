@@ -951,6 +951,36 @@ address and read their support history. So:
   browser**.
 - A **verified** visitor sees everything belonging to their contact record.
 
+**Verification decides what a visitor may read — not who the ticket belongs to.**
+Those are separate, and it is worth knowing which is which:
+
+| | Unverified | Verified |
+| --- | --- | --- |
+| Ticket names a **customer** (not a guest) | ✅ whenever your snippet sends `mail` | ✅ |
+| Sees **their own** conversations from this browser | ✅ | ✅ |
+| Sees the contact's conversations **from other channels** | ❌ | ✅ |
+| Panel shows the name/phone **the desk has on file** | ❌ — only what the page sent | ✅ |
+| `variables` become the customer's **Custom fields** | ✅ on a customer the widget creates | ✅ always |
+| May **change** an existing customer record | ❌ | ✅ |
+| Gets the "we got your message" **email** | ❌ | ✅ |
+
+So the email address in your snippet is what creates and matches the customer —
+get-or-create on email, exactly like adding somebody by hand on the Customers
+screen. One address is one person, and `unique_id` is only a correlation id for
+your own system; it never appears on the customer record. Send `mail` and the
+ticket arrives attributed instead of reading _"Not linked to a customer record"_.
+Sign the JWT when you also want the visitor to see their history from email and
+the portal in the same panel.
+
+**Why an unsigned `variables` bag stops updating a customer who already exists.**
+The config object sits in a public page, so anyone can open the browser console on
+your site and call `identifyChatWidget` with somebody else's address and any keys
+they like. If that wrote through, every visitor would have an edit on every
+customer record — so it does not. A widget-created customer is seeded from it
+(there is nothing to overwrite), and after that the bag only lands when the
+identity is signed. If you want `plan` to stay current on the customer, sign the
+JWT; that is the job it exists for.
+
 There are two ways to become verified. Either your site signs a **JWT** with the
 widget's secret key and passes it in the snippet's `token` field — this is what
 "Identity verification" is for, and your server signs it, never your page — or the

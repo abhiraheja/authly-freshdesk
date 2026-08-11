@@ -7,6 +7,7 @@ import {
   input,
   resource,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
@@ -20,6 +21,7 @@ import {
   settled,
   STATUS_TONE,
   SessionStore,
+  TicketRealtime,
   TicketsApi,
   errorMessage,
   formatDateTime,
@@ -606,6 +608,7 @@ export class TicketDetail {
   private readonly api = inject(TicketsApi);
   private readonly session = inject(SessionStore);
   private readonly toast = inject(ToastService);
+  private readonly realtime = inject(TicketRealtime);
 
   /** Route param, bound by `withComponentInputBinding()`. */
   readonly id = input.required<string>();
@@ -906,6 +909,23 @@ export class TicketDetail {
     effect(() => {
       const status = this.loadedTicket()?.status;
       if (status) this.statusValue.set(status);
+    });
+
+    // A reply can arrive from somewhere the agent is not looking — the widget,
+    // the portal, an inbound email. Until this, nothing told this screen: the
+    // customer's message sat in the database and the open thread kept showing
+    // the conversation as it was when the page loaded.
+    this.realtime.ensureStarted();
+    effect(() => {
+      const change = this.realtime.lastChange();
+      if (!change || change.ticketId !== this.id()) return;
+      // `untracked` because reload() writes the very resources a tracked read
+      // would subscribe this effect to, which would re-run it forever.
+      untracked(() => {
+        this.ticket.reload();
+        this.comments.reload();
+        this.attachments.reload();
+      });
     });
   }
 

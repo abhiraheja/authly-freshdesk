@@ -280,11 +280,34 @@ public class WidgetPublicService(
         if (claimedPhone is not null) visitor.Phone = claimedPhone;
         if (claimedId is not null) visitor.ExternalId = claimedId;
 
-        if (proven)
+        if (proven) visitor.IsVerified = true;
+
+        // The contact is resolved from the claimed email whether or not it was
+        // proven — and **linking is not the same as trusting**.
+        //
+        // `UserId` answers "who is this ticket for": the requester on the ticket,
+        // the author on the reply. An email address is the workspace's own key for
+        // that question — it is exactly what `POST /api/users` gets-or-creates on
+        // when an agent adds somebody by hand. Withholding the link left every
+        // widget ticket reading "Not linked to a customer record" even when the
+        // host page had said who the visitor was, which is not a security posture,
+        // just a worse record.
+        //
+        // What proof buys is **read scope**, and that is enforced somewhere else
+        // entirely: `Conversations` widens to the contact's whole history only for
+        // a visitor with `IsVerified`, and `ContactConversations` throws rather
+        // than return rows without it. So the trust rule (plan § 3.3) is intact —
+        // a claimed address still cannot read anybody's history. Everything that
+        // would disclose what the desk already knows about that address stays
+        // behind `IsVerified` too: see `ToSessionAsync` and `VisitorNameAsync`.
+        if (claimedEmail is not null)
         {
-            visitor.IsVerified = true;
+            // `visitor.Variables`, not `identity.Variables` — the bag was merged
+            // above, so this carries what every page load so far has said, not just
+            // whatever the current route happened to include.
             visitor.UserId = await UpsertContactAsync(
-                widget.WorkspaceId, claimedEmail, claimedName, claimedPhone, ct);
+                widget.WorkspaceId, claimedEmail, claimedName, claimedPhone,
+                visitor.Variables, proven, ct);
         }
 
         return error;
@@ -364,7 +387,10 @@ public class WidgetPublicService(
         token.ConsumedAt = now;
         visitor.Email = email;
         visitor.IsVerified = true;
-        visitor.UserId = await UpsertContactAsync(widget.WorkspaceId, email, visitor.Name, visitor.Phone, ct);
+        // proven: true — a completed OTP is proof of this address, so the claim may
+        // fill blanks on an existing contact and its variables may land on it.
+        visitor.UserId = await UpsertContactAsync(
+            widget.WorkspaceId, email, visitor.Name, visitor.Phone, visitor.Variables, proven: true, ct);
         visitor.LastSeenAt = now;
         await db.SaveChangesAsync(ct);
 
@@ -374,13 +400,22 @@ public class WidgetPublicService(
     // ---- Contacts -------------------------------------------------------------
 
     /// <summary>
-    /// The contact behind a <b>verified</b> visitor, created if this workspace
-    /// has never seen them.
+    /// The contact behind a claimed email address, created if this workspace has
+    /// never seen it. Get-or-create on email, the same way
+    /// <c>POST /api/users</c> behaves when an agent adds somebody by hand — one
+    /// address is one person, and a second row would be two histories for them.
     ///
     /// <para>
-    /// Never called for an unverified visitor: a typed email address must not be
-    /// able to attach a browser to somebody else's contact record, and it must
-    /// not be able to conjure contacts either.
+    /// Called for unverified visitors too, which is what puts a requester on a
+    /// widget ticket instead of a guest name. It is safe because a link is not a
+    /// read grant: see the note at the call site in
+    /// <see cref="ApplyIdentityAsync"/>.
+    /// </para>
+    /// <para>
+    /// <paramref name="proven"/> decides only whether the claim may <b>write</b>
+    /// into a contact that already exists. An unverified visitor may be attached
+    /// to a record but must not edit one — otherwise anybody who can load the
+    /// embed could fill in a blank name or phone number on a real customer.
     /// </para>
     /// <para>
     /// An address belonging to an agent or an admin is left alone and returns
@@ -390,7 +425,8 @@ public class WidgetPublicService(
     /// </para>
     /// </summary>
     private async Task<Guid?> UpsertContactAsync(
-        Guid workspaceId, string? email, string? name, string? phone, CancellationToken ct)
+        Guid workspaceId, string? email, string? name, string? phone,
+        IReadOnlyDictionary<string, string>? variables, bool proven, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(email)) return null;
 
@@ -405,14 +441,28 @@ public class WidgetPublicService(
                     "Widget identity {Email} matches a {Role} account; left unlinked", email, existing.Role);
                 return null;
             }
-            // Fill blanks only. The contact record is the desk's, and an agent
-            // who corrected a customer's name should not have it overwritten by
-            // whatever the host page happens to send on the next page load.
-            if (string.IsNullOrWhiteSpace(existing.Name) && !string.IsNullOrWhiteSpace(name))
-                existing.Name = name;
-            if (string.IsNullOrWhiteSpace(existing.Phone) && !string.IsNullOrWhiteSpace(phone))
-                existing.Phone = phone;
-            existing.UpdatedAt = DateTime.UtcNow;
+            // Fill blanks only, and only on a proven claim. The contact record is
+            // the desk's: an agent who corrected a customer's name should not have
+            // it overwritten by whatever the host page sends on the next page
+            // load, and an anonymous visitor who merely typed the address should
+            // not be writing to it at all.
+            //
+            // That last part is why `variables` needs proof too, and it is the one
+            // place where being strict actually costs something. The bag is
+            // attacker-controllable in a way a JWT is not: the config object lives
+            // in a public page, so anybody can open the console on the embedding
+            // site and call `identifyChatWidget` with somebody else's address and
+            // any keys they like. Writing that into the workspace's CRM fields
+            // would hand every visitor an edit on every customer record.
+            if (proven)
+            {
+                if (string.IsNullOrWhiteSpace(existing.Name) && !string.IsNullOrWhiteSpace(name))
+                    existing.Name = name;
+                if (string.IsNullOrWhiteSpace(existing.Phone) && !string.IsNullOrWhiteSpace(phone))
+                    existing.Phone = phone;
+                MergeVariables(existing, variables);
+                existing.UpdatedAt = DateTime.UtcNow;
+            }
             return existing.Id;
         }
 
@@ -427,9 +477,36 @@ public class WidgetPublicService(
             // account someone can sign in to. They reach their tickets through
             // the widget or an emailed link, exactly as a guest does.
         };
+        // Seeded even from an unverified claim: there is no existing record to
+        // overwrite and nothing an agent recorded to lose, and a contact the
+        // widget just created with no `plan` on it is a worse answer than one
+        // carrying what the host page said about them.
+        MergeVariables(contact, variables);
         db.Users.Add(contact);
         await db.SaveChangesAsync(ct);
         return contact.Id;
+    }
+
+    /// <summary>
+    /// The host page's <c>variables</c> bag, folded into the contact's custom
+    /// fields — the same free key/value store the Customers screen edits, because
+    /// it is the same kind of thing: whatever this business tracks about a person.
+    ///
+    /// <para>
+    /// Merge, not replace, and last write wins per key. Blank keys and values are
+    /// dropped rather than stored empty, matching <c>POST /api/users</c> — a key
+    /// with nothing behind it is noise on a screen an agent reads during a call.
+    /// </para>
+    /// </summary>
+    private static void MergeVariables(User contact, IReadOnlyDictionary<string, string>? variables)
+    {
+        if (variables is null) return;
+        foreach (var (key, value) in variables)
+        {
+            var trimmed = key?.Trim();
+            if (string.IsNullOrEmpty(trimmed) || string.IsNullOrWhiteSpace(value)) continue;
+            contact.CustomFields[trimmed] = value.Trim();
+        }
     }
 
     // ---- Conversations --------------------------------------------------------
@@ -924,9 +1001,15 @@ public class WidgetPublicService(
     /// </summary>
     private static bool IsAgent(string? role) => role is not null && role != TracklyRoles.Customer;
 
+    /// <summary>
+    /// What to label this visitor's own messages with. The linked contact's name
+    /// when there is proof, otherwise whatever the browser claimed — the same
+    /// split as <see cref="ToSessionAsync"/>, and for the same reason: an
+    /// unverified claim must not read back the desk's record of that address.
+    /// </summary>
     private async Task<string?> VisitorNameAsync(WidgetVisitor visitor, CancellationToken ct)
     {
-        if (visitor.UserId is null) return visitor.Name;
+        if (!visitor.IsVerified || visitor.UserId is null) return visitor.Name;
         return await db.Users
             .Where(u => u.Id == visitor.UserId && u.WorkspaceId == visitor.WorkspaceId)
             .Select(u => u.Name)
@@ -947,8 +1030,15 @@ public class WidgetPublicService(
     {
         // A linked contact is the better source: an agent may have corrected the
         // name after the host page supplied it.
+        //
+        // Only for a **verified** visitor, though. A visitor is now linked on a
+        // claimed address as well, and reading the contact back would answer a
+        // question nobody is entitled to ask: type a stranger's email into the
+        // details form and the panel would echo the name and phone number the desk
+        // has on file for them. Unverified, the panel only ever shows what this
+        // browser itself said.
         string? name = visitor.Name, email = visitor.Email, phone = visitor.Phone;
-        if (visitor.UserId is not null)
+        if (visitor is { IsVerified: true, UserId: not null })
         {
             var contact = await db.Users
                 .Where(u => u.Id == visitor.UserId && u.WorkspaceId == widget.WorkspaceId)

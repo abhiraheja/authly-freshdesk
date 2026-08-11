@@ -130,6 +130,34 @@ Without it, "see all my tickets in the widget" is a data-leak endpoint: type
 `ceo@theircompany.com`, read their support history. It is the widget's
 equivalent of invariant 5 — enforce it in the API, never in the UI.
 
+#### The rule is about reading, not about who the ticket is for
+
+The first implementation read the rule as "an unverified visitor has no contact
+at all" and left `widget_visitors.user_id` null until something was proven. That
+was a misreading, and an expensive one: every widget ticket from a host page that
+*had* said who its user was still arrived with a guest name and read **"Not linked
+to a customer record"** on the agent's screen. No history was protected by that —
+the visitor could not read anything either way — so the only effect was a worse
+record of who the desk was talking to.
+
+So the two questions are separated, and only the second one needs proof:
+
+| Question | Answered by | Needs proof? |
+| --- | --- | --- |
+| Who is this ticket **for**? | `widget_visitors.user_id` → `tickets.requester_id` | **No.** Get-or-create on the claimed email, exactly as `POST /api/users` does for an agent adding somebody by hand. One address is one person. |
+| What may this browser **read**? | `Conversations(visitor)` | **Yes.** It widens to the contact's whole history only when `is_verified`; `ContactConversations` throws rather than return rows without it. |
+| What does the desk already **know** about this address? | `ToSessionAsync`, `VisitorNameAsync` | **Yes.** Unverified, the panel is only ever told what this browser itself said — otherwise typing a stranger's address would read back the name and phone on file for them. |
+| May this claim **write** to an existing contact? | `UpsertContactAsync(proven:)` | **Yes.** An unverified visitor may be attached to a record but never edit one. |
+
+The confirmation email stays behind `is_verified` as well (§ 9.x): sending to an
+address nobody has proved would make any embed a way to post workspace-branded
+mail to a stranger's inbox.
+
+Net effect: `unique_id` is a correlation id and nothing more, **the email is the
+identity**, and a widget ticket names its requester the same way every other
+channel does — while the sentence the rule actually exists to guarantee is
+unchanged. A claimed address still reads nothing.
+
 ---
 
 ## 4. Design decisions

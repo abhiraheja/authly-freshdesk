@@ -62,6 +62,7 @@ public static class DependencyInjection
         // in the API. This is the floor, so a host that never maps it still
         // resolves NotificationService; the API replaces it with the real one.
         services.TryAddSingleton<IWidgetRealtime, NoOpWidgetRealtime>();
+        services.TryAddSingleton<ITicketRealtime, NoOpTicketRealtime>();
 
         return services;
     }

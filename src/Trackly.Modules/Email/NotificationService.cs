@@ -21,6 +21,7 @@ public class NotificationService(
     EmailProviderService providers,
     EmailTemplateService templates,
     IWidgetRealtime widgetRealtime,
+    ITicketRealtime ticketRealtime,
     IConfiguration configuration,
     ILogger<NotificationService> logger)
 {
@@ -35,6 +36,11 @@ public class NotificationService(
             var ticket = await LoadAsync(ticketId, ct);
             if (ticket is null) return;
             var ctx = await ResolveAsync(ticket.WorkspaceId, ct);
+
+            // Any queue on screen gains a row. Ahead of the settings gates for the
+            // same reason as the reply push below: an open list is a live screen,
+            // not an email preference.
+            await ticketRealtime.TicketUpdatedAsync(ticket.WorkspaceId, ticketId, ct);
 
             // Notify the auto-assigned agent. (Guests already got their submit
             // confirmation from GuestService; portal requesters get the create note.)
@@ -70,6 +76,11 @@ public class NotificationService(
             // did not ask for the widget to stop updating. Best-effort by
             // contract, so it cannot throw into the sends that follow.
             await widgetRealtime.ConversationUpdatedAsync(ticketId, ct);
+
+            // The same nudge in the other direction, and the one that was
+            // missing: a reply from the portal, the widget or an inbound email
+            // reached no agent screen at all until somebody reloaded the page.
+            await ticketRealtime.TicketUpdatedAsync(ticket.WorkspaceId, ticketId, ct);
 
             // Stamp + persist the Message-ID so an inbound reply's In-Reply-To can
             // be matched back to this comment (threading fallback).

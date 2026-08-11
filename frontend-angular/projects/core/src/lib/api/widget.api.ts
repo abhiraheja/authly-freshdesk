@@ -1,4 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
+import { HubConnectionBuilder, LogLevel, type HubConnection } from '@microsoft/signalr';
+import { TRACKLY_CONFIG } from '../core.config';
 import { ApiService } from './api.service';
 
 // ---- Wire types ------------------------------------------------------------
@@ -156,6 +158,8 @@ function read(key: string): string | null {
 @Injectable({ providedIn: 'root' })
 export class WidgetApi {
   private readonly api = inject(ApiService);
+  /** Not `config` — that name is already this class's public config() endpoint. */
+  private readonly runtime = inject(TRACKLY_CONFIG);
 
   private base(widgetToken: string): string {
     return `/api/public/widget/${encodeURIComponent(widgetToken)}`;
@@ -235,5 +239,35 @@ export class WidgetApi {
     return this.api.url(
       `${this.base(widgetToken)}/conversations/${conversationId}/attachments/${attachmentId}`,
     );
+  }
+
+  // ── Real-time ───────────────────────────────────────────────────────────────
+
+  /**
+   * A hub connection for this visitor, not yet started.
+   *
+   * REST stays the source of truth; the hub only says *that* something changed.
+   * The server sends `conversation` with a `{ conversationId }` and nothing else,
+   * so the panel re-fetches through the endpoints that apply the trust rule and
+   * strip internal notes — a socket carrying message bodies would be a second
+   * place invariant 5 has to hold.
+   *
+   * The visitor token goes in the query string because the panel has no session
+   * cookie: it is the whole of the credential, exactly as it is on the REST
+   * surface. A connection that presents none simply joins no group.
+   *
+   * `withAutomaticReconnect` because the panel outlives sleeps and network
+   * changes — an embedded widget sits open on a page for hours.
+   */
+  connect(widgetToken: string, visitorToken: string): HubConnection {
+    const query =
+      `?widget=${encodeURIComponent(widgetToken)}` +
+      `&visitorToken=${encodeURIComponent(visitorToken)}`;
+
+    return new HubConnectionBuilder()
+      .withUrl(`${this.runtime.apiBaseUrl}${this.runtime.widgetHubPath}${query}`)
+      .withAutomaticReconnect()
+      .configureLogging(LogLevel.Warning)
+      .build();
   }
 }
