@@ -780,6 +780,27 @@ Two smaller decisions:
 - **The loader holds no credential.** § 7.2's `visitorId` step is gone; the frame
   owns the server-issued token. A loader with nothing to steal is a loader that
   can safely be a plain script tag on a page Trackly does not control.
+- **An opaque host origin posts to `'*'`, and must.** A host page opened from
+  `file://` — or one inside a sandboxed iframe — reports `event.origin` as the
+  *string* `"null"`, which is not a legal `postMessage` target: it throws
+  `SyntaxError` instead of quietly not delivering. `WidgetBridge.targetOrigin()`
+  maps it to `'*'`, which is the only string that can reach an opaque origin.
+
+  This is not a weakening of the learned-origin rule. The recipient is always
+  `window.parent`, and nothing the panel sends outward is a secret — the visitor
+  token never crosses `postMessage`, only unread counts and window-chrome
+  requests. The *inbound* check (`event.origin` must match the learned origin) is
+  untouched, and that is the half that matters.
+
+  It shipped broken and reached a user. The throw happened inside the effect
+  behind `reportUnread`, which took out change detection, so the panel sat on its
+  loading skeletons forever — on screen, indistinguishable from an API call that
+  never returned, and easily mistaken for a CORS problem. Every request was a
+  200. `scripts/widget-opaque-origin-probe.mjs` is the regression guard, and it
+  was confirmed to fail against the broken code before being kept: every other
+  probe serves the host page over http, which is precisely why none of them
+  caught it. Opening the snippet in a local HTML file is the first thing anyone
+  does with it.
 
 The move to SignalR added two more probes, deliberately split by what they can
 prove. `scripts/widget-realtime-probe.mjs` drives the hub through the same client
