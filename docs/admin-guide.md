@@ -909,8 +909,10 @@ looking for "our logo on the login page" thinks to open *Widget*.)
 ### Set up
 
 1. **Logo** — PNG, SVG, JPEG or WebP, up to 1 MB. It appears in the sign-in
-   header, on customer pages, and at the top of every email. A square mark reads
-   better than a wordmark, because it is rendered small.
+   header, on customer pages, at the top of every email, and as the **icon on the
+   browser tab**. A square mark reads better than a wordmark, because it is
+   rendered small — at 16 pixels on the tab, a wordmark is an unreadable smudge.
+   Until you upload one, the tab wears Trackly's own icon.
 2. **Sign-in image** — PNG, JPEG, WebP or GIF, up to 5 MB. Fills the panel beside
    the sign-in form, framed at 4:5. The headline sits across the bottom of that
    panel over a dark scrim, so keep the subject of the picture out of that strip.

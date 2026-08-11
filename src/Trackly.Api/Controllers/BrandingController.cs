@@ -91,8 +91,14 @@ public partial class BrandingController(TracklyDbContext db, IWorkspaceFileStora
         {
             workspaceName = workspace.Name,
             slug = workspace.Slug,
-            logoUrl = branding?.LogoStorageKey is null ? null : $"{assetBase}/logo",
-            signInImageUrl = branding?.SignInImageStorageKey is null ? null : $"{assetBase}/sign-in-image",
+            // Versioned: the asset endpoints answer `max-age=300`, so without a
+            // changing query string a replaced logo keeps showing for five more
+            // minutes — and a favicon, which browsers cache far harder than that,
+            // could keep showing indefinitely.
+            logoUrl = branding?.LogoStorageKey is null ? null : $"{assetBase}/logo?v={AssetVersion(branding)}",
+            signInImageUrl = branding?.SignInImageStorageKey is null
+                ? null
+                : $"{assetBase}/sign-in-image?v={AssetVersion(branding)}",
             primaryColor = branding?.PrimaryColor ?? "#2563EB",
             pageTitle = branding?.PageTitle ?? $"{workspace.Name} Support",
             welcomeText = branding?.WelcomeText ?? "How can we help you?",
@@ -280,6 +286,9 @@ public partial class BrandingController(TracklyDbContext db, IWorkspaceFileStora
         }
         return branding;
     }
+
+    // Ticks of the last edit — enough to change whenever an asset was replaced.
+    private static long AssetVersion(WorkspaceBranding branding) => branding.UpdatedAt.Ticks;
 
     // The admin UI builds the preview URLs from the workspace slug it already
     // knows; the flags just say whether an asset exists.

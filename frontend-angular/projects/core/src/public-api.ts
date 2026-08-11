@@ -41,6 +41,7 @@ export * from './lib/auth/guards';
 
 // Theme + formatting
 export * from './lib/theme/theme.service';
+export * from './lib/theme/favicon.service';
 // One brand-token helper, not two: `lib/brand.ts` (widget branch) and
 // `lib/theme/brand-tokens.ts` (main) solved the same problem, and main's derives
 // the full palette — tint, border, ink — where the widget's derived only the
