@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using Trackly.Modules.Email;
 using Trackly.Modules.Releases;
 using Trackly.Modules.Tickets;
 
@@ -53,6 +54,14 @@ public class ApiExceptionFilter : IExceptionFilter
                 error = e.Message,
                 code = e.Code,
             }),
+            // 502, not 400 or 500: the request was fine and Trackly is fine — the
+            // mail relay Trackly depends on refused. The distinction is what tells
+            // an admin to go and look at their email settings rather than at their
+            // typing or at the server log.
+            EmailDeliveryException e => new ObjectResult(new { error = e.Message })
+            {
+                StatusCode = StatusCodes.Status502BadGateway,
+            },
             ArgumentException e => new BadRequestObjectResult(new { error = e.Message }),
             UnauthorizedAccessException => new ObjectResult(new { error = "Forbidden." })
             {

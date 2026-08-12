@@ -45,18 +45,61 @@ public class InvitationService(
             InvitedBy = actor.UserId,
             ExpiresAt = DateTime.UtcNow.Add(InviteLifetime),
         };
+
+        // Trailing slash tolerated, because a config value is typed by hand and
+        // "https://help.example.com/" would otherwise produce a //invite/ link.
+        var frontendBaseUrl = (configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173").TrimEnd('/');
+
+        // **The row and the email are one unit of work.** An invitation nobody
+        // received is worse than no invitation at all: it sits in the pending
+        // list looking sent, its token exists only in a mail that never left, and
+        // the admin's only route back is to spot it, revoke it and start again —
+        // there is no resend. So the insert is committed only once the relay has
+        // accepted the message.
+        //
+        // The window that remains is a commit failing after a successful send,
+        // which hands someone a link that will not resolve. That is the better
+        // of the two failures: it tells the recipient plainly that something is
+        // wrong, where a phantom pending row tells the admin that everything
+        // worked.
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+
         db.WorkspaceInvitations.Add(invitation);
         await db.SaveChangesAsync(ct);
 
-        var frontendBaseUrl = configuration.GetNonEmpty("App:FrontendBaseUrl") ?? "http://localhost:5173";
-
-        await mailer.SendAsync(actor.WorkspaceId, email, toName: null, "invitation", new()
+        try
         {
-            ["action_url"] = $"{frontendBaseUrl}/invite/{token}",
-            ["inviter_name"] = inviter.Name ?? inviter.Email,
-            ["role_name"] = role == TracklyRoles.Admin ? "an admin" : "an agent",
-            ["expiry_days"] = ((int)InviteLifetime.TotalDays).ToString(),
-        }, ct);
+            await mailer.SendAsync(actor.WorkspaceId, email, toName: null, "invitation", new()
+            {
+                ["action_url"] = $"{frontendBaseUrl}/invite/{token}",
+                ["inviter_name"] = inviter.Name ?? inviter.Email,
+                ["role_name"] = role == TracklyRoles.Admin ? "an admin" : "an agent",
+                ["expiry_days"] = ((int)InviteLifetime.TotalDays).ToString(),
+            }, ct);
+        }
+        // Cancellation is excluded so a browser that gave up mid-send is not
+        // reported as a mail failure. Disposing the transaction still rolls it
+        // back, so the row goes either way.
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // CancellationToken.None: the rollback is the cleanup, and cancelling
+            // it is what would leave the row behind.
+            await tx.RollbackAsync(CancellationToken.None);
+
+            // The context still tracks the insert as saved. Nothing else uses it
+            // on this request, but leaving it attached is how a later
+            // SaveChangesAsync on the same scope would quietly resurrect it.
+            db.Entry(invitation).State = EntityState.Detached;
+
+            // Wrapped here rather than inside TransactionalMailer: this endpoint
+            // is admin-only, so the relay's own error text is safe to show and is
+            // the only thing that makes the failure fixable. See
+            // EmailDeliveryException.
+            throw new EmailDeliveryException(
+                $"The invitation to {email} was not sent, so no invitation was created: {ex.Message}", ex);
+        }
+
+        await tx.CommitAsync(ct);
 
         return new InvitationDto(invitation.Id, invitation.Email, invitation.Role,
             inviter.Name ?? inviter.Email, invitation.ExpiresAt, invitation.AcceptedAt);

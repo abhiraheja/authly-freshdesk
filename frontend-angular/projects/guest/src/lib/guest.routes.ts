@@ -23,7 +23,7 @@ export const guestRoutes: Routes = [
   { path: 'chat', loadComponent: () => import('./chat-visitor').then((m) => m.ChatVisitor) },
   { path: 'csat/:ticketId', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.rateSupport', from: 'frontend/src/pages/public/CsatPage.tsx', branded: true } },
   { path: 'tickets/:id', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.yourTicket', from: 'frontend/src/pages/public/GuestTicketPage.tsx', branded: true } },
-  { path: 'invite/:token', loadComponent: placeholder, data: { titleKey: 'comingSoon.titles.acceptInvitation', from: 'frontend/src/pages/public/InviteAcceptPage.tsx', branded: true } },
+  { path: 'invite/:token', loadComponent: () => import('./invite-accept').then((m) => m.InviteAccept), data: { titleKey: 'invite.pageTitle', branded: true } },
 
   /**
    * The embeddable widget's panel — the document `widget.js` puts in its iframe

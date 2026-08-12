@@ -8,6 +8,8 @@ import {
   formatDateTime,
   settled,
   type AddMemberResult,
+  type InvitableRole,
+  type Invitation,
   type Member,
   type UserRole,
 } from '@trackly/core';
@@ -31,6 +33,12 @@ import {
 } from '@trackly/ui';
 
 const ROLES: readonly UserRole[] = ['agent', 'admin', 'customer'];
+
+/**
+ * An invitation may only grant staff. The API refuses anything else, so a
+ * customer option here would be a dropdown entry whose only outcome is an error.
+ */
+const INVITABLE_ROLES: readonly InvitableRole[] = ['agent', 'admin'];
 
 /**
  * Admin → People → Members.
@@ -76,10 +84,19 @@ const ROLES: readonly UserRole[] = ['agent', 'admin', 'customer'];
           <span class="text-meta text-muted-foreground">
             {{ 'admin.members.count' | transloco: { count: rows.length } }}
           </span>
-          <button tkButton (click)="openAdd()">
-            <tk-icon name="user-plus" [size]="16" />
-            {{ 'admin.members.add' | transloco }}
-          </button>
+          <div class="flex flex-wrap items-center gap-2">
+            <!-- Outline, because "Add member" is the one that works on every
+                 install. Inviting needs email configured; leading with it would
+                 push a fresh workspace towards the button that cannot deliver. -->
+            <button tkButton variant="outline" (click)="openInvite()">
+              <tk-icon name="mail" [size]="16" />
+              {{ 'admin.members.invite' | transloco }}
+            </button>
+            <button tkButton (click)="openAdd()">
+              <tk-icon name="user-plus" [size]="16" />
+              {{ 'admin.members.add' | transloco }}
+            </button>
+          </div>
         </div>
 
         <!-- Said once, at the top, because it is the thing an admin only
@@ -179,6 +196,71 @@ const ROLES: readonly UserRole[] = ['agent', 'admin', 'customer'];
             </table>
           </div>
         </tk-card>
+
+        <!-- ─────────── Pending invitations ─────────── -->
+        @if (loadedInvites(); as invites) {
+          <!-- Empty renders nothing on purpose: this section exists only while
+               somebody has been invited and has not joined. A permanent "no
+               pending invitations" panel would be chrome describing its own
+               absence on almost every visit. -->
+          @if (invites.length) {
+            <section class="mt-8">
+              <h2 class="font-display text-[17px] font-extrabold">{{ 'admin.members.pending' | transloco }}</h2>
+              <p class="mb-3 mt-1 text-meta text-muted-foreground">{{ 'admin.members.pendingHint' | transloco }}</p>
+
+              <tk-card flush>
+                <div class="overflow-x-auto">
+                  <table tkTable class="min-w-[620px]">
+                    <thead>
+                      <tr>
+                        <th>{{ 'admin.members.email' | transloco }}</th>
+                        <th>{{ 'admin.members.role' | transloco }}</th>
+                        <th>{{ 'admin.members.invitedBy' | transloco }}</th>
+                        <th>{{ 'admin.members.expires' | transloco }}</th>
+                        <th class="col-right">{{ 'tickets.columns.actions' | transloco }}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      @for (invite of invites; track invite.id) {
+                        <tr>
+                          <td class="font-semibold">{{ invite.email }}</td>
+                          <td><tk-badge tone="neutral">{{ 'roles.' + invite.role | transloco }}</tk-badge></td>
+                          <td class="text-meta text-muted-foreground">{{ invite.invitedBy }}</td>
+                          <td class="text-meta text-muted-foreground">{{ at(invite.expiresAt) }}</td>
+                          <td>
+                            <div class="flex items-center justify-end gap-1.5">
+                              @if (busyId() === invite.id) {
+                                <tk-spinner [size]="16" />
+                              }
+                              <button
+                                tkButton
+                                variant="ghost"
+                                size="sm"
+                                [disabled]="busyId() === invite.id"
+                                (click)="revoke(invite)"
+                              >
+                                {{ 'admin.members.revoke' | transloco }}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      }
+                    </tbody>
+                  </table>
+                </div>
+              </tk-card>
+            </section>
+          }
+        } @else if (invitations.error()) {
+          <tk-alert tone="danger" class="mt-8" [heading]="'admin.members.pendingLoadFailed' | transloco">
+            {{ inviteListError() }}
+            <button type="button" class="ml-1 font-semibold underline" (click)="invitations.reload()">
+              {{ 'common.retry' | transloco }}
+            </button>
+          </tk-alert>
+        } @else {
+          <span tkSkeleton class="mt-8 block h-16 w-full"></span>
+        }
       } @else if (members.error()) {
         <tk-alert tone="danger" [heading]="'admin.members.loadFailed' | transloco">
           {{ errorText() }}
@@ -224,6 +306,41 @@ const ROLES: readonly UserRole[] = ['agent', 'admin', 'customer'];
       </div>
     </tk-modal>
 
+    <!-- ─────────── Invite ─────────── -->
+    <tk-modal [(open)]="inviteOpen" [heading]="'admin.members.inviteHeading' | transloco">
+      <div class="space-y-4">
+        <tk-field [label]="'admin.members.email' | transloco" for="invite-email">
+          <input tkInput inset id="invite-email" type="email" [(ngModel)]="inviteEmail" placeholder="agent@company.com" />
+        </tk-field>
+        <tk-field [label]="'admin.members.role' | transloco" for="invite-role">
+          <tk-select [(value)]="inviteRole" inputId="invite-role">
+            @for (role of invitableRoles; track role) {
+              <tk-option [value]="role" [label]="'roles.' + role | transloco" />
+            }
+          </tk-select>
+        </tk-field>
+        <p class="text-meta text-muted-foreground">{{ 'admin.members.inviteHint' | transloco }}</p>
+
+        <!-- An alert, not a toast. This is where the relay's own refusal
+             arrives ("535 authentication failed"), it is the only copy of it,
+             and it is the thing the admin has to act on. A toast would take it
+             away after four seconds. -->
+        @if (inviteError(); as message) {
+          <tk-alert tone="danger" [heading]="'admin.members.inviteFailed' | transloco">{{ message }}</tk-alert>
+        }
+      </div>
+
+      <div modal-footer class="flex justify-end gap-2">
+        <button tkButton variant="outline" (click)="inviteOpen.set(false)">{{ 'common.cancel' | transloco }}</button>
+        <button tkButton [disabled]="!canInvite() || inviting()" (click)="invite()">
+          @if (inviting()) {
+            <tk-spinner [size]="16" />
+          }
+          {{ 'admin.members.inviteSend' | transloco }}
+        </button>
+      </div>
+    </tk-modal>
+
     <!-- ─────────── The password, shown once ─────────── -->
     <tk-modal [(open)]="issuedOpen" [heading]="'admin.members.passwordIssued' | transloco">
       @if (issued(); as result) {
@@ -253,10 +370,13 @@ export class AdminMembers {
   private readonly transloco = inject(TranslocoService);
 
   protected readonly roles = ROLES;
+  protected readonly invitableRoles = INVITABLE_ROLES;
   protected readonly members = resource({ loader: () => this.api.members() });
+  protected readonly invitations = resource({ loader: () => this.api.invitations() });
 
   /** Never `.value()` directly: it throws in the error state and blanks the page. */
   protected readonly loadedMembers = settled(() => this.members);
+  protected readonly loadedInvites = settled(() => this.invitations);
 
   protected readonly myId = computed(() => this.session.user()?.id ?? '');
   protected readonly busyId = signal<string | null>(null);
@@ -270,9 +390,17 @@ export class AdminMembers {
   protected readonly issuedOpen = signal(false);
   protected readonly issued = signal<AddMemberResult | null>(null);
 
+  protected readonly inviteOpen = signal(false);
+  protected readonly inviteEmail = signal('');
+  protected readonly inviteRole = signal<string>('agent');
+  protected readonly inviting = signal(false);
+  protected readonly inviteError = signal('');
+
   protected readonly canAdd = computed(() => /.+@.+\..+/.test(this.newEmail()));
+  protected readonly canInvite = computed(() => /.+@.+\..+/.test(this.inviteEmail()));
 
   protected readonly errorText = computed(() => errorMessage(this.members.error()));
+  protected readonly inviteListError = computed(() => errorMessage(this.invitations.error()));
 
   /**
    * One active admin means one lost password away from an installation nobody
@@ -313,6 +441,62 @@ export class AdminMembers {
       this.toast.error(errorMessage(error));
     } finally {
       this.adding.set(false);
+    }
+  }
+
+  protected openInvite(): void {
+    this.inviteEmail.set('');
+    this.inviteRole.set('agent');
+    this.inviteError.set('');
+    this.inviteOpen.set(true);
+  }
+
+  /**
+   * The modal stays open on failure, holding the typed address and the reason.
+   *
+   * That is the whole point of the server committing the row only after the
+   * relay accepts: a failure here means nothing was created, so trying again
+   * after fixing the email settings is a retry rather than a duplicate.
+   */
+  protected async invite(): Promise<void> {
+    if (!this.canInvite() || this.inviting()) return;
+    this.inviting.set(true);
+    this.inviteError.set('');
+    try {
+      await this.api.invite({
+        email: this.inviteEmail().trim(),
+        role: this.inviteRole() as InvitableRole,
+      });
+      this.inviteOpen.set(false);
+      // A toast, because this one succeeded and the surface it happened on is
+      // gone — the pending row below is the durable record.
+      this.toast.success(this.transloco.translate('admin.members.inviteSent'));
+      this.invitations.reload();
+    } catch (error) {
+      this.inviteError.set(errorMessage(error));
+    } finally {
+      this.inviting.set(false);
+    }
+  }
+
+  protected async revoke(invite: Invitation): Promise<void> {
+    const ok = await this.confirm.ask({
+      heading: this.transloco.translate('admin.members.revokeHeading', { email: invite.email }),
+      message: this.transloco.translate('admin.members.revokeBody'),
+      confirmLabel: this.transloco.translate('admin.members.revoke'),
+      tone: 'danger',
+    });
+    if (!ok) return;
+
+    this.busyId.set(invite.id);
+    try {
+      await this.api.revokeInvitation(invite.id);
+      this.toast.success(this.transloco.translate('admin.members.revoked'));
+      this.invitations.reload();
+    } catch (error) {
+      this.toast.error(errorMessage(error));
+    } finally {
+      this.busyId.set(null);
     }
   }
 

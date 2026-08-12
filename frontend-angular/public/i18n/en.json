@@ -717,7 +717,6 @@
       "liveChat": "Live chat",
       "rateSupport": "Rate your support",
       "yourTicket": "Your ticket",
-      "acceptInvitation": "Accept invitation",
       "myTickets": "My tickets",
       "newTicket": "New ticket",
       "ticket": "Ticket",
@@ -990,7 +989,22 @@
       "soleAdmin": "You are the only administrator",
       "soleAdminBody": "If you lose your password and email is not working, nobody can reset it for you. Make a second person an admin.",
       "saved": "Member updated",
-      "loadFailed": "Could not load members"
+      "loadFailed": "Could not load members",
+      "invite": "Invite",
+      "inviteHeading": "Invite someone",
+      "inviteHint": "Trackly emails a join link valid for 7 days. They pick their own name and are signed in as soon as they accept. Needs working outbound email.",
+      "inviteSend": "Send invitation",
+      "inviteSent": "Invitation sent",
+      "inviteFailed": "The invitation was not sent",
+      "pending": "Pending invitations",
+      "pendingHint": "Sent and not yet accepted. There is no resend — revoke one and invite again.",
+      "invitedBy": "Invited by",
+      "expires": "Expires",
+      "revoke": "Revoke",
+      "revokeHeading": "Revoke the invitation to {{email}}?",
+      "revokeBody": "Their link stops working immediately. You can invite them again afterwards.",
+      "revoked": "Invitation revoked",
+      "pendingLoadFailed": "Could not load pending invitations"
     },
     "login": {
       "title": "Login methods",
@@ -1642,6 +1656,25 @@
       "title": "Your account, your key.",
       "body": "Trackly stores only a hash — nobody, including an administrator, can read your password back."
     }
+  },
+  "invite": {
+    "pageTitle": "Accept invitation",
+    "title": "Join {{workspace}}",
+    "body": "{{inviter}} invited you to join as {{role}}.",
+    "bodyNoInviter": "You have been invited to join as {{role}}.",
+    "emailLabel": "You will join as",
+    "nameLabel": "Your name",
+    "nameHint": "Shown to your teammates and on the replies you send.",
+    "accept": "Accept and continue",
+    "failed": "Could not accept this invitation",
+    "signIn": "Go to sign-in",
+    "expiredHeading": "This invitation has expired",
+    "expiredBody": "Invitations are valid for 7 days. Ask an administrator at {{workspace}} to send you a new one.",
+    "acceptedHeading": "This invitation has already been used",
+    "acceptedBody": "You already have an account here. Sign in instead.",
+    "invalidHeading": "This link is not valid",
+    "invalidBody": "It may have been revoked, or the address may be incomplete. Check the link in your email, or ask for a new invitation.",
+    "loadFailedHeading": "Could not load this invitation"
   },
   "roles": {
     "customer": "Customer",

@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { ApiService } from './api.service';
+import type { User } from '../auth/auth.models';
 
 /**
  * A workspace's public branding — everything a customer-facing surface needs to
@@ -19,6 +20,24 @@ export interface PublicBranding {
   emailLoginEnabled: boolean;
   ssoProviderName: string | null;
   categories: { id: string; name: string }[];
+}
+
+/**
+ * What the invite link's landing page may know before anyone accepts.
+ *
+ * `expired` and `accepted` are reported rather than hidden behind a 404, so a
+ * link that has simply run out can say so instead of looking broken. The email
+ * is included because the recipient needs to see which address they were invited
+ * at — a link forwarded to a personal inbox still joins as the invited one.
+ */
+export interface InvitationInfo {
+  workspaceName: string;
+  workspaceSlug: string;
+  email: string;
+  role: string;
+  invitedBy: string | null;
+  expired: boolean;
+  accepted: boolean;
 }
 
 /** Unauthenticated endpoints — reachable before (and instead of) a session. */
@@ -48,5 +67,26 @@ export class PublicApi {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Reads an invitation without consuming it.
+   *
+   * **Deliberately not swallowed like `branding()`.** There, a miss costs some
+   * colour; here it is the whole page — "this link is not valid" and "we could
+   * not reach the server" need different words and only one of them is worth
+   * retrying, so the caller gets the `ApiError` and decides.
+   */
+  invitation(token: string): Promise<InvitationInfo> {
+    return this.api.get<InvitationInfo>(`/api/invitations/${encodeURIComponent(token)}`);
+  }
+
+  /**
+   * Consumes the invitation and signs the invitee in — the session cookie comes
+   * back on this response, which is why nothing but the POST may spend the token
+   * (invariant 7: mail scanners fetch the GET above).
+   */
+  acceptInvitation(token: string, name?: string): Promise<{ status: string; user: User }> {
+    return this.api.post<{ status: string; user: User }>('/api/invitations/accept', { token, name });
   }
 }

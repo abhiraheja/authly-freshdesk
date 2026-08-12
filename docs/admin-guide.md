@@ -134,7 +134,16 @@ self-hosted install and no recovery link, so a lockout here would be permanent.
   replace it the first time they sign in, and until they do, their account can do
   nothing else.
 - **Invite** — where outbound email works, an invitee can instead get a join link
-  **valid for 7 days**.
+  **valid for 7 days**. Enter an email, choose **Agent** or **Admin** (an
+  invitation cannot grant the customer role), and Trackly emails the link. They
+  pick their own name on the way in and are signed in the moment they accept.
+  The invitation is created only if the mail relay accepts the message: if
+  sending fails you are shown the relay's own error and *no* pending invitation
+  is left behind, so there is never a row that looks sent but reached nobody.
+  Fix the problem in **Admin ▾ → Email** (§9) and send it again.
+- **Pending invitations** — listed under the members table once there is at
+  least one, with who sent it and when it expires. **Revoke** kills the link
+  immediately. There is no resend: revoke and invite again.
 - **Reset password** — on any member row. A new password is shown once and their
   other sessions are signed out immediately. This is your recovery path when
   somebody is locked out and email is not available.

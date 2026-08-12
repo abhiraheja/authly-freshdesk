@@ -32,6 +32,24 @@ export interface AddMemberResult {
   readonly temporaryPassword: string;
 }
 
+/**
+ * Only staff can be invited. A customer never gets one: they arrive by raising a
+ * ticket, and the server refuses the role outright — so offering it would be a
+ * dead option in the dropdown.
+ */
+export type InvitableRole = 'agent' | 'admin';
+
+/** A join link that has been emailed and not yet used. */
+export interface Invitation {
+  readonly id: string;
+  readonly email: string;
+  readonly role: InvitableRole;
+  /** Display name of the admin who sent it. */
+  readonly invitedBy: string | null;
+  readonly expiresAt: string;
+  readonly acceptedAt: string | null;
+}
+
 export interface LoginSettings {
   readonly passwordLoginEnabled: boolean;
   readonly emailLoginEnabled: boolean;
@@ -240,6 +258,30 @@ export class AdminApi {
 
   updateMember(id: string, body: { role?: UserRole; isActive?: boolean }): Promise<Member> {
     return this.api.patch<Member>(`/api/users/${id}`, body);
+  }
+
+  // ---- Invitations ---------------------------------------------------------
+
+  /** Pending only — accepted and expired rows are not returned. */
+  invitations(): Promise<Invitation[]> {
+    return this.api.get<Invitation[]>('/api/invitations');
+  }
+
+  /**
+   * Emails a join link, valid for 7 days.
+   *
+   * **Rejects with 502 when the relay refuses**, and in that case nothing was
+   * created — the server commits the invitation only once the message is
+   * accepted, so there is no half-sent row to clean up. The `ApiError` message is
+   * the relay's own, which is what makes it fixable; show it, do not swallow it.
+   */
+  invite(body: { email: string; role: InvitableRole }): Promise<Invitation> {
+    return this.api.post<Invitation>('/api/invitations', body);
+  }
+
+  /** Invalidates the link. The only way to "resend" — there is no resend. */
+  revokeInvitation(id: string): Promise<void> {
+    return this.api.delete<void>(`/api/invitations/${id}`);
   }
 
   // ---- Login settings ------------------------------------------------------
