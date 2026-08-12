@@ -19,6 +19,7 @@ import {
   Badge,
   Button,
   Card,
+  Checkbox,
   ConfirmService,
   Field,
   Icon,
@@ -64,6 +65,7 @@ const INVITABLE_ROLES: readonly InvitableRole[] = ['agent', 'admin'];
     Badge,
     Button,
     Card,
+    Checkbox,
     Field,
     Icon,
     InputDirective,
@@ -79,11 +81,21 @@ const INVITABLE_ROLES: readonly InvitableRole[] = ['agent', 'admin'];
       <h1 class="font-display text-page font-extrabold">{{ 'admin.members.title' | transloco }}</h1>
       <p class="mb-6 mt-1 text-body text-muted-foreground">{{ 'admin.members.subtitle' | transloco }}</p>
 
-      @if (loadedMembers(); as rows) {
+      @if (visibleMembers(); as rows) {
         <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <span class="text-meta text-muted-foreground">
-            {{ 'admin.members.count' | transloco: { count: rows.length } }}
-          </span>
+          <div class="flex flex-wrap items-center gap-4">
+            <span class="text-meta text-muted-foreground">
+              {{ 'admin.members.count' | transloco: { count: rows.length } }}
+            </span>
+            <!-- Only offered when there is something behind it. With nobody
+                 deactivated the checkbox is a control that reveals an empty
+                 set — chrome describing its own absence. -->
+            @if (deactivatedCount(); as hidden) {
+              <tk-checkbox inputId="show-deactivated" [(checked)]="showDeactivated">
+                {{ 'admin.members.showDeactivated' | transloco: { count: hidden } }}
+              </tk-checkbox>
+            }
+          </div>
           <div class="flex flex-wrap items-center gap-2">
             <!-- Outline, because "Add member" is the one that works on every
                  install. Inviting needs email configured; leading with it would
@@ -380,6 +392,30 @@ export class AdminMembers {
 
   protected readonly myId = computed(() => this.session.user()?.id ?? '');
   protected readonly busyId = signal<string | null>(null);
+
+  /**
+   * Off on arrival. A deactivated account is a former colleague: it has to stay
+   * on the record — their tickets still point at it, and reactivating is how
+   * someone comes back — but it is not who the admin came here to manage. On a
+   * workspace with years of turnover, showing them by default buries the people
+   * who can actually sign in.
+   *
+   * Filtered here rather than in the API: the list is the whole workspace's
+   * staff and already fully loaded, so flipping this is instant and the counts
+   * below stay honest without a round trip.
+   */
+  protected readonly showDeactivated = signal(false);
+
+  protected readonly deactivatedCount = computed(
+    () => this.loadedMembers()?.filter((m) => !m.isActive).length ?? 0,
+  );
+
+  /** `undefined` until loaded, so the template's load/error gate still works. */
+  protected readonly visibleMembers = computed(() => {
+    const rows = this.loadedMembers();
+    if (!rows) return undefined;
+    return this.showDeactivated() ? rows : rows.filter((m) => m.isActive);
+  });
 
   protected readonly addOpen = signal(false);
   protected readonly newEmail = signal('');

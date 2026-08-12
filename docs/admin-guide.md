@@ -150,7 +150,10 @@ self-hosted install and no recovery link, so a lockout here would be permanent.
 - **Change a role** — pick a new role on any member row; it takes effect on their
   next request (no re-login needed).
 - **Deactivate** — signs them out everywhere and blocks sign-in. Their tickets
-  stay.
+  stay. Deactivated members are **hidden from the list by default**, so the
+  screen shows the people who can actually sign in; the count above the table
+  counts those. **Show deactivated** appears beside it whenever there is at
+  least one, with how many, and reveals them for reactivating or reviewing.
 - Roles always come from Trackly’s own records — never from an SSO token at
   request time (see §3.3 for how SSO groups map to roles **at login**).
 
@@ -783,12 +786,24 @@ account, or the app registration changed — the card turns red and says why, an
 inbound mail stops rather than failing silently. Click **Connect** again to
 re-consent.
 
-**Set up — say which provider does what.** Connecting a provider does not put it
-to work. Two dropdowns decide that:
+**Set up — mail delivery.** Everything below the provider grid is one form under
+one **Save**: routing, the From line, and what happens when a customer replies.
+They are one decision rather than three — a From address is only valid for the
+provider that sends it, and *poll the mailbox* means the mailbox of whichever
+provider receives — so nothing here is written until you click **Save**, and the
+button tells you when there is something unsaved. (The provider switches in the
+grid above and the notification toggles below are single facts and still save the
+moment you move them.)
+
+*Which provider does what.* Connecting a provider does not put it to work. Two
+dropdowns decide that:
 - **Send mail through** — notifications, sign-in codes and invitations all take
   this route. Leave it on the deployment's own relay if you have one.
 - **Receive replies from** — the mailbox Trackly polls and turns into tickets and
   replies.
+
+Trackly refuses a role it cannot honour, so after saving the dropdowns show what
+it kept, not what was asked for.
 
 **Prove it works.** **Send a test email** delivers a real message, through
 whatever is designated, to your own address. This is the only evidence Trackly
@@ -809,7 +824,10 @@ similar — a green per-provider Test and a failed **Send a test email**. Fix it
 where the rule lives: verify the domain with your relay, or set the From address
 to one it will carry.
 
-**Set up — replies and inbound.**
+*Who mail comes from.* The **From name** and **From address** on every message
+Trackly sends. Saved by the same **Save** as the rest of this card.
+
+*Replies and inbound mail.*
 - **What email can do** — notifications only, one-way (customers reply), or
   two-way (both sides reply).
 - **How inbound mail arrives** — poll the mailbox above, or a **parse webhook**:

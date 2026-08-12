@@ -52,6 +52,14 @@ type Capability = 'all' | 'send' | 'receive';
  * changing anything here clears the delivery proof and the banner says to send
  * another test — otherwise an admin could turn off password sign-in on the
  * strength of a green tick about a relay nothing sends through.
+ *
+ * **Two save models, on purpose.** A provider switch and a notification toggle
+ * are single facts and save the moment they move. Routing, identity and replies
+ * are one interdependent form behind one Save — an address is only valid for the
+ * provider that sends it, and "poll the mailbox" means the mailbox of whichever
+ * provider receives, so committing them one control at a time would push the
+ * server through states the admin never intended and clear the delivery proof
+ * once per keystroke's worth of change.
  */
 @Component({
   selector: 'tk-admin-email-settings',
@@ -176,38 +184,193 @@ type Capability = 'all' | 'send' | 'receive';
             </div>
           </tk-card>
 
-          <tk-card [heading]="'admin.email.roles' | transloco" [subheading]="'admin.email.rolesHint' | transloco">
-            <div class="grid gap-4 sm:grid-cols-2">
-              <tk-field [label]="'admin.email.sendVia' | transloco" [hint]="'admin.email.sendViaHint' | transloco">
-                <tk-select
-                  inset
-                  [(value)]="sendingProvider"
-                  [ariaLabel]="'admin.email.sendVia' | transloco"
-                  (valueChange)="saveRoles()"
-                >
-                  <tk-option value="" [label]="'admin.email.sharedRelay' | transloco" />
-                  @for (option of senders(); track option.provider) {
-                    <tk-option [value]="option.provider" [label]="option.displayName" />
-                  }
-                </tk-select>
-              </tk-field>
+          <!-- Routing, identity and replies are one form because they are one
+               decision — a From address is only valid for the provider that
+               sends it, and "poll the mailbox" means the mailbox of whichever
+               provider receives. Splitting them left two of the three with no
+               Save button of their own, so an admin edited the From name and
+               had to guess which button further down the page would keep it. -->
+          <tk-card [heading]="'admin.email.delivery' | transloco" [subheading]="'admin.email.deliveryHint' | transloco">
+            <div class="space-y-6">
+              <section class="space-y-4">
+                <div>
+                  <p class="text-meta font-semibold uppercase tracking-wide text-muted-foreground">
+                    {{ 'admin.email.roles' | transloco }}
+                  </p>
+                  <p class="mt-1 text-meta text-muted-foreground">{{ 'admin.email.rolesHint' | transloco }}</p>
+                </div>
 
-              <tk-field [label]="'admin.email.receiveVia' | transloco" [hint]="'admin.email.receiveViaHint' | transloco">
-                <tk-select
-                  inset
-                  [(value)]="receivingProvider"
-                  [ariaLabel]="'admin.email.receiveVia' | transloco"
-                  (valueChange)="saveRoles()"
-                >
-                  <tk-option value="" [label]="'admin.email.noReceiving' | transloco" />
-                  @for (option of receivers(); track option.provider) {
-                    <tk-option [value]="option.provider" [label]="option.displayName" />
+                <div class="grid gap-4 sm:grid-cols-2">
+                  <tk-field [label]="'admin.email.sendVia' | transloco" [hint]="'admin.email.sendViaHint' | transloco">
+                    <tk-select inset [(value)]="sendingProvider" [ariaLabel]="'admin.email.sendVia' | transloco">
+                      <tk-option value="" [label]="'admin.email.sharedRelay' | transloco" />
+                      @for (option of senders(); track option.provider) {
+                        <tk-option [value]="option.provider" [label]="option.displayName" />
+                      }
+                    </tk-select>
+                  </tk-field>
+
+                  <tk-field [label]="'admin.email.receiveVia' | transloco" [hint]="'admin.email.receiveViaHint' | transloco">
+                    <tk-select inset [(value)]="receivingProvider" [ariaLabel]="'admin.email.receiveVia' | transloco">
+                      <tk-option value="" [label]="'admin.email.noReceiving' | transloco" />
+                      @for (option of receivers(); track option.provider) {
+                        <tk-option [value]="option.provider" [label]="option.displayName" />
+                      }
+                    </tk-select>
+                  </tk-field>
+                </div>
+              </section>
+
+              <!-- The config resource is separate from the provider list, so it
+                   gets its own three states inside the shared card rather than
+                   taking the card down with it. -->
+              @if (loadedConfig(); as cfg) {
+                <section class="space-y-4 border-t border-border pt-5">
+                  <p class="text-meta font-semibold uppercase tracking-wide text-muted-foreground">
+                    {{ 'admin.email.identity' | transloco }}
+                  </p>
+
+                  <div class="grid gap-4 sm:grid-cols-2">
+                    <tk-field [label]="'admin.email.fromName' | transloco" for="from-name">
+                      <input tkInput inset id="from-name" [(ngModel)]="fromName" />
+                    </tk-field>
+
+                    <tk-field
+                      [label]="'admin.email.fromEmail' | transloco"
+                      for="from-email"
+                      [hint]="'admin.email.fromEmailHint' | transloco"
+                    >
+                      <input
+                        tkInput
+                        inset
+                        id="from-email"
+                        type="email"
+                        placeholder="support@acme.com"
+                        [(ngModel)]="fromEmail"
+                      />
+                    </tk-field>
+                  </div>
+                </section>
+
+                <section class="space-y-4 border-t border-border pt-5">
+                  <p class="text-meta font-semibold uppercase tracking-wide text-muted-foreground">
+                    {{ 'admin.email.replies' | transloco }}
+                  </p>
+
+                  <tk-field [label]="'admin.email.mode' | transloco" [hint]="'admin.email.modeHint' | transloco">
+                    <tk-select inset [(value)]="emailMode" [ariaLabel]="'admin.email.mode' | transloco">
+                      <tk-option value="notifications_only" [label]="'admin.email.modes.notificationsOnly' | transloco" />
+                      <tk-option value="one_way" [label]="'admin.email.modes.oneWay' | transloco" />
+                      <tk-option value="two_way" [label]="'admin.email.modes.twoWay' | transloco" />
+                    </tk-select>
+                  </tk-field>
+
+                  <tk-field [label]="'admin.email.inbound' | transloco" [hint]="'admin.email.inboundHint' | transloco">
+                    <tk-select inset [(value)]="inboundConnector" [ariaLabel]="'admin.email.inbound' | transloco">
+                      <tk-option value="" [label]="'admin.email.inboundNone' | transloco" />
+                      <tk-option value="mailbox_poll" [label]="'admin.email.inboundPoll' | transloco" />
+                      <tk-option value="parse_webhook" [label]="'admin.email.inboundWebhook' | transloco" />
+                    </tk-select>
+                  </tk-field>
+
+                  @if (inboundConnector() === 'parse_webhook') {
+                    <tk-field
+                      [label]="'admin.email.replyDomain' | transloco"
+                      for="reply-domain"
+                      [hint]="'admin.email.replyDomainHint' | transloco"
+                    >
+                      <input tkInput inset id="reply-domain" placeholder="tickets.acme.com" [(ngModel)]="inboundReplyDomain" />
+                    </tk-field>
+
+                    <tk-field
+                      [label]="'admin.email.webhookSecret' | transloco"
+                      for="webhook-secret"
+                      [hint]="secretHint(cfg.hasInboundWebhookSecret)"
+                    >
+                      <input
+                        tkInput
+                        inset
+                        id="webhook-secret"
+                        type="password"
+                        autocomplete="off"
+                        [placeholder]="secretPlaceholder(cfg.hasInboundWebhookSecret)"
+                        [(ngModel)]="inboundWebhookSecret"
+                      />
+                    </tk-field>
+
+                    <div class="rounded-xl bg-muted p-3">
+                      <p class="mb-1.5 text-meta font-semibold">{{ 'admin.email.webhookUrl' | transloco }}</p>
+                      <code class="block break-all text-meta text-muted-foreground">{{ webhookUrl }}</code>
+                    </div>
                   }
-                </tk-select>
-              </tk-field>
+
+                  @if (inboundConnector() === 'mailbox_poll') {
+                    <tk-field
+                      [label]="'admin.email.pollInterval' | transloco"
+                      for="poll-interval"
+                      [hint]="'admin.email.pollIntervalHint' | transloco"
+                    >
+                      <input tkInput inset id="poll-interval" type="number" inputmode="numeric" [(ngModel)]="pollIntervalSeconds" />
+                    </tk-field>
+                  }
+
+                  <label class="flex items-center justify-between gap-3">
+                    <span>
+                      <span class="block text-body">{{ 'admin.email.newTicket' | transloco }}</span>
+                      <span class="block text-meta text-muted-foreground">{{ 'admin.email.newTicketHint' | transloco }}</span>
+                    </span>
+                    <tk-switch [(checked)]="newTicketViaEmail" [ariaLabel]="'admin.email.newTicket' | transloco" />
+                  </label>
+                </section>
+              } @else if (config.error()) {
+                <div class="border-t border-border pt-5">
+                  <tk-alert tone="danger" [heading]="'admin.email.configFailed' | transloco">
+                    {{ configErrorText() }}
+                    <button type="button" class="ml-1 font-semibold underline" (click)="config.reload()">
+                      {{ 'common.retry' | transloco }}
+                    </button>
+                  </tk-alert>
+                </div>
+              } @else {
+                <div class="space-y-3 border-t border-border pt-5">
+                  <span tkSkeleton class="h-16 w-full"></span>
+                  <span tkSkeleton class="h-16 w-full"></span>
+                </div>
+              }
             </div>
 
-            <div class="mt-4 flex flex-wrap items-center gap-3 border-t border-border pt-4">
+            <!-- card-footer twice on purpose: the bare attribute is the slot
+                 selector, the class is what carries the padding and top rule. -->
+            <div card-footer class="card-footer">
+              <!-- Beside the button, not a toast: a rejected From address is
+                   something the admin has to act on, and the values it refused
+                   are still on screen waiting to be corrected. -->
+              @if (saveError(); as failure) {
+                <tk-alert class="mb-3 block" tone="danger" [heading]="'admin.email.saveFailed' | transloco">
+                  {{ failure }}
+                </tk-alert>
+              }
+
+              <div class="flex flex-wrap items-center gap-3">
+                <button tkButton [disabled]="saving() || !dirty()" (click)="save()">
+                  @if (saving()) {
+                    <tk-spinner [size]="16" />
+                  }
+                  {{ 'common.save' | transloco }}
+                </button>
+
+                @if (dirty()) {
+                  <span class="text-meta text-muted-foreground">{{ 'admin.email.deliveryUnsaved' | transloco }}</span>
+                }
+              </div>
+            </div>
+          </tk-card>
+
+          <!-- A separate card because it is an action, not a setting: the form
+               above states an intention, this is the one thing that proves it
+               reached a person (invariant 8). -->
+          <tk-card [heading]="'admin.email.proof' | transloco" [subheading]="'admin.email.proofHint' | transloco">
+            <div class="flex flex-wrap items-center gap-3">
               <button tkButton variant="outline" [disabled]="testing()" (click)="sendTest()">
                 @if (testing()) {
                   <tk-spinner [size]="16" />
@@ -237,102 +400,6 @@ type Capability = 'all' | 'send' | 'receive';
               </tk-alert>
             }
           </tk-card>
-
-          @if (loadedConfig(); as cfg) {
-            <tk-card [heading]="'admin.email.identity' | transloco">
-              <div class="grid gap-4 sm:grid-cols-2">
-                <tk-field [label]="'admin.email.fromName' | transloco" for="from-name">
-                  <input tkInput inset id="from-name" [(ngModel)]="fromName" />
-                </tk-field>
-
-                <tk-field
-                  [label]="'admin.email.fromEmail' | transloco"
-                  for="from-email"
-                  [hint]="'admin.email.fromEmailHint' | transloco"
-                >
-                  <input tkInput inset id="from-email" type="email" placeholder="support@acme.com" [(ngModel)]="fromEmail" />
-                </tk-field>
-              </div>
-            </tk-card>
-
-            <tk-card [heading]="'admin.email.replies' | transloco">
-              <div class="space-y-4">
-                <tk-field [label]="'admin.email.mode' | transloco" [hint]="'admin.email.modeHint' | transloco">
-                  <tk-select inset [(value)]="emailMode" [ariaLabel]="'admin.email.mode' | transloco">
-                    <tk-option value="notifications_only" [label]="'admin.email.modes.notificationsOnly' | transloco" />
-                    <tk-option value="one_way" [label]="'admin.email.modes.oneWay' | transloco" />
-                    <tk-option value="two_way" [label]="'admin.email.modes.twoWay' | transloco" />
-                  </tk-select>
-                </tk-field>
-
-                <tk-field [label]="'admin.email.inbound' | transloco" [hint]="'admin.email.inboundHint' | transloco">
-                  <tk-select inset [(value)]="inboundConnector" [ariaLabel]="'admin.email.inbound' | transloco">
-                    <tk-option value="" [label]="'admin.email.inboundNone' | transloco" />
-                    <tk-option value="mailbox_poll" [label]="'admin.email.inboundPoll' | transloco" />
-                    <tk-option value="parse_webhook" [label]="'admin.email.inboundWebhook' | transloco" />
-                  </tk-select>
-                </tk-field>
-
-                @if (inboundConnector() === 'parse_webhook') {
-                  <tk-field
-                    [label]="'admin.email.replyDomain' | transloco"
-                    for="reply-domain"
-                    [hint]="'admin.email.replyDomainHint' | transloco"
-                  >
-                    <input tkInput inset id="reply-domain" placeholder="tickets.acme.com" [(ngModel)]="inboundReplyDomain" />
-                  </tk-field>
-
-                  <tk-field
-                    [label]="'admin.email.webhookSecret' | transloco"
-                    for="webhook-secret"
-                    [hint]="secretHint(cfg.hasInboundWebhookSecret)"
-                  >
-                    <input
-                      tkInput
-                      inset
-                      id="webhook-secret"
-                      type="password"
-                      autocomplete="off"
-                      [placeholder]="secretPlaceholder(cfg.hasInboundWebhookSecret)"
-                      [(ngModel)]="inboundWebhookSecret"
-                    />
-                  </tk-field>
-
-                  <div class="rounded-xl bg-muted p-3">
-                    <p class="mb-1.5 text-meta font-semibold">{{ 'admin.email.webhookUrl' | transloco }}</p>
-                    <code class="block break-all text-meta text-muted-foreground">{{ webhookUrl }}</code>
-                  </div>
-                }
-
-                @if (inboundConnector() === 'mailbox_poll') {
-                  <tk-field
-                    [label]="'admin.email.pollInterval' | transloco"
-                    for="poll-interval"
-                    [hint]="'admin.email.pollIntervalHint' | transloco"
-                  >
-                    <input tkInput inset id="poll-interval" type="number" inputmode="numeric" [(ngModel)]="pollIntervalSeconds" />
-                  </tk-field>
-                }
-
-                <label class="flex items-center justify-between gap-3 border-t border-border pt-4">
-                  <span>
-                    <span class="block text-body">{{ 'admin.email.newTicket' | transloco }}</span>
-                    <span class="block text-meta text-muted-foreground">{{ 'admin.email.newTicketHint' | transloco }}</span>
-                  </span>
-                  <tk-switch [(checked)]="newTicketViaEmail" [ariaLabel]="'admin.email.newTicket' | transloco" />
-                </label>
-
-                <div class="border-t border-border pt-4">
-                  <button tkButton [disabled]="savingConfig()" (click)="saveConfig()">
-                    @if (savingConfig()) {
-                      <tk-spinner [size]="16" />
-                    }
-                    {{ 'common.save' | transloco }}
-                  </button>
-                </div>
-              </div>
-            </tk-card>
-          }
 
           @if (loadedNotifications(); as notif) {
             <tk-card [heading]="'admin.email.notifications' | transloco" [subheading]="'admin.email.notificationsHint' | transloco">
@@ -449,7 +516,8 @@ export class AdminEmailSettings {
   protected readonly savingProvider = signal(false);
   protected readonly connecting = signal(false);
   protected readonly connectError = signal<string | null>(null);
-  protected readonly savingConfig = signal(false);
+  protected readonly saving = signal(false);
+  protected readonly saveError = signal<string | null>(null);
   protected readonly testing = signal(false);
   protected readonly busy = signal<EmailProviderKind | null>(null);
   protected readonly testResult = signal<{ ok: boolean; sentTo?: string; error?: string } | null>(null);
@@ -457,6 +525,7 @@ export class AdminEmailSettings {
   private readonly form = viewChild(EmailProviderForm);
 
   protected readonly errorText = computed(() => errorMessage(this.data.error()));
+  protected readonly configErrorText = computed(() => errorMessage(this.config.error()));
 
   /**
    * `settled()` rather than reading `value()` behind a truthiness check: one
@@ -486,6 +555,42 @@ export class AdminEmailSettings {
   protected readonly receivers = computed(() =>
     (this.loaded()?.providers ?? []).filter((p) => p.canReceive && p.configured && p.enabled),
   );
+
+  /**
+   * The two halves of the form, tracked separately because they are two
+   * endpoints — and each one clears the delivery proof on the server. Saving
+   * the untouched half would throw away a green tick for nothing.
+   *
+   * Both return `false` until their resource has settled: with nothing loaded
+   * there is no baseline to differ from, only defaults that would read as an
+   * edit and offer to save themselves over the real values.
+   */
+  protected readonly rolesDirty = computed(() => {
+    const saved = this.loaded();
+    if (!saved) return false;
+    return (
+      this.sendingProvider() !== (saved.sendingProvider ?? '') ||
+      this.receivingProvider() !== (saved.receivingProvider ?? '')
+    );
+  });
+
+  protected readonly configDirty = computed(() => {
+    const cfg = this.loadedConfig();
+    if (!cfg) return false;
+    return (
+      this.fromName() !== (cfg.fromName ?? '') ||
+      this.fromEmail() !== (cfg.fromEmail ?? '') ||
+      this.emailMode() !== cfg.emailMode ||
+      this.inboundConnector() !== (cfg.inboundConnector ?? '') ||
+      this.inboundReplyDomain() !== (cfg.inboundReplyDomain ?? '') ||
+      // Never sent back, so anything typed here is new by definition.
+      this.inboundWebhookSecret() !== '' ||
+      Number(this.pollIntervalSeconds()) !== cfg.pollIntervalSeconds ||
+      this.newTicketViaEmail() !== cfg.newTicketViaEmail
+    );
+  });
+
+  protected readonly dirty = computed(() => this.rolesDirty() || this.configDirty());
 
   constructor() {
     this.readConnectOutcome();
@@ -688,45 +793,59 @@ export class AdminEmailSettings {
     }
   }
 
-  protected async saveRoles(): Promise<void> {
-    try {
-      await this.api.setRoles({
-        sendingProvider: (this.sendingProvider() || null) as EmailProviderKind | null,
-        receivingProvider: (this.receivingProvider() || null) as EmailProviderKind | null,
-      });
-      this.toast.success(this.transloco.translate('admin.email.saved'));
-    } catch (error) {
-      this.toast.error(errorMessage(error));
-    } finally {
-      // Reload either way — the server refuses roles it cannot honour, and the
-      // selects must show what it kept, not what was asked for.
-      this.data.reload();
-    }
-  }
+  /**
+   * One button, two endpoints — and only the ones that actually changed.
+   *
+   * Roles go first: the inbound connector reads "poll the mailbox (the provider
+   * above)", so a save that moved both has to land the receiving provider
+   * before the config that points at it, or the server validates the new
+   * connector against the old mailbox.
+   */
+  protected async save(): Promise<void> {
+    const roles = this.rolesDirty();
+    const config = this.configDirty();
+    if (this.saving() || (!roles && !config)) return;
 
-  protected async saveConfig(): Promise<void> {
-    this.savingConfig.set(true);
+    this.saving.set(true);
+    this.saveError.set(null);
+    let configWritten = false;
     try {
-      await this.api.saveConfig({
-        fromName: this.fromName().trim() || null,
-        fromEmail: this.fromEmail().trim() || null,
-        emailMode: this.emailMode() as EmailMode,
-        newTicketViaEmail: this.newTicketViaEmail(),
-        inboundConnector: (this.inboundConnector() || null) as InboundConnector | null,
-        inboundReplyDomain: this.inboundReplyDomain().trim() || null,
-        // Undefined, not '': blank keeps the stored secret, '' deletes it.
-        inboundWebhookSecret: this.inboundWebhookSecret() || undefined,
-        pollIntervalSeconds: this.pollIntervalSeconds(),
-      });
-      this.config.reload();
-      // The From address is part of what a delivered test proved, so the
-      // server cleared the proof — the banner has to catch up.
-      this.data.reload();
+      if (roles) {
+        await this.api.setRoles({
+          sendingProvider: (this.sendingProvider() || null) as EmailProviderKind | null,
+          receivingProvider: (this.receivingProvider() || null) as EmailProviderKind | null,
+        });
+      }
+
+      if (config) {
+        await this.api.saveConfig({
+          fromName: this.fromName().trim() || null,
+          fromEmail: this.fromEmail().trim() || null,
+          emailMode: this.emailMode() as EmailMode,
+          newTicketViaEmail: this.newTicketViaEmail(),
+          inboundConnector: (this.inboundConnector() || null) as InboundConnector | null,
+          inboundReplyDomain: this.inboundReplyDomain().trim() || null,
+          // Undefined, not '': blank keeps the stored secret, '' deletes it.
+          inboundWebhookSecret: this.inboundWebhookSecret() || undefined,
+          pollIntervalSeconds: this.pollIntervalSeconds(),
+        });
+        configWritten = true;
+      }
+
       this.toast.success(this.transloco.translate('admin.email.saved'));
     } catch (error) {
-      this.toast.error(errorMessage(error));
+      this.saveError.set(errorMessage(error));
     } finally {
-      this.savingConfig.set(false);
+      // The provider list reloads either way: the server refuses roles it
+      // cannot honour, so the selects have to show what it kept rather than
+      // what was asked for, and any write that did land cleared the delivery
+      // proof the banner reports.
+      this.data.reload();
+      // The config only when its own write went through. Reloading over a
+      // rejected save would wipe the address the server just complained about,
+      // leaving an error message about a value no longer on screen.
+      if (configWritten) this.config.reload();
+      this.saving.set(false);
     }
   }
 
