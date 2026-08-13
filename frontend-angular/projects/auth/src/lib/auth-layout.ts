@@ -1,7 +1,7 @@
 import { TranslocoPipe } from '@jsverse/transloco';
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { SIGN_IN_IMAGE_ASPECT } from '@trackly/core';
-import { Avatar, Icon } from '@trackly/ui';
+import { Avatar, Icon, TracklyMark } from '@trackly/ui';
 
 /**
  * The split shell every auth screen sits in: form on the left, a branded panel
@@ -28,7 +28,7 @@ import { Avatar, Icon } from '@trackly/ui';
 @Component({
   selector: 'tk-auth-layout',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [Avatar, Icon, TranslocoPipe],
+  imports: [Avatar, Icon, TracklyMark, TranslocoPipe],
   host: { class: 'block min-h-screen bg-background' },
   template: `
     <div [class]="gridClass()">
@@ -45,7 +45,7 @@ import { Avatar, Icon } from '@trackly/ui';
             <tk-avatar [name]="brandName()" [size]="44" />
           } @else {
             <span class="brand-gradient grid size-11 place-items-center rounded-xl text-white">
-              <tk-icon name="life-buoy" [size]="23" />
+              <tk-trackly-mark [size]="24" />
             </span>
           }
           <span class="font-display text-[19px] font-extrabold tracking-tight">{{ brandName() }}</span>

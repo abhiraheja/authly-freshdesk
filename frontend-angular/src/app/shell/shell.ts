@@ -25,6 +25,7 @@ import {
   Modal,
   Toaster,
   ToastService,
+  TracklyMark,
 } from '@trackly/ui';
 import { CommandPalette } from './command-palette';
 import { NotificationBell } from './notification-bell';
@@ -57,6 +58,7 @@ import { NAV, type NavGroup, type NavItem } from './nav';
     Kbd,
     Modal,
     Toaster,
+    TracklyMark,
     CommandPalette,
     NotificationBell,
   ],
